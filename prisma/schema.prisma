@@ -86,3 +86,25 @@ model EcosystemItem {
   order       Int     @default(0)
   active      Boolean @default(true)
 }
+
+model WindowConfig {
+  id              String  @id @default(cuid())
+  windowKey       String  @unique
+  title           String
+  subtitle        String  @default("")
+  description     String  @default("")
+  href            String  @default("")
+  accentColor     String  @default("#ff4444")
+  backgroundUrl   String?
+  backgroundType  String  @default("gradient")
+  gradientFrom    String  @default("#1a0000")
+  gradientTo      String  @default("#0a0a0f")
+  order           Int     @default(0)
+  active          Boolean @default(true)
+}
+
+model SiteConfig {
+  id    String @id @default(cuid())
+  key   String @unique
+  value String
+}

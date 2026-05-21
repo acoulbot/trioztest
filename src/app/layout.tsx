@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import localFont from "next/font/local";
 import "./globals.css";
 import Providers from "@/components/Providers";
-import Navbar from "@/components/ui/Navbar";
+import ConditionalNavbar from "@/components/ui/ConditionalNavbar";
 
 const geistSans = localFont({
   src: "./fonts/GeistVF.woff",
@@ -24,8 +24,8 @@ export default function RootLayout({
     <html lang="ru" className="dark">
       <body className={`${geistSans.variable} antialiased bg-dark-900 text-foreground min-h-screen`}>
         <Providers>
-          <Navbar />
-          <main className="pt-16">{children}</main>
+          <ConditionalNavbar />
+          <main>{children}</main>
         </Providers>
       </body>
     </html>

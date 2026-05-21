@@ -89,6 +89,15 @@ export default function AdminPage() {
       color: "from-fantasy-purple/20 to-purple-600/20",
       borderColor: "border-fantasy-purple/20 hover:border-fantasy-purple/40",
     },
+    {
+      title: "Окна главной",
+      count: "4",
+      href: "/admin/windows",
+      icon: "🖼️",
+      description: "Фоны, анимации, контент окон",
+      color: "from-red-400/20 to-orange-600/20",
+      borderColor: "border-red-400/20 hover:border-red-400/40",
+    },
   ];
 
   return (
@@ -143,6 +152,10 @@ export default function AdminPage() {
             <Link href="/admin/ecosystem" className="flex items-center gap-3 p-3 rounded-xl hover:bg-white/5 transition-colors text-gray-300 hover:text-white">
               <span className="text-xl">🌐</span>
               <span>Добавить элемент экосистемы</span>
+            </Link>
+            <Link href="/admin/windows" className="flex items-center gap-3 p-3 rounded-xl hover:bg-white/5 transition-colors text-gray-300 hover:text-white">
+              <span className="text-xl">🖼️</span>
+              <span>Настроить окна главной</span>
             </Link>
           </div>
         </div>
