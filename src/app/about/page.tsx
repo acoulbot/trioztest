@@ -2,7 +2,6 @@
 
 import { motion } from "framer-motion";
 import Link from "next/link";
-import Image from "next/image";
 
 const sections = [
   {
@@ -75,17 +74,6 @@ export default function AboutPage() {
           transition={{ duration: 1 }}
           className="text-center mb-16"
         >
-          <motion.div
-            initial={{ scale: 0.5, opacity: 0 }}
-            animate={{ scale: 1, opacity: 1 }}
-            transition={{ duration: 0.8, delay: 0.2 }}
-            className="inline-block mb-6"
-          >
-            <div className="w-28 h-28 md:w-36 md:h-36 rounded-full overflow-hidden mx-auto relative shadow-[0_0_40px_rgba(100,200,255,0.2)]">
-              <Image src="/logo.png" alt="TrioZ" fill className="object-cover" priority />
-            </div>
-          </motion.div>
-
           <motion.h1
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}

@@ -113,7 +113,8 @@ export default function AdminUsersPage() {
                   <span className="text-xs text-gray-500">{user.email}</span>
                   <span className={`px-2 py-0.5 rounded text-xs ${
                     user.role === "ADMIN" ? "bg-fantasy-gold/20 text-fantasy-gold" :
-                    user.role === "MODERATOR" ? "bg-fantasy-purple/20 text-fantasy-purple" :
+                    user.role === "EDITOR" ? "bg-fantasy-purple/20 text-fantasy-purple" :
+                    user.role === "CONSULTANT" ? "bg-cyan-400/20 text-cyan-400" :
                     "bg-gray-700 text-gray-400"
                   }`}>
                     {user.role}
@@ -137,7 +138,8 @@ export default function AdminUsersPage() {
                   className="bg-dark-700 border border-white/10 rounded-lg px-2 py-1 text-sm text-white"
                 >
                   <option value="USER">USER</option>
-                  <option value="MODERATOR">MODERATOR</option>
+                  <option value="CONSULTANT">CONSULTANT</option>
+                  <option value="EDITOR">EDITOR</option>
                   <option value="ADMIN">ADMIN</option>
                 </select>
                 <button

@@ -1,9 +1,9 @@
 "use client";
 
-import { motion, AnimatePresence } from "framer-motion";
+import { motion, AnimatePresence, useAnimation } from "framer-motion";
 import Link from "next/link";
 import Image from "next/image";
-import { useEffect, useState, useMemo } from "react";
+import { useEffect, useState, useMemo, useCallback } from "react";
 import { useSession, signOut } from "next-auth/react";
 
 /* ─────────────── Types ─────────────── */
@@ -45,20 +45,10 @@ function useParticles(count: number, seed: number) {
 /* ─────────────── Window Background Animation ─────────────── */
 
 function WindowAnimation({ accentColor, seed }: { accentColor: string; seed: number }) {
-  const particles = useParticles(12, seed);
+  const particles = useParticles(6, seed);
 
   return (
     <div className="absolute inset-0 overflow-hidden pointer-events-none">
-      {/* Cyber grid */}
-      <svg className="absolute inset-0 w-full h-full opacity-[0.04]">
-        <defs>
-          <pattern id={`grid-${seed}`} width="40" height="40" patternUnits="userSpaceOnUse">
-            <path d="M40 0L0 0L0 40" fill="none" stroke={accentColor} strokeWidth="0.3" />
-          </pattern>
-        </defs>
-        <rect width="100%" height="100%" fill={`url(#grid-${seed})`} />
-      </svg>
-
       {/* Floating particles */}
       {particles.map((p) => (
         <motion.div
@@ -73,7 +63,7 @@ function WindowAnimation({ accentColor, seed }: { accentColor: string; seed: num
           }}
           animate={{
             y: [0, -40, -80],
-            opacity: [0, 0.6, 0],
+            opacity: [0, 0.4, 0],
             scale: [0.5, 1, 0.3],
           }}
           transition={{
@@ -83,43 +73,6 @@ function WindowAnimation({ accentColor, seed }: { accentColor: string; seed: num
             ease: "easeOut",
           }}
         />
-      ))}
-
-      {/* Pulsing ring */}
-      <motion.div
-        className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2"
-        style={{ width: 80, height: 80 }}
-      >
-        {[0, 1].map((ring) => (
-          <motion.div
-            key={ring}
-            className="absolute inset-0 rounded-full"
-            style={{ border: `1px solid ${accentColor}20` }}
-            animate={{ scale: [1, 2.5, 1], opacity: [0.2, 0, 0.2] }}
-            transition={{ duration: 5, repeat: Infinity, delay: ring * 2.5, ease: "easeOut" }}
-          />
-        ))}
-      </motion.div>
-
-      {/* Rune marks */}
-      {["ᚠ", "ᛟ", "ᚢ"].map((rune, i) => (
-        <motion.div
-          key={i}
-          className="absolute select-none font-bold"
-          style={{
-            fontSize: 14 + i * 3,
-            color: `${accentColor}25`,
-            left: `${20 + i * 30}%`,
-            top: `${30 + (i % 2) * 30}%`,
-          }}
-          animate={{
-            y: [-8, 8, -8],
-            opacity: [0.1, 0.3, 0.1],
-          }}
-          transition={{ duration: 6 + i * 2, repeat: Infinity, delay: i * 1.5 }}
-        >
-          {rune}
-        </motion.div>
       ))}
     </div>
   );
@@ -180,69 +133,19 @@ function WindowCard({ window, index }: { window: WindowData; index: number }) {
             transition={{ duration: 0.4 }}
           />
 
-          {/* Hover glow border */}
-          <motion.div
-            className="absolute inset-0 pointer-events-none"
-            style={{
-              boxShadow: hovered
-                ? `inset 0 0 40px ${window.accentColor}15, 0 0 30px ${window.accentColor}10`
-                : "none",
-            }}
-            animate={{ opacity: hovered ? 1 : 0 }}
-            transition={{ duration: 0.4 }}
-          />
-
           {/* Content */}
           <div className="relative z-10 flex flex-col justify-end h-full p-4 sm:p-6">
-            <motion.div
-              className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] sm:text-xs font-medium mb-2 w-fit"
-              style={{
-                color: window.accentColor,
-                border: `1px solid ${window.accentColor}30`,
-                backgroundColor: `${window.accentColor}08`,
-              }}
-              animate={hovered ? { opacity: 1 } : { opacity: 0.5 }}
-            >
-              <span
-                className="w-1 h-1 rounded-full animate-pulse"
-                style={{ backgroundColor: window.accentColor }}
-              />
-              {window.subtitle}
-            </motion.div>
-
             <h3 className="text-lg sm:text-xl md:text-2xl font-bold text-white mb-1 group-hover:translate-x-1 transition-transform duration-500">
               {window.title}
             </h3>
 
             <motion.p
-              className="text-gray-400 text-xs sm:text-sm leading-relaxed line-clamp-2"
-              animate={hovered ? { opacity: 1, y: 0 } : { opacity: 0.4, y: 4 }}
+              className="text-gray-500 text-xs sm:text-sm"
+              animate={hovered ? { opacity: 1 } : { opacity: 0.3 }}
               transition={{ duration: 0.3 }}
             >
-              {window.description}
+              {window.subtitle}
             </motion.p>
-
-            {/* Arrow */}
-            <motion.div
-              className="flex items-center gap-1.5 mt-2"
-              animate={hovered ? { opacity: 1, x: 0 } : { opacity: 0, x: -8 }}
-              transition={{ duration: 0.3, delay: 0.1 }}
-            >
-              <span className="text-xs font-medium" style={{ color: window.accentColor }}>
-                Войти
-              </span>
-              <motion.svg
-                className="w-3 h-3"
-                style={{ color: window.accentColor }}
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-                animate={hovered ? { x: [0, 4, 0] } : { x: 0 }}
-                transition={{ duration: 1.2, repeat: Infinity }}
-              >
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 8l4 4m0 0l-4 4m4-4H3" />
-              </motion.svg>
-            </motion.div>
           </div>
         </motion.div>
       </Link>
@@ -252,88 +155,106 @@ function WindowCard({ window, index }: { window: WindowData; index: number }) {
 
 /* ─────────────── Center Logo Button ─────────────── */
 
+function GhostParticle({ index, active }: { index: number; active: boolean }) {
+  const angle = (index * 60) + Math.random() * 30;
+  const rad = (angle * Math.PI) / 180;
+  const dist = 60 + index * 15;
+
+  return (
+    <motion.div
+      className="absolute w-2 h-2 rounded-full"
+      style={{
+        top: "50%",
+        left: "50%",
+        background: `rgba(100, 200, 255, ${0.5 - index * 0.06})`,
+        boxShadow: "0 0 6px rgba(100,200,255,0.4)",
+      }}
+      animate={
+        active
+          ? {
+              x: [0, Math.cos(rad) * dist],
+              y: [0, Math.sin(rad) * dist],
+              opacity: [0.6, 0],
+              scale: [1, 0.2],
+            }
+          : { x: 0, y: 0, opacity: 0, scale: 0 }
+      }
+      transition={{
+        duration: 1.5 + index * 0.1,
+        repeat: active ? Infinity : 0,
+        repeatDelay: 0.3,
+        delay: index * 0.08,
+        ease: "easeOut",
+      }}
+    />
+  );
+}
+
 function CenterLogoButton() {
   const [hovered, setHovered] = useState(false);
+  const spinControls = useAnimation();
+
+  const handleHoverStart = useCallback(async () => {
+    setHovered(true);
+    await spinControls.start({
+      rotate: [0, 360],
+      transition: { duration: 0.6, ease: [0.2, 0, 0.3, 1] },
+    });
+    spinControls.start({
+      rotate: [0, 360],
+      transition: { duration: 8, ease: "linear", repeat: Infinity },
+    });
+  }, [spinControls]);
+
+  const handleHoverEnd = useCallback(() => {
+    setHovered(false);
+    spinControls.stop();
+    spinControls.set({ rotate: 0 });
+  }, [spinControls]);
 
   return (
     <Link href="/about">
       <motion.div
         className="relative cursor-pointer"
-        onMouseEnter={() => setHovered(true)}
-        onMouseLeave={() => setHovered(false)}
-        initial={{ scale: 0, opacity: 0, rotate: -180 }}
-        animate={{ scale: 1, opacity: 1, rotate: 0 }}
-        transition={{ duration: 1.2, delay: 0.6, ease: [0.34, 1.56, 0.64, 1] }}
+        onMouseEnter={handleHoverStart}
+        onMouseLeave={handleHoverEnd}
+        initial={{ scale: 0, opacity: 0 }}
+        animate={{ scale: 1, opacity: 1 }}
+        transition={{ duration: 1, delay: 0.6, ease: [0.34, 1.56, 0.64, 1] }}
       >
-        {/* Outer glow rings */}
-        {[0, 1, 2].map((ring) => (
-          <motion.div
-            key={ring}
-            className="absolute rounded-full"
-            style={{
-              inset: -(12 + ring * 10),
-              border: "1px solid",
-              borderColor: hovered
-                ? `rgba(100, 200, 255, ${0.3 - ring * 0.1})`
-                : `rgba(255, 255, 255, ${0.08 - ring * 0.02})`,
-            }}
-            animate={
-              hovered
-                ? { scale: [1, 1.1 + ring * 0.05, 1], opacity: [0.3, 0.1, 0.3] }
-                : { scale: 1, opacity: 0.15 - ring * 0.04 }
-            }
-            transition={{ duration: 2.5 + ring * 0.5, repeat: Infinity }}
-          />
+        {/* Ghost particles */}
+        {Array.from({ length: 8 }).map((_, i) => (
+          <GhostParticle key={i} index={i} active={hovered} />
         ))}
 
-        {/* Gradient glow behind */}
+        {/* Glow behind logo */}
         <motion.div
-          className="absolute rounded-full blur-2xl"
-          style={{ inset: -20 }}
+          className="absolute blur-2xl"
+          style={{ inset: -16 }}
           animate={{
             background: hovered
-              ? [
-                  "radial-gradient(circle, rgba(100,200,255,0.4) 0%, transparent 70%)",
-                  "radial-gradient(circle, rgba(140,180,255,0.5) 0%, transparent 70%)",
-                  "radial-gradient(circle, rgba(100,200,255,0.4) 0%, transparent 70%)",
-                ]
-              : "radial-gradient(circle, rgba(255,255,255,0.05) 0%, transparent 70%)",
+              ? "radial-gradient(circle, rgba(100,200,255,0.35) 0%, transparent 70%)"
+              : "radial-gradient(circle, rgba(255,255,255,0.03) 0%, transparent 70%)",
           }}
-          transition={{ duration: 2, repeat: Infinity }}
+          transition={{ duration: 0.4 }}
         />
 
-        {/* Logo image */}
+        {/* Logo image — no circular clip, respects transparency */}
         <motion.div
-          className="relative w-20 h-20 sm:w-24 sm:h-24 md:w-28 md:h-28 rounded-full overflow-hidden"
+          className="relative w-24 h-24 sm:w-28 sm:h-28 md:w-32 md:h-32"
+          animate={spinControls}
           style={{
-            boxShadow: hovered
-              ? "0 0 40px rgba(100,200,255,0.4), 0 0 80px rgba(100,200,255,0.15)"
-              : "0 0 20px rgba(0,0,0,0.5)",
+            filter: hovered
+              ? "drop-shadow(0 0 20px rgba(100,200,255,0.5)) drop-shadow(0 0 40px rgba(100,200,255,0.2))"
+              : "drop-shadow(0 0 8px rgba(0,0,0,0.5))",
           }}
-          animate={hovered ? { scale: 1.08 } : { scale: 1 }}
-          transition={{ duration: 0.4 }}
         >
           <Image
             src="/logo.png"
             alt="TrioZ"
             fill
-            className="object-cover"
+            className="object-contain"
             priority
-          />
-
-          {/* Gradient overlay on hover */}
-          <motion.div
-            className="absolute inset-0 rounded-full"
-            animate={{
-              background: hovered
-                ? [
-                    "linear-gradient(135deg, rgba(100,200,255,0.15) 0%, transparent 50%)",
-                    "linear-gradient(225deg, rgba(140,180,255,0.2) 0%, transparent 50%)",
-                    "linear-gradient(315deg, rgba(100,200,255,0.15) 0%, transparent 50%)",
-                  ]
-                : "linear-gradient(135deg, transparent 0%, transparent 100%)",
-            }}
-            transition={{ duration: 3, repeat: Infinity }}
           />
         </motion.div>
       </motion.div>
@@ -486,12 +407,6 @@ export default function HomePage() {
 
   return (
     <div className="fixed inset-0 bg-dark-900 overflow-hidden">
-      {/* Ambient background effects */}
-      <div className="absolute inset-0 pointer-events-none">
-        <div className="absolute top-0 left-1/4 w-[400px] h-[400px] bg-cyan-400/[0.02] rounded-full blur-[150px]" />
-        <div className="absolute bottom-0 right-1/4 w-[400px] h-[400px] bg-fantasy-purple/[0.02] rounded-full blur-[150px]" />
-      </div>
-
       {/* Top right: Auth button */}
       <div className="fixed top-4 right-4 z-50">
         <UserMenu />
@@ -511,23 +426,7 @@ export default function HomePage() {
         </div>
       </div>
 
-      {/* Corner decoration lines */}
-      <svg className="fixed top-0 left-0 w-16 h-16 opacity-20 pointer-events-none z-30" viewBox="0 0 64 64">
-        <motion.line x1="0" y1="0" x2="64" y2="0" stroke="rgba(0,240,255,0.4)" strokeWidth="1"
-          initial={{ pathLength: 0 }} animate={{ pathLength: 1 }} transition={{ duration: 2, delay: 1 }}
-        />
-        <motion.line x1="0" y1="0" x2="0" y2="64" stroke="rgba(0,240,255,0.4)" strokeWidth="1"
-          initial={{ pathLength: 0 }} animate={{ pathLength: 1 }} transition={{ duration: 2, delay: 1.2 }}
-        />
-      </svg>
-      <svg className="fixed bottom-0 right-0 w-16 h-16 opacity-20 pointer-events-none z-30" viewBox="0 0 64 64">
-        <motion.line x1="64" y1="64" x2="0" y2="64" stroke="rgba(0,240,255,0.4)" strokeWidth="1"
-          initial={{ pathLength: 0 }} animate={{ pathLength: 1 }} transition={{ duration: 2, delay: 1.4 }}
-        />
-        <motion.line x1="64" y1="64" x2="64" y2="0" stroke="rgba(0,240,255,0.4)" strokeWidth="1"
-          initial={{ pathLength: 0 }} animate={{ pathLength: 1 }} transition={{ duration: 2, delay: 1.6 }}
-        />
-      </svg>
+
     </div>
   );
 }
