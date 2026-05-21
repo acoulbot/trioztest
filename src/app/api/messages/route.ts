@@ -27,6 +27,21 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
+  // Check if user is banned
+  const user = await prisma.user.findUnique({ where: { id: session.user.id } });
+  if (user?.banned) {
+    const now = new Date();
+    if (!user.bannedUntil || new Date(user.bannedUntil) > now) {
+      const until = user.bannedUntil
+        ? new Date(user.bannedUntil).toLocaleString("ru-RU")
+        : "бессрочно";
+      return NextResponse.json(
+        { error: `Ваш аккаунт ограничен до ${until}. Причина: ${user.banReason || "не указана"}` },
+        { status: 403 }
+      );
+    }
+  }
+
   const { content, channelId } = await req.json();
   if (!content || !channelId) {
     return NextResponse.json({ error: "Missing fields" }, { status: 400 });

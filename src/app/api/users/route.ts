@@ -18,6 +18,7 @@ export async function GET() {
       role: true,
       banned: true,
       banReason: true,
+      bannedUntil: true,
       createdAt: true,
       _count: { select: { messages: true } },
     },

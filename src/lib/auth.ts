@@ -18,10 +18,12 @@ export const authOptions: NextAuthOptions = {
           where: { email: credentials.email },
         });
 
-        if (!user || user.banned) return null;
+        if (!user) return null;
 
         const isValid = await bcrypt.compare(credentials.password, user.password);
         if (!isValid) return null;
+
+        const isBanned = user.banned && (!user.bannedUntil || new Date(user.bannedUntil) > new Date());
 
         return {
           id: user.id,
@@ -29,6 +31,9 @@ export const authOptions: NextAuthOptions = {
           name: user.name,
           role: user.role,
           image: user.avatar,
+          banned: isBanned,
+          bannedUntil: user.bannedUntil?.toISOString() || null,
+          banReason: user.banReason || null,
         };
       },
     }),
@@ -36,15 +41,23 @@ export const authOptions: NextAuthOptions = {
   callbacks: {
     async jwt({ token, user }) {
       if (user) {
-        token.role = (user as { role: string }).role;
-        token.id = user.id;
+        const u = user as { role: string; id: string; banned: boolean; bannedUntil: string | null; banReason: string | null };
+        token.role = u.role;
+        token.id = u.id;
+        token.banned = u.banned;
+        token.bannedUntil = u.bannedUntil;
+        token.banReason = u.banReason;
       }
       return token;
     },
     async session({ session, token }) {
       if (session.user) {
-        (session.user as { role: string }).role = token.role as string;
-        (session.user as { id: string }).id = token.id as string;
+        const u = session.user as { role: string; id: string; banned: boolean; bannedUntil: string | null; banReason: string | null };
+        u.role = token.role as string;
+        u.id = token.id as string;
+        u.banned = token.banned as boolean;
+        u.bannedUntil = token.bannedUntil as string | null;
+        u.banReason = token.banReason as string | null;
       }
       return session;
     },
