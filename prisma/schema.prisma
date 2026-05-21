@@ -16,6 +16,7 @@ model User {
   role           String          @default("USER")
   banned         Boolean         @default(false)
   banReason      String?
+  bannedUntil    DateTime?
   messages       Message[]
   channelMembers ChannelMember[]
   createdAt      DateTime        @default(now())

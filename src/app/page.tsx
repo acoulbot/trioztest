@@ -1,9 +1,9 @@
 "use client";
 
-import { motion, AnimatePresence, useAnimation } from "framer-motion";
+import { motion, AnimatePresence } from "framer-motion";
 import Link from "next/link";
 import Image from "next/image";
-import { useEffect, useState, useMemo, useCallback } from "react";
+import { useEffect, useState, useMemo } from "react";
 import { useSession, signOut } from "next-auth/react";
 
 /* ─────────────── Types ─────────────── */
@@ -155,78 +155,19 @@ function WindowCard({ window, index }: { window: WindowData; index: number }) {
 
 /* ─────────────── Center Logo Button ─────────────── */
 
-function GhostParticle({ index, active }: { index: number; active: boolean }) {
-  const angle = (index * 60) + Math.random() * 30;
-  const rad = (angle * Math.PI) / 180;
-  const dist = 60 + index * 15;
-
-  return (
-    <motion.div
-      className="absolute w-2 h-2 rounded-full"
-      style={{
-        top: "50%",
-        left: "50%",
-        background: `rgba(100, 200, 255, ${0.5 - index * 0.06})`,
-        boxShadow: "0 0 6px rgba(100,200,255,0.4)",
-      }}
-      animate={
-        active
-          ? {
-              x: [0, Math.cos(rad) * dist],
-              y: [0, Math.sin(rad) * dist],
-              opacity: [0.6, 0],
-              scale: [1, 0.2],
-            }
-          : { x: 0, y: 0, opacity: 0, scale: 0 }
-      }
-      transition={{
-        duration: 1.5 + index * 0.1,
-        repeat: active ? Infinity : 0,
-        repeatDelay: 0.3,
-        delay: index * 0.08,
-        ease: "easeOut",
-      }}
-    />
-  );
-}
-
 function CenterLogoButton() {
   const [hovered, setHovered] = useState(false);
-  const spinControls = useAnimation();
-
-  const handleHoverStart = useCallback(async () => {
-    setHovered(true);
-    await spinControls.start({
-      rotate: [0, 360],
-      transition: { duration: 0.6, ease: [0.2, 0, 0.3, 1] },
-    });
-    spinControls.start({
-      rotate: [0, 360],
-      transition: { duration: 8, ease: "linear", repeat: Infinity },
-    });
-  }, [spinControls]);
-
-  const handleHoverEnd = useCallback(() => {
-    setHovered(false);
-    spinControls.stop();
-    spinControls.set({ rotate: 0 });
-  }, [spinControls]);
 
   return (
     <Link href="/about">
       <motion.div
         className="relative cursor-pointer"
-        onMouseEnter={handleHoverStart}
-        onMouseLeave={handleHoverEnd}
+        onMouseEnter={() => setHovered(true)}
+        onMouseLeave={() => setHovered(false)}
         initial={{ scale: 0, opacity: 0 }}
         animate={{ scale: 1, opacity: 1 }}
         transition={{ duration: 1, delay: 0.6, ease: [0.34, 1.56, 0.64, 1] }}
       >
-        {/* Ghost particles */}
-        {Array.from({ length: 8 }).map((_, i) => (
-          <GhostParticle key={i} index={i} active={hovered} />
-        ))}
-
         {/* Glow behind logo */}
         <motion.div
           className="absolute blur-2xl"
@@ -239,10 +180,19 @@ function CenterLogoButton() {
           transition={{ duration: 0.4 }}
         />
 
-        {/* Logo image — no circular clip, respects transparency */}
+        {/* Logo image — gentle wobble on hover, respects transparency */}
         <motion.div
           className="relative w-24 h-24 sm:w-28 sm:h-28 md:w-32 md:h-32"
-          animate={spinControls}
+          animate={
+            hovered
+              ? { rotate: [0, 4, -4, 3, -3, 0], scale: 1.05 }
+              : { rotate: 0, scale: 1 }
+          }
+          transition={
+            hovered
+              ? { rotate: { duration: 2.5, repeat: Infinity, ease: "easeInOut" }, scale: { duration: 0.4 } }
+              : { duration: 0.4 }
+          }
           style={{
             filter: hovered
               ? "drop-shadow(0 0 20px rgba(100,200,255,0.5)) drop-shadow(0 0 40px rgba(100,200,255,0.2))"
