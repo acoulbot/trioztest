@@ -141,10 +141,7 @@ export default function SignInPage() {
           </button>
         </div>
 
-        <div className="mt-4 p-3 bg-dark-700/50 rounded-xl text-xs text-gray-500 text-center">
-          <p>Демо: admin@trioz.ru / admin123</p>
-          <p>Пользователь: user@trioz.ru / user123</p>
-        </div>
+
       </motion.div>
     </div>
   );
