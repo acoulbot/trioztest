@@ -89,6 +89,15 @@ export default function AdminPage() {
       color: "from-fantasy-purple/20 to-purple-600/20",
       borderColor: "border-fantasy-purple/20 hover:border-fantasy-purple/40",
     },
+    {
+      title: "Фоны окон",
+      count: "-",
+      href: "/admin/backgrounds",
+      icon: "🎨",
+      description: "Анимированные фоны главной",
+      color: "from-pink-400/20 to-rose-600/20",
+      borderColor: "border-pink-400/20 hover:border-pink-400/40",
+    },
   ];
 
   return (
@@ -143,6 +152,10 @@ export default function AdminPage() {
             <Link href="/admin/ecosystem" className="flex items-center gap-3 p-3 rounded-xl hover:bg-white/5 transition-colors text-gray-300 hover:text-white">
               <span className="text-xl">🌐</span>
               <span>Добавить элемент экосистемы</span>
+            </Link>
+            <Link href="/admin/backgrounds" className="flex items-center gap-3 p-3 rounded-xl hover:bg-white/5 transition-colors text-gray-300 hover:text-white">
+              <span className="text-xl">🎨</span>
+              <span>Настроить фоны окон</span>
             </Link>
           </div>
         </div>

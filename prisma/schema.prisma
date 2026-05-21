@@ -86,3 +86,14 @@ model EcosystemItem {
   order       Int     @default(0)
   active      Boolean @default(true)
 }
+
+model WindowBackground {
+  id            String  @id @default(cuid())
+  windowId      String  @unique
+  animationType String  @default("default")
+  customCss     String?
+  gradientFrom  String?
+  gradientVia   String?
+  gradientTo    String?
+  active        Boolean @default(true)
+}
