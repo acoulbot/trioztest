@@ -15,6 +15,7 @@ model User {
   password       String
   avatar         String?
   role           String          @default("USER")
+  emailVerified  Boolean         @default(false)
   banned         Boolean         @default(false)
   banReason      String?
   bannedUntil    DateTime?
@@ -26,6 +27,18 @@ model User {
   aiChats        AiChat[]
   createdAt      DateTime        @default(now())
   updatedAt      DateTime        @updatedAt
+}
+
+model VerificationCode {
+  id        String   @id @default(cuid())
+  email     String
+  code      String
+  type      String   @default("register")
+  expiresAt DateTime
+  used      Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  @@index([email, code])
 }
 
 model Group {
