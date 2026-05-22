@@ -2,6 +2,7 @@
 
 import { motion } from "framer-motion";
 import Link from "next/link";
+import EditableText from "@/components/EditableText";
 
 const items = [
   {
@@ -39,9 +40,7 @@ export default function PeroPage() {
               Перо Измерений
             </span>
           </h1>
-          <p className="text-gray-400 max-w-2xl mx-auto text-lg">
-            Настольные игры, книги и другие физические товары, направленные на развитие мышления
-          </p>
+          <EditableText contentKey="pero.subtitle" defaultValue="Настольные игры, книги и другие физические товары, направленные на развитие мышления" tag="p" className="text-gray-400 max-w-2xl mx-auto text-lg" />
         </motion.div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
@@ -67,7 +66,7 @@ export default function PeroPage() {
               <h3 className="text-xl font-bold text-white mb-3 group-hover:text-fantasy-purple transition-colors">
                 {item.title}
               </h3>
-              <p className="text-gray-400 leading-relaxed">{item.description}</p>
+              <EditableText contentKey={`pero.${i}.desc`} defaultValue={item.description} tag="p" className="text-gray-400 leading-relaxed" multiline />
             </motion.div>
           ))}
         </div>
@@ -78,11 +77,8 @@ export default function PeroPage() {
           viewport={{ once: true }}
           className="mt-16 glass-card p-8 text-center border border-fantasy-purple/10"
         >
-          <h3 className="text-xl font-bold text-white mb-3">Миссия</h3>
-          <p className="text-gray-400 max-w-2xl mx-auto leading-relaxed">
-            Создание легкодоступных для людей развлекательных товаров, направленных на развитие мышления.
-            Каждый продукт — это окно в мир T.Р.И.О.Z, где воображение встречается со стратегией.
-          </p>
+          <EditableText contentKey="pero.mission.title" defaultValue="Миссия" tag="h3" className="text-xl font-bold text-white mb-3" />
+          <EditableText contentKey="pero.mission.text" defaultValue="Создание легкодоступных для людей развлекательных товаров, направленных на развитие мышления. Каждый продукт — это окно в мир T.Р.И.О.Z, где воображение встречается со стратегией." tag="p" className="text-gray-400 max-w-2xl mx-auto leading-relaxed" multiline />
           <div className="mt-6">
             <Link href="/library" className="btn-secondary inline-block">
               Узнать больше о лоре

@@ -2,6 +2,7 @@
 
 import { motion } from "framer-motion";
 import Link from "next/link";
+import EditableText from "@/components/EditableText";
 
 const sections = [
   {
@@ -80,21 +81,17 @@ export default function AboutPage() {
             transition={{ duration: 0.8, delay: 0.4 }}
             className="text-5xl md:text-7xl font-display font-bold mb-4"
           >
-            <span className="bg-gradient-to-r from-violet-600 via-neutral-900 to-indigo-600 dark:from-cyan-400 dark:via-white dark:to-fantasy-purple bg-clip-text text-transparent">
-              Trio
-            </span>
-            <span className="text-violet-600 dark:text-cyan-400 glow-text">Z</span>
+            <EditableText contentKey="about.title" defaultValue="TrioZ" tag="span" className="bg-gradient-to-r from-violet-600 via-neutral-900 to-indigo-600 dark:from-cyan-400 dark:via-white dark:to-fantasy-purple bg-clip-text text-transparent" />
           </motion.h1>
 
-          <motion.p
+          <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             transition={{ delay: 0.6 }}
             className="text-lg text-neutral-500 dark:text-gray-400 max-w-2xl mx-auto leading-relaxed"
           >
-            Масштабная экосистема проектов в стиле dark fantasy и cyberpunk.
-            Один мир. Множество измерений. Игры, книги, коммуникации, технологии.
-          </motion.p>
+            <EditableText contentKey="about.subtitle" defaultValue="Масштабная экосистема проектов в стиле dark fantasy и cyberpunk. Один мир. Множество измерений. Игры, книги, коммуникации, технологии." tag="p" multiline />
+          </motion.div>
         </motion.div>
 
         {/* Sections */}
@@ -125,9 +122,7 @@ export default function AboutPage() {
                       </h2>
                     </div>
 
-                    <p className="text-neutral-500 dark:text-gray-400 leading-relaxed text-sm md:text-base">
-                      {section.description}
-                    </p>
+                    <EditableText contentKey={`about.section.${section.key}`} defaultValue={section.description} tag="p" className="text-neutral-500 dark:text-gray-400 leading-relaxed text-sm md:text-base" multiline />
 
                     <div className="flex items-center gap-2 mt-4 opacity-0 group-hover:opacity-100 transition-opacity duration-300">
                       <span className="text-sm font-medium" style={{ color: section.color }}>
@@ -159,7 +154,7 @@ export default function AboutPage() {
           transition={{ delay: 1.2 }}
           className="text-center mt-16 text-neutral-400 dark:text-gray-600 text-sm"
         >
-          <p>&copy; 2024 T.Р.И.О.Z — Экосистема проектов</p>
+          <EditableText contentKey="about.footer" defaultValue="&copy; 2024 T.Р.И.О.Z — Экосистема проектов" tag="p" />
         </motion.div>
       </div>
     </div>

@@ -6,6 +6,8 @@ import Image from "next/image";
 import { useEffect, useState, useMemo } from "react";
 import { useSession, signOut } from "next-auth/react";
 import { useTheme } from "@/components/Providers";
+import { useInlineEdit } from "@/components/InlineEditContext";
+import EditableText from "@/components/EditableText";
 
 /* ─────────────── Types ─────────────── */
 
@@ -130,17 +132,24 @@ function WindowCard({ window, index }: { window: WindowData; index: number }) {
           />
 
           <div className="relative z-10 flex flex-col justify-end h-full p-4 sm:p-6">
-            <h3 className="text-lg sm:text-xl md:text-2xl font-display font-bold text-white mb-1 group-hover:translate-x-1 transition-transform duration-500">
-              {window.title}
-            </h3>
+            <EditableText
+              contentKey={`window.${window.windowKey}.title`}
+              defaultValue={window.title}
+              tag="h3"
+              className="text-lg sm:text-xl md:text-2xl font-display font-bold text-white mb-1 group-hover:translate-x-1 transition-transform duration-500"
+            />
 
-            <motion.p
-              className="text-gray-500 text-xs sm:text-sm"
+            <motion.div
               animate={hovered ? { opacity: 1 } : { opacity: 0.3 }}
               transition={{ duration: 0.3 }}
             >
-              {window.subtitle}
-            </motion.p>
+              <EditableText
+                contentKey={`window.${window.windowKey}.subtitle`}
+                defaultValue={window.subtitle}
+                tag="p"
+                className="text-gray-500 text-xs sm:text-sm"
+              />
+            </motion.div>
           </div>
         </motion.div>
       </Link>
@@ -213,6 +222,7 @@ function UserMenu() {
   const { data: session } = useSession();
   const [menuOpen, setMenuOpen] = useState(false);
   const { theme, toggleTheme } = useTheme();
+  const { editMode, toggleEditMode, isAdmin } = useInlineEdit();
 
   return (
     <div className="flex items-center gap-2">
@@ -232,6 +242,22 @@ function UserMenu() {
           </svg>
         )}
       </button>
+
+      {isAdmin && (
+        <button
+          onClick={toggleEditMode}
+          className={`p-2 rounded-xl transition-all ${
+            editMode
+              ? "bg-cyan-500 text-white shadow-lg shadow-cyan-500/30"
+              : "text-gray-400 hover:text-white hover:bg-white/10"
+          }`}
+          title={editMode ? "Выключить редактирование" : "Редактировать сайт"}
+        >
+          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+          </svg>
+        </button>
+      )}
 
       {!session ? (
         <Link href="/auth/signin">

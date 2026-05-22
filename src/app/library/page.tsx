@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
 import Link from "next/link";
+import EditableText from "@/components/EditableText";
 
 interface Article {
   id: string;
@@ -41,9 +42,7 @@ export default function LibraryPage() {
           className="text-center mb-12"
         >
           <h1 className="section-title text-4xl md:text-5xl mb-4">TZ.Library</h1>
-          <p className="text-gray-400 max-w-xl mx-auto">
-            Хранилище знаний и лора вселенной T.Р.И.О.Z. Статьи, история, мифология.
-          </p>
+          <EditableText contentKey="library.subtitle" defaultValue="Хранилище знаний и лора вселенной T.Р.И.О.Z. Статьи, история, мифология." tag="p" className="text-gray-400 max-w-xl mx-auto" />
         </motion.div>
 
         {categories.length > 0 && (
