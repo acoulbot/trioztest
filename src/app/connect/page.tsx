@@ -4,6 +4,9 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import { useSession } from "next-auth/react";
 import { motion, AnimatePresence } from "framer-motion";
 import Link from "next/link";
+import dynamic from "next/dynamic";
+
+const VoiceChannel = dynamic(() => import("@/components/VoiceChannel"), { ssr: false });
 
 interface Channel {
   id: string;
@@ -180,8 +183,27 @@ export default function ConnectPage() {
           )}
         </div>
 
-        {/* Messages or Welcome */}
-        {selectedChannel ? (
+        {/* Messages / Voice / Welcome */}
+        {selectedChannel && selectedChannelData?.type === "VOICE" ? (
+          session ? (
+            <VoiceChannel
+              channelId={selectedChannel}
+              channelName={selectedChannelData.name}
+              userId={session.user.id}
+              userName={session.user.name || "Пользователь"}
+            />
+          ) : (
+            <div className="flex-1 flex items-center justify-center">
+              <div className="text-center">
+                <span className="text-4xl block mb-3">🎙️</span>
+                <p className="text-gray-400 mb-4">Войдите, чтобы подключиться к голосовому каналу</p>
+                <Link href="/auth/signin" className="btn-secondary text-sm">
+                  Войти
+                </Link>
+              </div>
+            </div>
+          )
+        ) : selectedChannel ? (
           <>
             <div className="flex-1 overflow-y-auto p-4 space-y-4">
               {messages.length === 0 ? (
