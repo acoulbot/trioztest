@@ -92,34 +92,51 @@ export default function SignInPage() {
     return () => clearTimeout(t);
   }, [countdown]);
 
+  const handleLogin = async () => {
+    setError("");
+    if (!email || !password) {
+      setError("Введите email и пароль");
+      return;
+    }
+    setLoading(true);
+    try {
+      const result = await signIn("credentials", {
+        email,
+        password,
+        redirect: false,
+      });
+      if (result?.error) {
+        setError("Неверный email или пароль");
+      } else {
+        router.push("/");
+        router.refresh();
+      }
+    } catch {
+      setError("Произошла ошибка");
+    }
+    setLoading(false);
+  };
+
   const sendCode = async () => {
     setError("");
     setLoading(true);
 
     try {
-      if (authType === "register") {
-        if (!email || !name || !username || !password) {
-          setError("Заполните все поля");
-          setLoading(false);
-          return;
-        }
-        if (!/^[a-zA-Z0-9_]{3,20}$/.test(username)) {
-          setError("Юзернейм: 3-20 символов, латиница, цифры и _");
-          setLoading(false);
-          return;
-        }
-      } else {
-        if (!email) {
-          setError("Введите email");
-          setLoading(false);
-          return;
-        }
+      if (!email || !name || !username || !password) {
+        setError("Заполните все поля");
+        setLoading(false);
+        return;
+      }
+      if (!/^[a-zA-Z0-9_]{3,20}$/.test(username)) {
+        setError("Юзернейм: 3-20 символов, латиница, цифры и _");
+        setLoading(false);
+        return;
       }
 
       const res = await fetch("/api/auth/send-code", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, type: authType }),
+        body: JSON.stringify({ email, type: "register" }),
       });
 
       const data = await res.json();
@@ -146,7 +163,7 @@ export default function SignInPage() {
       const verifyRes = await fetch("/api/auth/verify-code", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, code, type: authType }),
+        body: JSON.stringify({ email, code, type: "register" }),
       });
 
       const verifyData = await verifyRes.json();
@@ -156,19 +173,17 @@ export default function SignInPage() {
         return;
       }
 
-      if (authType === "register") {
-        const regRes = await fetch("/api/auth/register", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ email, password, name, username, verificationCode: code }),
-        });
+      const regRes = await fetch("/api/auth/register", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email, password, name, username, verificationCode: code }),
+      });
 
-        const regData = await regRes.json();
-        if (!regRes.ok) {
-          setError(regData.error || "Ошибка регистрации");
-          setLoading(false);
-          return;
-        }
+      const regData = await regRes.json();
+      if (!regRes.ok) {
+        setError(regData.error || "Ошибка регистрации");
+        setLoading(false);
+        return;
       }
 
       const result = await signIn("credentials", {
@@ -178,11 +193,7 @@ export default function SignInPage() {
       });
 
       if (result?.error) {
-        if (authType === "login") {
-          setError("Неверный пароль");
-        } else {
-          setError("Ошибка входа");
-        }
+        setError("Ошибка входа");
       } else {
         router.push("/");
         router.refresh();
@@ -233,7 +244,7 @@ export default function SignInPage() {
               <p className="text-neutral-500 dark:text-gray-400 text-sm mt-1">
                 {authType === "register"
                   ? "Создайте аккаунт — код подтверждения придёт на email"
-                  : "Код подтверждения придёт на вашу почту"}
+                  : "Введите email и пароль"}
               </p>
             </>
           ) : (
@@ -302,6 +313,7 @@ export default function SignInPage() {
                   type="password"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
+                  onKeyDown={(e) => { if (e.key === "Enter") { if (authType === "login") { handleLogin(); } else { sendCode(); } } }}
                   className="input-field"
                   placeholder="••••••••"
                   required
@@ -309,11 +321,13 @@ export default function SignInPage() {
               </div>
 
               <button
-                onClick={sendCode}
+                onClick={authType === "login" ? handleLogin : sendCode}
                 disabled={loading}
                 className="btn-primary w-full disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                {loading ? "Отправка..." : "Получить код на email"}
+                {loading
+                  ? (authType === "login" ? "Вход..." : "Отправка...")
+                  : (authType === "login" ? "Войти" : "Получить код на email")}
               </button>
             </div>
 
