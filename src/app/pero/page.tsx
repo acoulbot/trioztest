@@ -11,13 +11,17 @@ const items = [
     description: "Первая книга серии «Перо Измерений», погружающая читателя в глубины вселенной T.Р.И.О.Z. История о путешествии через измерения, где каждый мир хранит свои тайны и опасности.",
     status: "В процессе редактирования",
     icon: "📖",
+    href: null as string | null,
+    ctaLabel: null as string | null,
   },
   {
     title: "Перо Измерений: Вельд'Эран",
     type: "Настольная игра",
-    description: "Стратегическая настольная игра во вселенной T.Р.И.О.Z. Развивает мышление, предлагает уникальную механику измерений. Для 2-6 игроков.",
-    status: "В разработке",
+    description: "Стратегическая настольная игра во вселенной T.Р.И.О.Z. Десять фракций, карта мира с городами, святилищами и особыми локациями, бои на картах и призыв богов. 2–10 игроков.",
+    status: "Браузерная демо-версия",
     icon: "🎲",
+    href: "/pero/veld-eran",
+    ctaLabel: "Запустить партию →",
   },
 ];
 
@@ -67,6 +71,14 @@ export default function PeroPage() {
                 {item.title}
               </h3>
               <EditableText contentKey={`pero.${i}.desc`} defaultValue={item.description} tag="p" className="text-gray-400 leading-relaxed" multiline />
+              {item.href && (
+                <Link
+                  href={item.href}
+                  className="inline-block mt-4 px-4 py-2 rounded-lg bg-fantasy-purple/20 hover:bg-fantasy-purple/30 border border-fantasy-purple/40 text-fantasy-purple text-sm font-medium transition"
+                >
+                  {item.ctaLabel}
+                </Link>
+              )}
             </motion.div>
           ))}
         </div>

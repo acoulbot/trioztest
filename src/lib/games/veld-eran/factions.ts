@@ -1,0 +1,168 @@
+import type { FactionDef, FactionId, GodEntry } from "./types";
+
+export const FACTIONS: Record<FactionId, FactionDef> = {
+  empire: {
+    id: "empire",
+    name: "Империя",
+    tagline: "Империя людей севера Вайн’Вуделла",
+    color: "#dc2626",
+    borderColor: "#7f1d1d",
+    lore: "Главный враг Республики и Вальгаллов.",
+  },
+  republic: {
+    id: "republic",
+    name: "Республика",
+    tagline: "Республика людей юга Вайн’Вуделла",
+    color: "#2563eb",
+    borderColor: "#1e3a8a",
+    lore: "Главный враг Империи и Серебряного Мятежа.",
+  },
+  subbgars: {
+    id: "subbgars",
+    name: "Суббгары",
+    tagline: "Викингообразные гиганты фьордов",
+    color: "#7e22ce",
+    borderColor: "#3b0764",
+    lore: "Могут «летать» между своими городами и Лагерем Наёмников за один ход.",
+    canFly: true,
+  },
+  dwarves: {
+    id: "dwarves",
+    name: "Дворфы",
+    tagline: "Бородатые карлики горных крепостей",
+    color: "#eab308",
+    borderColor: "#713f12",
+    lore: "Главные враги Суббгаров и Аваллов.",
+  },
+  delions: {
+    id: "delions",
+    name: "Дэлионы",
+    tagline: "Низшие Эльфы лесов Алвинда",
+    color: "#0f172a",
+    borderColor: "#020617",
+    lore: "Главные враги Авайнов.",
+  },
+  avayns: {
+    id: "avayns",
+    name: "Авайны",
+    tagline: "Высшие Эльфы Алдесвинда",
+    color: "#f8fafc",
+    borderColor: "#94a3b8",
+    lore: "Главные враги Дэлионов.",
+  },
+  ancients: {
+    id: "ancients",
+    name: "Союз Древних",
+    tagline: "Вальгаллы + Аваллы",
+    color: "#92400e",
+    borderColor: "#451a03",
+    lore: "Законные владельцы Нортвилда и Валдесорта.",
+  },
+  trolls: {
+    id: "trolls",
+    name: "Тролли",
+    tagline: "Развалины Империи Троллей",
+    color: "#16a34a",
+    borderColor: "#14532d",
+    lore: "Возрождают былое влияние.",
+  },
+  dark: {
+    id: "dark",
+    name: "Тёмные",
+    tagline: "Культ Ситаса",
+    color: "#67e8f9",
+    borderColor: "#0e7490",
+    lore: "Фанатики бога Пустоты.",
+  },
+  rebellion: {
+    id: "rebellion",
+    name: "Серебряный мятеж",
+    tagline: "Восставшие воины Вестфолла",
+    color: "#94a3b8",
+    borderColor: "#475569",
+    lore: "Предатели Империи и Республики.",
+  },
+};
+
+export const FACTION_ORDER: FactionId[] = [
+  "empire",
+  "republic",
+  "subbgars",
+  "dwarves",
+  "delions",
+  "avayns",
+  "ancients",
+  "trolls",
+  "dark",
+  "rebellion",
+];
+
+/** Таблица божеств 2..12 (по двум кубикам). */
+export const GODS: GodEntry[] = [
+  {
+    roll: 2,
+    name: "Джалайна",
+    description: "Воскрешает любой ваш отряд или гвардию в любой точке карты, кроме святилища.",
+    effect: "instant",
+  },
+  {
+    roll: 3,
+    name: "Авалайс",
+    description: "Получаете карту: утопить любую вражескую армию на морских путях.",
+    effect: "card",
+  },
+  {
+    roll: 4,
+    name: "Стратос",
+    description: "Уничтожает вашу гвардию на этом святилище.",
+    effect: "instant",
+  },
+  {
+    roll: 5,
+    name: "Ситас",
+    description: "Получаете карту: пропустить ход любому игроку.",
+    effect: "card",
+  },
+  {
+    roll: 6,
+    name: "Шент’Ар",
+    description: "Получаете 2 карты: сыграв перед боем, при победе вражеский отряд становится вашим.",
+    effect: "card",
+  },
+  {
+    roll: 7,
+    name: "Гиордг",
+    description: "Получаете 2 карты: сыграв перед боем, при проигрыше карта сгорает и бой переигрывается.",
+    effect: "card",
+  },
+  {
+    roll: 8,
+    name: "Сихварис",
+    description: "Переносит ваш отряд в любую точку карты, кроме святилища.",
+    effect: "instant",
+  },
+  {
+    roll: 9,
+    name: "Вьеронх",
+    description: "Получаете карту: перенести армию соперника в любую точку карты.",
+    effect: "card",
+  },
+  {
+    roll: 10,
+    name: "Ангелона",
+    description: "Призывает к этому святилищу 2 вражеских отряда.",
+    effect: "instant",
+  },
+  {
+    roll: 11,
+    name: "Антегриз",
+    description: "Уничтожает любой вражеский отряд на суше.",
+    effect: "instant",
+  },
+  {
+    roll: 12,
+    name: "Выбор",
+    description: "Выберите любое божество в помощь.",
+    effect: "instant",
+  },
+];
