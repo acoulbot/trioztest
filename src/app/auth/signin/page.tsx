@@ -12,6 +12,7 @@ export default function SignInPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [name, setName] = useState("");
+  const [username, setUsername] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
@@ -25,7 +26,7 @@ export default function SignInPage() {
         const res = await fetch("/api/auth/register", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ email, password, name }),
+          body: JSON.stringify({ email, password, name, username }),
         });
         const data = await res.json();
         if (!res.ok) {
@@ -88,17 +89,32 @@ export default function SignInPage() {
 
         <form onSubmit={handleSubmit} className="space-y-4">
           {isRegister && (
-            <div>
-              <label className="block text-sm text-neutral-600 dark:text-gray-400 mb-1">Имя</label>
-              <input
-                type="text"
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                className="input-field"
-                placeholder="Ваше имя"
-                required
-              />
-            </div>
+            <>
+              <div>
+                <label className="block text-sm text-neutral-600 dark:text-gray-400 mb-1">Имя</label>
+                <input
+                  type="text"
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  className="input-field"
+                  placeholder="Ваше имя"
+                  required
+                />
+              </div>
+              <div>
+                <label className="block text-sm text-neutral-600 dark:text-gray-400 mb-1">Юзернейм</label>
+                <input
+                  type="text"
+                  value={username}
+                  onChange={(e) => setUsername(e.target.value)}
+                  className="input-field"
+                  placeholder="my_username"
+                  pattern="[a-zA-Z0-9_]{3,20}"
+                  title="3-20 символов: латиница, цифры и _"
+                  required
+                />
+              </div>
+            </>
           )}
           <div>
             <label className="block text-sm text-neutral-600 dark:text-gray-400 mb-1">Email</label>
