@@ -1,0 +1,66 @@
+import { NextResponse } from "next/server";
+import prisma from "@/lib/prisma";
+import { generateCode, sendVerificationEmail } from "@/lib/email";
+
+export async function POST(req: Request) {
+  try {
+    const { email, type } = await req.json();
+
+    if (!email || !type) {
+      return NextResponse.json({ error: "Email и тип обязательны" }, { status: 400 });
+    }
+
+    if (type !== "register" && type !== "login") {
+      return NextResponse.json({ error: "Неверный тип" }, { status: 400 });
+    }
+
+    if (type === "login") {
+      const user = await prisma.user.findUnique({ where: { email } });
+      if (!user) {
+        return NextResponse.json({ error: "Пользователь не найден" }, { status: 404 });
+      }
+    }
+
+    if (type === "register") {
+      const existing = await prisma.user.findUnique({ where: { email } });
+      if (existing) {
+        return NextResponse.json({ error: "Email уже зарегистрирован" }, { status: 400 });
+      }
+    }
+
+    const recentCode = await prisma.verificationCode.findFirst({
+      where: {
+        email,
+        createdAt: { gte: new Date(Date.now() - 60 * 1000) },
+      },
+      orderBy: { createdAt: "desc" },
+    });
+
+    if (recentCode) {
+      return NextResponse.json(
+        { error: "Подождите минуту перед повторной отправкой" },
+        { status: 429 }
+      );
+    }
+
+    const code = generateCode();
+    const expiresAt = new Date(Date.now() + 10 * 60 * 1000);
+
+    await prisma.verificationCode.create({
+      data: { email, code, type, expiresAt },
+    });
+
+    const sent = await sendVerificationEmail(email, code, type);
+
+    if (!sent) {
+      return NextResponse.json(
+        { error: "Не удалось отправить письмо. Проверьте настройки SMTP." },
+        { status: 500 }
+      );
+    }
+
+    return NextResponse.json({ ok: true, message: "Код отправлен на " + email });
+  } catch {
+    return NextResponse.json({ error: "Внутренняя ошибка" }, { status: 500 });
+  }
+}
