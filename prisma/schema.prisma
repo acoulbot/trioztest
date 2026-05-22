@@ -23,10 +23,16 @@ model User {
   channelMembers ChannelMember[]
   groupMembers   GroupMember[]
   ownedGroups    Group[]         @relation("GroupOwner")
-  invitesCreated Invite[]
-  aiChats        AiChat[]
-  createdAt      DateTime        @default(now())
-  updatedAt      DateTime        @updatedAt
+  invitesCreated    Invite[]
+  aiChats           AiChat[]
+  friendsSent       Friendship[]   @relation("FriendshipSender")
+  friendsReceived   Friendship[]   @relation("FriendshipReceiver")
+  hostedGameRooms   GameRoom[]     @relation("GameHost")
+  gamePlayers       GamePlayer[]
+  gameInvitesSent   GameInvite[]   @relation("GameInviteSender")
+  gameInvitesRecvd  GameInvite[]   @relation("GameInviteReceiver")
+  createdAt         DateTime        @default(now())
+  updatedAt         DateTime        @updatedAt
 }
 
 model VerificationCode {
@@ -177,6 +183,64 @@ model AiChat {
   messages  AiMessage[]
   createdAt DateTime    @default(now())
   updatedAt DateTime    @updatedAt
+}
+
+model Friendship {
+  id         String   @id @default(cuid())
+  senderId   String
+  receiverId String
+  status     String   @default("PENDING")
+  sender     User     @relation("FriendshipSender", fields: [senderId], references: [id], onDelete: Cascade)
+  receiver   User     @relation("FriendshipReceiver", fields: [receiverId], references: [id], onDelete: Cascade)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@unique([senderId, receiverId])
+}
+
+model GameRoom {
+  id          String       @id @default(cuid())
+  name        String
+  hostId      String
+  host        User         @relation("GameHost", fields: [hostId], references: [id], onDelete: Cascade)
+  status      String       @default("LOBBY")
+  gameType    String       @default("velderan")
+  maxPlayers  Int          @default(6)
+  inviteCode  String       @unique
+  players     GamePlayer[]
+  invites     GameInvite[]
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+}
+
+model GamePlayer {
+  id        String   @id @default(cuid())
+  roomId    String
+  userId    String
+  faction   String?
+  color     String?
+  isReady   Boolean  @default(false)
+  turnOrder Int      @default(0)
+  room      GameRoom @relation(fields: [roomId], references: [id], onDelete: Cascade)
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  joinedAt  DateTime @default(now())
+
+  @@unique([roomId, userId])
+  @@unique([roomId, faction])
+}
+
+model GameInvite {
+  id         String   @id @default(cuid())
+  roomId     String
+  inviterId  String
+  inviteeId  String
+  status     String   @default("PENDING")
+  room       GameRoom @relation(fields: [roomId], references: [id], onDelete: Cascade)
+  inviter    User     @relation("GameInviteSender", fields: [inviterId], references: [id], onDelete: Cascade)
+  invitee    User     @relation("GameInviteReceiver", fields: [inviteeId], references: [id], onDelete: Cascade)
+  createdAt  DateTime @default(now())
+
+  @@unique([roomId, inviteeId])
 }
 
 model AiMessage {

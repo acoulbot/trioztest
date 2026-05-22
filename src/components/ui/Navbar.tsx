@@ -18,6 +18,7 @@ export default function Navbar() {
     { href: "/projects", label: "Т.Р.И.О.Z" },
     { href: "/pero", label: "Перо Измерений" },
     { href: "/connect", label: "TZ.Connect" },
+    { href: "/games", label: "Игры" },
     { href: "/library", label: "TZ.Library" },
   ];
 

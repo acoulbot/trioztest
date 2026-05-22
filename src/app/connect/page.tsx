@@ -7,6 +7,7 @@ import Link from "next/link";
 import dynamic from "next/dynamic";
 
 const VoiceChannel = dynamic(() => import("@/components/voice/VoiceChannel"), { ssr: false });
+const FriendsPanel = dynamic(() => import("@/components/friends/FriendsPanel"), { ssr: false });
 
 /* ─── Types ─── */
 
@@ -269,6 +270,7 @@ export default function ConnectPage() {
   const [showCreateChannel, setShowCreateChannel] = useState(false);
   const [showInvite, setShowInvite] = useState(false);
   const [showMembers, setShowMembers] = useState(false);
+  const [showFriends, setShowFriends] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const pollRef = useRef<NodeJS.Timeout | null>(null);
 
@@ -408,6 +410,18 @@ export default function ConnectPage() {
           className="w-12 h-12 rounded-2xl bg-neutral-200 dark:bg-neutral-800 text-blue-600 dark:text-blue-400 flex items-center justify-center hover:bg-blue-100 dark:hover:bg-blue-400/20 hover:rounded-xl transition-all duration-300"
           title="Присоединиться">
           <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z" /></svg>
+        </button>
+
+        <div className="w-8 h-px bg-neutral-300 dark:bg-white/10 my-1" />
+
+        <button onClick={() => setShowFriends(!showFriends)}
+          className={`w-12 h-12 rounded-2xl flex items-center justify-center hover:rounded-xl transition-all duration-300 ${
+            showFriends
+              ? "bg-amber-500 dark:bg-amber-500 text-white rounded-xl shadow-lg"
+              : "bg-neutral-200 dark:bg-neutral-800 text-amber-600 dark:text-amber-400 hover:bg-amber-100 dark:hover:bg-amber-400/20"
+          }`}
+          title="Друзья">
+          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
         </button>
       </div>
 
@@ -597,6 +611,11 @@ export default function ConnectPage() {
       {/* Members Panel */}
       {showMembers && groupDetail && (
         <MembersPanel group={groupDetail} onClose={() => setShowMembers(false)} />
+      )}
+
+      {/* Friends Panel */}
+      {showFriends && (
+        <FriendsPanel onClose={() => setShowFriends(false)} />
       )}
 
       {/* Modals */}
