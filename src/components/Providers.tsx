@@ -2,6 +2,7 @@
 
 import { SessionProvider } from "next-auth/react";
 import { ReactNode, createContext, useContext, useState, useEffect } from "react";
+import { InlineEditProvider } from "./InlineEditContext";
 
 type Theme = "dark" | "light";
 
@@ -45,7 +46,9 @@ export default function Providers({ children }: { children: ReactNode }) {
   return (
     <SessionProvider>
       <ThemeProvider>
-        {children}
+        <InlineEditProvider>
+          {children}
+        </InlineEditProvider>
       </ThemeProvider>
     </SessionProvider>
   );

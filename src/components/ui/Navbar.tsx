@@ -5,11 +5,13 @@ import { useSession, signOut } from "next-auth/react";
 import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useTheme } from "@/components/Providers";
+import { useInlineEdit } from "@/components/InlineEditContext";
 
 export default function Navbar() {
   const { data: session } = useSession();
   const [menuOpen, setMenuOpen] = useState(false);
   const { theme, toggleTheme } = useTheme();
+  const { editMode, toggleEditMode, isAdmin } = useInlineEdit();
 
   const navLinks = [
     { href: "/", label: "Главная" },
@@ -57,7 +59,22 @@ export default function Navbar() {
 
             {session ? (
               <div className="flex items-center gap-2">
-                {(session.user as { role?: string })?.role === "ADMIN" && (
+                {isAdmin && (
+                  <button
+                    onClick={toggleEditMode}
+                    className={`text-sm px-3 py-1.5 rounded-lg transition-all duration-300 flex items-center gap-1.5 ${
+                      editMode
+                        ? "bg-violet-500 dark:bg-cyan-500 text-white shadow-lg shadow-violet-500/30 dark:shadow-cyan-500/30"
+                        : "text-neutral-500 dark:text-gray-400 hover:text-violet-600 dark:hover:text-cyan-400 hover:bg-neutral-100 dark:hover:bg-white/5"
+                    }`}
+                  >
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                    </svg>
+                    <span className="hidden sm:inline">{editMode ? "Редактирование" : "Редактировать"}</span>
+                  </button>
+                )}
+                {isAdmin && (
                   <Link
                     href="/admin"
                     className="text-sm text-amber-600 dark:text-fantasy-gold hover:text-amber-500 dark:hover:text-yellow-300 transition-colors"

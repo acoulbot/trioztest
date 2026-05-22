@@ -2,6 +2,7 @@
 
 import { motion } from "framer-motion";
 import Link from "next/link";
+import EditableText from "@/components/EditableText";
 
 const projects = [
   {
@@ -42,9 +43,7 @@ export default function ProjectsPage() {
               Проекты Т.Р.И.О.&quot;Z&quot;
             </span>
           </h1>
-          <p className="text-gray-400 max-w-2xl mx-auto text-lg">
-            Игры, карты, онлайн — масштабные проекты во вселенной T.Р.И.О.Z
-          </p>
+          <EditableText contentKey="projects.subtitle" defaultValue="Игры, карты, онлайн — масштабные проекты во вселенной T.Р.И.О.Z" tag="p" className="text-gray-400 max-w-2xl mx-auto text-lg" />
         </motion.div>
 
         <div className="space-y-8">
@@ -64,7 +63,7 @@ export default function ProjectsPage() {
                       {project.status}
                     </span>
                   </div>
-                  <p className="text-gray-300 leading-relaxed mb-4">{project.description}</p>
+                  <EditableText contentKey={`projects.${i}.desc`} defaultValue={project.description} tag="p" className="text-gray-300 leading-relaxed mb-4" multiline />
                   <div className="flex flex-wrap gap-2">
                     {project.tags.map((tag) => (
                       <span key={tag} className="px-3 py-1 bg-dark-700/50 text-gray-400 text-sm rounded-lg">
@@ -85,8 +84,8 @@ export default function ProjectsPage() {
           className="mt-16 text-center"
         >
           <div className="glass-card p-8 inline-block">
-            <h3 className="text-xl font-bold text-white mb-3">Хотите присоединиться?</h3>
-            <p className="text-gray-400 mb-4">Следите за развитием проектов в TZ.Connect</p>
+            <EditableText contentKey="projects.cta.title" defaultValue="Хотите присоединиться?" tag="h3" className="text-xl font-bold text-white mb-3" />
+            <EditableText contentKey="projects.cta.text" defaultValue="Следите за развитием проектов в TZ.Connect" tag="p" className="text-gray-400 mb-4" />
             <Link href="/connect" className="btn-primary inline-block">
               Перейти в TZ.Connect
             </Link>
