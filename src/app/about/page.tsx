@@ -40,11 +40,11 @@ const sections = [
 
 export default function AboutPage() {
   return (
-    <div className="min-h-screen bg-dark-900 relative overflow-x-hidden">
+    <div className="min-h-screen bg-neutral-50 dark:bg-neutral-950 relative overflow-x-hidden">
       {/* Ambient background */}
       <div className="fixed inset-0 pointer-events-none">
-        <div className="absolute top-0 left-1/4 w-[500px] h-[500px] bg-cyan-400/[0.02] rounded-full blur-[150px]" />
-        <div className="absolute bottom-0 right-1/4 w-[500px] h-[500px] bg-fantasy-purple/[0.02] rounded-full blur-[150px]" />
+        <div className="absolute top-0 left-1/4 w-[500px] h-[500px] bg-violet-400/[0.03] dark:bg-cyan-400/[0.02] rounded-full blur-[150px]" />
+        <div className="absolute bottom-0 right-1/4 w-[500px] h-[500px] bg-indigo-400/[0.03] dark:bg-fantasy-purple/[0.02] rounded-full blur-[150px]" />
       </div>
 
       {/* Back button */}
@@ -52,8 +52,8 @@ export default function AboutPage() {
         <Link href="/">
           <motion.button
             className="px-4 py-2 rounded-xl text-sm font-medium transition-all duration-300
-              border border-white/10 text-gray-300 hover:text-cyan-400 hover:border-cyan-400/40
-              backdrop-blur-xl bg-black/30 flex items-center gap-2"
+              border border-neutral-300 dark:border-white/10 text-neutral-600 dark:text-gray-300 hover:text-violet-600 dark:hover:text-cyan-400 hover:border-violet-300 dark:hover:border-cyan-400/40
+              backdrop-blur-xl bg-white/80 dark:bg-black/30 flex items-center gap-2"
             whileHover={{ scale: 1.05, x: -2 }}
             whileTap={{ scale: 0.95 }}
           >
@@ -78,19 +78,19 @@ export default function AboutPage() {
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.8, delay: 0.4 }}
-            className="text-5xl md:text-7xl font-bold mb-4"
+            className="text-5xl md:text-7xl font-display font-bold mb-4"
           >
-            <span className="bg-gradient-to-r from-cyan-400 via-white to-fantasy-purple bg-clip-text text-transparent">
+            <span className="bg-gradient-to-r from-violet-600 via-neutral-900 to-indigo-600 dark:from-cyan-400 dark:via-white dark:to-fantasy-purple bg-clip-text text-transparent">
               Trio
             </span>
-            <span className="text-cyan-400 glow-text">Z</span>
+            <span className="text-violet-600 dark:text-cyan-400 glow-text">Z</span>
           </motion.h1>
 
           <motion.p
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             transition={{ delay: 0.6 }}
-            className="text-lg text-gray-400 max-w-2xl mx-auto leading-relaxed"
+            className="text-lg text-neutral-500 dark:text-gray-400 max-w-2xl mx-auto leading-relaxed"
           >
             Масштабная экосистема проектов в стиле dark fantasy и cyberpunk.
             Один мир. Множество измерений. Игры, книги, коммуникации, технологии.
@@ -120,12 +120,12 @@ export default function AboutPage() {
                         className="w-3 h-3 rounded-full animate-pulse"
                         style={{ backgroundColor: section.color, boxShadow: `0 0 10px ${section.color}50` }}
                       />
-                      <h2 className="text-xl md:text-2xl font-bold text-white group-hover:translate-x-1 transition-transform duration-300">
+                      <h2 className="text-xl md:text-2xl font-display font-bold text-neutral-900 dark:text-white group-hover:translate-x-1 transition-transform duration-300">
                         {section.title}
                       </h2>
                     </div>
 
-                    <p className="text-gray-400 leading-relaxed text-sm md:text-base">
+                    <p className="text-neutral-500 dark:text-gray-400 leading-relaxed text-sm md:text-base">
                       {section.description}
                     </p>
 
@@ -157,7 +157,7 @@ export default function AboutPage() {
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           transition={{ delay: 1.2 }}
-          className="text-center mt-16 text-gray-600 text-sm"
+          className="text-center mt-16 text-neutral-400 dark:text-gray-600 text-sm"
         >
           <p>&copy; 2024 T.Р.И.О.Z — Экосистема проектов</p>
         </motion.div>

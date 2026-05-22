@@ -98,6 +98,15 @@ export default function AdminPage() {
       color: "from-red-400/20 to-orange-600/20",
       borderColor: "border-red-400/20 hover:border-red-400/40",
     },
+    {
+      title: "ИИ-ассистент",
+      count: "AI",
+      href: "/admin/ai",
+      icon: "🧠",
+      description: "API ключ, модель, промт",
+      color: "from-violet-400/20 to-indigo-600/20",
+      borderColor: "border-violet-400/20 hover:border-violet-400/40",
+    },
   ];
 
   return (
@@ -156,6 +165,10 @@ export default function AdminPage() {
             <Link href="/admin/windows" className="flex items-center gap-3 p-3 rounded-xl hover:bg-white/5 transition-colors text-gray-300 hover:text-white">
               <span className="text-xl">🖼️</span>
               <span>Настроить окна главной</span>
+            </Link>
+            <Link href="/admin/ai" className="flex items-center gap-3 p-3 rounded-xl hover:bg-white/5 transition-colors text-gray-300 hover:text-white">
+              <span className="text-xl">🧠</span>
+              <span>Настроить ИИ-ассистент</span>
             </Link>
           </div>
         </div>

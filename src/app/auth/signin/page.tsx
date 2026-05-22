@@ -54,34 +54,34 @@ export default function SignInPage() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center px-4 bg-dark-900">
+    <div className="min-h-screen flex items-center justify-center px-4 bg-neutral-50 dark:bg-neutral-950">
       <div className="fixed inset-0 pointer-events-none">
-        <div className="absolute top-1/3 left-1/3 w-96 h-96 bg-cyan-400/5 rounded-full blur-[120px]" />
-        <div className="absolute bottom-1/3 right-1/3 w-96 h-96 bg-fantasy-purple/5 rounded-full blur-[120px]" />
+        <div className="absolute top-1/3 left-1/3 w-96 h-96 bg-violet-400/5 dark:bg-cyan-400/5 rounded-full blur-[120px]" />
+        <div className="absolute bottom-1/3 right-1/3 w-96 h-96 bg-indigo-400/5 dark:bg-fantasy-purple/5 rounded-full blur-[120px]" />
       </div>
 
       <motion.div
         initial={{ opacity: 0, y: 20, scale: 0.95 }}
         animate={{ opacity: 1, y: 0, scale: 1 }}
         transition={{ duration: 0.6 }}
-        className="glass-card p-8 w-full max-w-md relative"
+        className="bg-white dark:bg-neutral-900/80 backdrop-blur-xl border border-neutral-200 dark:border-white/10 rounded-2xl p-8 w-full max-w-md relative shadow-xl"
       >
         <div className="text-center mb-8">
           <Link href="/" className="inline-flex items-center gap-2 mb-4">
-            <div className="w-10 h-10 bg-gradient-to-br from-cyan-400 to-fantasy-purple rounded-xl flex items-center justify-center">
+            <div className="w-10 h-10 bg-gradient-to-br from-violet-500 to-indigo-600 dark:from-cyan-400 dark:to-fantasy-purple rounded-xl flex items-center justify-center">
               <span className="text-white font-bold">TZ</span>
             </div>
           </Link>
-          <h1 className="text-2xl font-bold text-white">
+          <h1 className="text-2xl font-display font-bold text-neutral-900 dark:text-white">
             {isRegister ? "Регистрация" : "Вход в TrioZ"}
           </h1>
-          <p className="text-gray-400 text-sm mt-1">
+          <p className="text-neutral-500 dark:text-gray-400 text-sm mt-1">
             {isRegister ? "Создайте аккаунт для доступа к экосистеме" : "Войдите в свой аккаунт"}
           </p>
         </div>
 
         {error && (
-          <div className="mb-4 p-3 bg-red-500/10 border border-red-500/30 rounded-xl text-red-400 text-sm text-center">
+          <div className="mb-4 p-3 bg-red-50 dark:bg-red-500/10 border border-red-200 dark:border-red-500/30 rounded-xl text-red-600 dark:text-red-400 text-sm text-center">
             {error}
           </div>
         )}
@@ -89,7 +89,7 @@ export default function SignInPage() {
         <form onSubmit={handleSubmit} className="space-y-4">
           {isRegister && (
             <div>
-              <label className="block text-sm text-gray-400 mb-1">Имя</label>
+              <label className="block text-sm text-neutral-600 dark:text-gray-400 mb-1">Имя</label>
               <input
                 type="text"
                 value={name}
@@ -101,7 +101,7 @@ export default function SignInPage() {
             </div>
           )}
           <div>
-            <label className="block text-sm text-gray-400 mb-1">Email</label>
+            <label className="block text-sm text-neutral-600 dark:text-gray-400 mb-1">Email</label>
             <input
               type="email"
               value={email}
@@ -112,7 +112,7 @@ export default function SignInPage() {
             />
           </div>
           <div>
-            <label className="block text-sm text-gray-400 mb-1">Пароль</label>
+            <label className="block text-sm text-neutral-600 dark:text-gray-400 mb-1">Пароль</label>
             <input
               type="password"
               value={password}
@@ -135,13 +135,11 @@ export default function SignInPage() {
         <div className="mt-6 text-center">
           <button
             onClick={() => { setIsRegister(!isRegister); setError(""); }}
-            className="text-sm text-cyan-400 hover:text-cyan-300 transition-colors"
+            className="text-sm text-violet-600 dark:text-cyan-400 hover:text-violet-500 dark:hover:text-cyan-300 transition-colors"
           >
             {isRegister ? "Уже есть аккаунт? Войти" : "Нет аккаунта? Зарегистрироваться"}
           </button>
         </div>
-
-
       </motion.div>
     </div>
   );

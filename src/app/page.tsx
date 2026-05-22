@@ -5,6 +5,7 @@ import Link from "next/link";
 import Image from "next/image";
 import { useEffect, useState, useMemo } from "react";
 import { useSession, signOut } from "next-auth/react";
+import { useTheme } from "@/components/Providers";
 
 /* ─────────────── Types ─────────────── */
 
@@ -49,7 +50,6 @@ function WindowAnimation({ accentColor, seed }: { accentColor: string; seed: num
 
   return (
     <div className="absolute inset-0 overflow-hidden pointer-events-none">
-      {/* Floating particles */}
       {particles.map((p) => (
         <motion.div
           key={p.id}
@@ -106,7 +106,6 @@ function WindowCard({ window, index }: { window: WindowData; index: number }) {
           whileHover={{ scale: 1.01 }}
           transition={{ duration: 0.3 }}
         >
-          {/* Video background if set */}
           {window.backgroundType === "video" && window.backgroundUrl && (
             <video
               autoPlay muted loop playsInline
@@ -115,7 +114,6 @@ function WindowCard({ window, index }: { window: WindowData; index: number }) {
             />
           )}
 
-          {/* Image background if set */}
           {window.backgroundType === "image" && window.backgroundUrl && (
             <div
               className="absolute inset-0 bg-cover bg-center"
@@ -123,19 +121,16 @@ function WindowCard({ window, index }: { window: WindowData; index: number }) {
             />
           )}
 
-          {/* Animated overlay */}
           <WindowAnimation accentColor={window.accentColor} seed={seeds[index] || 42} />
 
-          {/* Dark overlay */}
           <motion.div
             className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/30 to-transparent"
             animate={{ opacity: hovered ? 0.5 : 0.7 }}
             transition={{ duration: 0.4 }}
           />
 
-          {/* Content */}
           <div className="relative z-10 flex flex-col justify-end h-full p-4 sm:p-6">
-            <h3 className="text-lg sm:text-xl md:text-2xl font-bold text-white mb-1 group-hover:translate-x-1 transition-transform duration-500">
+            <h3 className="text-lg sm:text-xl md:text-2xl font-display font-bold text-white mb-1 group-hover:translate-x-1 transition-transform duration-500">
               {window.title}
             </h3>
 
@@ -180,7 +175,7 @@ function CenterLogoButton() {
           transition={{ duration: 0.4 }}
         />
 
-        {/* Logo image — gentle wobble on hover, respects transparency */}
+        {/* Logo image */}
         <motion.div
           className="relative w-24 h-24 sm:w-28 sm:h-28 md:w-32 md:h-32"
           animate={
@@ -217,97 +212,115 @@ function CenterLogoButton() {
 function UserMenu() {
   const { data: session } = useSession();
   const [menuOpen, setMenuOpen] = useState(false);
-
-  if (!session) {
-    return (
-      <Link href="/auth/signin">
-        <motion.button
-          className="px-4 py-2 rounded-xl text-sm font-medium transition-all duration-300
-            border border-white/10 text-gray-300 hover:text-cyan-400 hover:border-cyan-400/40
-            hover:shadow-[0_0_20px_rgba(0,240,255,0.15)] backdrop-blur-xl bg-black/30"
-          whileHover={{ scale: 1.05 }}
-          whileTap={{ scale: 0.95 }}
-        >
-          Войти
-        </motion.button>
-      </Link>
-    );
-  }
+  const { theme, toggleTheme } = useTheme();
 
   return (
-    <div className="relative">
-      <motion.button
-        onClick={() => setMenuOpen(!menuOpen)}
-        className="flex items-center gap-2 px-3 py-2 rounded-xl text-sm
-          border border-white/10 text-gray-300 backdrop-blur-xl bg-black/30
-          hover:border-cyan-400/30 transition-all duration-300"
-        whileHover={{ scale: 1.02 }}
+    <div className="flex items-center gap-2">
+      {/* Theme toggle */}
+      <button
+        onClick={toggleTheme}
+        className="p-2 rounded-xl text-gray-400 hover:text-white hover:bg-white/10 transition-all"
+        title={theme === "dark" ? "Светлая тема" : "Тёмная тема"}
       >
-        <div className="w-6 h-6 rounded-full bg-gradient-to-br from-cyan-400/30 to-fantasy-purple/30 flex items-center justify-center">
-          <span className="text-[10px] font-bold text-white">
-            {session.user?.name?.charAt(0) || "U"}
-          </span>
-        </div>
-        <span className="hidden sm:inline text-xs">{session.user?.name}</span>
-        <svg className={`w-3 h-3 transition-transform ${menuOpen ? "rotate-180" : ""}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-        </svg>
-      </motion.button>
-
-      <AnimatePresence>
-        {menuOpen && (
-          <motion.div
-            initial={{ opacity: 0, y: -8, scale: 0.95 }}
-            animate={{ opacity: 1, y: 0, scale: 1 }}
-            exit={{ opacity: 0, y: -8, scale: 0.95 }}
-            transition={{ duration: 0.2 }}
-            className="absolute right-0 top-full mt-2 w-48 rounded-xl border border-white/10 bg-dark-800/95 backdrop-blur-xl shadow-2xl overflow-hidden z-50"
-          >
-            <div className="p-3 border-b border-white/5">
-              <p className="text-xs text-gray-400">Вы вошли как</p>
-              <p className="text-sm text-white font-medium truncate">{session.user?.name}</p>
-              <p className="text-[10px] text-gray-500 truncate">{session.user?.email}</p>
-            </div>
-
-            <div className="p-1">
-              {(session.user as { role?: string })?.role === "ADMIN" && (
-                <Link
-                  href="/admin"
-                  onClick={() => setMenuOpen(false)}
-                  className="flex items-center gap-2 px-3 py-2 text-sm text-fantasy-gold hover:bg-white/5 rounded-lg transition-colors"
-                >
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.066 2.573c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.573 1.066c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.066-2.573c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                  </svg>
-                  Админ-панель
-                </Link>
-              )}
-
-              <Link
-                href="/projects"
-                onClick={() => setMenuOpen(false)}
-                className="flex items-center gap-2 px-3 py-2 text-sm text-gray-300 hover:text-white hover:bg-white/5 rounded-lg transition-colors"
-              >
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zm10 0a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zm10 0a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z" />
-                </svg>
-                Проекты
-              </Link>
-
-              <button
-                onClick={() => { signOut(); setMenuOpen(false); }}
-                className="flex items-center gap-2 px-3 py-2 text-sm text-red-400 hover:bg-white/5 rounded-lg transition-colors w-full text-left"
-              >
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
-                </svg>
-                Выйти
-              </button>
-            </div>
-          </motion.div>
+        {theme === "dark" ? (
+          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z" />
+          </svg>
+        ) : (
+          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z" />
+          </svg>
         )}
-      </AnimatePresence>
+      </button>
+
+      {!session ? (
+        <Link href="/auth/signin">
+          <motion.button
+            className="px-4 py-2 rounded-xl text-sm font-medium transition-all duration-300
+              border border-white/10 text-gray-300 hover:text-cyan-400 hover:border-cyan-400/40
+              hover:shadow-[0_0_20px_rgba(0,240,255,0.15)] backdrop-blur-xl bg-black/30"
+            whileHover={{ scale: 1.05 }}
+            whileTap={{ scale: 0.95 }}
+          >
+            Войти
+          </motion.button>
+        </Link>
+      ) : (
+        <div className="relative">
+          <motion.button
+            onClick={() => setMenuOpen(!menuOpen)}
+            className="flex items-center gap-2 px-3 py-2 rounded-xl text-sm
+              border border-white/10 text-gray-300 backdrop-blur-xl bg-black/30
+              hover:border-cyan-400/30 transition-all duration-300"
+            whileHover={{ scale: 1.02 }}
+          >
+            <div className="w-6 h-6 rounded-full bg-gradient-to-br from-violet-400/30 to-indigo-500/30 flex items-center justify-center">
+              <span className="text-[10px] font-bold text-white">
+                {session.user?.name?.charAt(0) || "U"}
+              </span>
+            </div>
+            <span className="hidden sm:inline text-xs">{session.user?.name}</span>
+            <svg className={`w-3 h-3 transition-transform ${menuOpen ? "rotate-180" : ""}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+            </svg>
+          </motion.button>
+
+          <AnimatePresence>
+            {menuOpen && (
+              <motion.div
+                initial={{ opacity: 0, y: -8, scale: 0.95 }}
+                animate={{ opacity: 1, y: 0, scale: 1 }}
+                exit={{ opacity: 0, y: -8, scale: 0.95 }}
+                transition={{ duration: 0.2 }}
+                className="absolute right-0 top-full mt-2 w-48 rounded-xl border border-white/10 bg-neutral-900/95 backdrop-blur-xl shadow-2xl overflow-hidden z-50"
+              >
+                <div className="p-3 border-b border-white/5">
+                  <p className="text-xs text-gray-400">Вы вошли как</p>
+                  <p className="text-sm text-white font-medium truncate">{session.user?.name}</p>
+                  <p className="text-[10px] text-gray-500 truncate">{session.user?.email}</p>
+                </div>
+
+                <div className="p-1">
+                  {(session.user as { role?: string })?.role === "ADMIN" && (
+                    <Link
+                      href="/admin"
+                      onClick={() => setMenuOpen(false)}
+                      className="flex items-center gap-2 px-3 py-2 text-sm text-amber-400 hover:bg-white/5 rounded-lg transition-colors"
+                    >
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.066 2.573c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.573 1.066c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.066-2.573c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                      </svg>
+                      Админ-панель
+                    </Link>
+                  )}
+
+                  <Link
+                    href="/projects"
+                    onClick={() => setMenuOpen(false)}
+                    className="flex items-center gap-2 px-3 py-2 text-sm text-gray-300 hover:text-white hover:bg-white/5 rounded-lg transition-colors"
+                  >
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zm10 0a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zm10 0a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z" />
+                    </svg>
+                    Проекты
+                  </Link>
+
+                  <button
+                    onClick={() => { signOut(); setMenuOpen(false); }}
+                    className="flex items-center gap-2 px-3 py-2 text-sm text-red-400 hover:bg-white/5 rounded-lg transition-colors w-full text-left"
+                  >
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+                    </svg>
+                    Выйти
+                  </button>
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </div>
+      )}
     </div>
   );
 }
@@ -356,13 +369,13 @@ export default function HomePage() {
   }, []);
 
   return (
-    <div className="fixed inset-0 bg-dark-900 overflow-hidden">
-      {/* Top right: Auth button */}
+    <div className="fixed inset-0 bg-neutral-950 overflow-hidden">
+      {/* Top right: Auth button + Theme toggle */}
       <div className="fixed top-4 right-4 z-50">
         <UserMenu />
       </div>
 
-      {/* 4 Windows Grid - full screen */}
+      {/* 4 Windows Grid */}
       <div className="absolute inset-0 grid grid-cols-2 grid-rows-2 gap-[1px]" style={{ backgroundColor: "rgba(255,255,255,0.03)" }}>
         {windows.map((win, i) => (
           <WindowCard key={win.id} window={win} index={i} />
@@ -375,8 +388,6 @@ export default function HomePage() {
           <CenterLogoButton />
         </div>
       </div>
-
-
     </div>
   );
 }
