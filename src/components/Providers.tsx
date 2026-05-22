@@ -3,6 +3,7 @@
 import { SessionProvider } from "next-auth/react";
 import { ReactNode, createContext, useContext, useState, useEffect } from "react";
 import { InlineEditProvider } from "./InlineEditContext";
+import InlineEditOverlay from "./InlineEditOverlay";
 
 type Theme = "dark" | "light";
 
@@ -48,6 +49,7 @@ export default function Providers({ children }: { children: ReactNode }) {
       <ThemeProvider>
         <InlineEditProvider>
           {children}
+          <InlineEditOverlay />
         </InlineEditProvider>
       </ThemeProvider>
     </SessionProvider>
