@@ -10,6 +10,7 @@ datasource db {
 model User {
   id             String          @id @default(cuid())
   email          String          @unique
+  username       String          @unique
   name           String
   password       String
   avatar         String?
@@ -19,9 +20,51 @@ model User {
   bannedUntil    DateTime?
   messages       Message[]
   channelMembers ChannelMember[]
+  groupMembers   GroupMember[]
+  ownedGroups    Group[]         @relation("GroupOwner")
+  invitesCreated Invite[]
   aiChats        AiChat[]
   createdAt      DateTime        @default(now())
   updatedAt      DateTime        @updatedAt
+}
+
+model Group {
+  id          String        @id @default(cuid())
+  name        String
+  icon        String?
+  description String        @default("")
+  ownerId     String
+  owner       User          @relation("GroupOwner", fields: [ownerId], references: [id], onDelete: Cascade)
+  channels    Channel[]
+  members     GroupMember[]
+  invites     Invite[]
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+}
+
+model GroupMember {
+  id       String   @id @default(cuid())
+  userId   String
+  groupId  String
+  role     String   @default("MEMBER")
+  user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  group    Group    @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  joinedAt DateTime @default(now())
+
+  @@unique([userId, groupId])
+}
+
+model Invite {
+  id        String    @id @default(cuid())
+  code      String    @unique
+  groupId   String
+  createdBy String
+  maxUses   Int       @default(0)
+  uses      Int       @default(0)
+  expiresAt DateTime?
+  group     Group     @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  creator   User      @relation(fields: [createdBy], references: [id], onDelete: Cascade)
+  createdAt DateTime  @default(now())
 }
 
 model Channel {
@@ -29,6 +72,8 @@ model Channel {
   name      String
   type      String          @default("TEXT")
   icon      String?
+  groupId   String
+  group     Group           @relation(fields: [groupId], references: [id], onDelete: Cascade)
   members   ChannelMember[]
   messages  Message[]
   createdAt DateTime        @default(now())

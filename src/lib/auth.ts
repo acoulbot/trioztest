@@ -29,6 +29,7 @@ export const authOptions: NextAuthOptions = {
           id: user.id,
           email: user.email,
           name: user.name,
+          username: user.username,
           role: user.role,
           image: user.avatar,
           banned: isBanned,
@@ -41,9 +42,10 @@ export const authOptions: NextAuthOptions = {
   callbacks: {
     async jwt({ token, user }) {
       if (user) {
-        const u = user as { role: string; id: string; banned: boolean; bannedUntil: string | null; banReason: string | null };
+        const u = user as { role: string; id: string; username: string; banned: boolean; bannedUntil: string | null; banReason: string | null };
         token.role = u.role;
         token.id = u.id;
+        token.username = u.username;
         token.banned = u.banned;
         token.bannedUntil = u.bannedUntil;
         token.banReason = u.banReason;
@@ -52,9 +54,10 @@ export const authOptions: NextAuthOptions = {
     },
     async session({ session, token }) {
       if (session.user) {
-        const u = session.user as { role: string; id: string; banned: boolean; bannedUntil: string | null; banReason: string | null };
+        const u = session.user as { role: string; id: string; username: string; banned: boolean; bannedUntil: string | null; banReason: string | null };
         u.role = token.role as string;
         u.id = token.id as string;
+        u.username = token.username as string;
         u.banned = token.banned as boolean;
         u.bannedUntil = token.bannedUntil as string | null;
         u.banReason = token.banReason as string | null;

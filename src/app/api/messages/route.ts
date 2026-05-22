@@ -13,7 +13,7 @@ export async function GET(req: Request) {
 
   const messages = await prisma.message.findMany({
     where: { channelId },
-    include: { user: { select: { id: true, name: true, avatar: true } } },
+    include: { user: { select: { id: true, name: true, username: true, avatar: true } } },
     orderBy: { createdAt: "asc" },
     take: 100,
   });
@@ -53,7 +53,7 @@ export async function POST(req: Request) {
       channelId,
       userId: session.user.id,
     },
-    include: { user: { select: { id: true, name: true, avatar: true } } },
+    include: { user: { select: { id: true, name: true, username: true, avatar: true } } },
   });
 
   return NextResponse.json(message);
