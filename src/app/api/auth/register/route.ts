@@ -1,8 +1,11 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import bcrypt from "bcryptjs";
 import prisma from "@/lib/prisma";
+import { rateLimit } from "@/lib/rateLimit";
 
-export async function POST(req: Request) {
+export async function POST(req: NextRequest) {
+  const limited = rateLimit(req, "register", { limit: 10, windowMs: 60 * 60 * 1000 });
+  if (limited) return limited;
   try {
     const { email, name, username, password, verificationCode } = await req.json();
 

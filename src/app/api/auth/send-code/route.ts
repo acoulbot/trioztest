@@ -1,8 +1,11 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
 import { generateCode, sendVerificationEmail } from "@/lib/email";
+import { rateLimit } from "@/lib/rateLimit";
 
-export async function POST(req: Request) {
+export async function POST(req: NextRequest) {
+  const limited = rateLimit(req, "send-code", { limit: 5, windowMs: 15 * 60 * 1000 });
+  if (limited) return limited;
   try {
     const { email, type } = await req.json();
 
