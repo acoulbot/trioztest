@@ -141,14 +141,38 @@ export default function VoiceChannel({ channelId, channelName, onClose }: VoiceC
     if (!session?.user) return;
     setError(null);
 
+    // 1. Check if we're in a secure context (HTTPS or localhost)
+    //    navigator.mediaDevices is undefined on plain HTTP over IP address
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+      setError(
+        "Голосовой канал требует защищённого соединения (HTTPS). " +
+        "При локальном тесте используйте http://localhost:3000, а не IP-адрес."
+      );
+      return;
+    }
+
+    let stream: MediaStream | null = null;
+
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({
-        audio: {
-          echoCancellation: true,
-          noiseSuppression: true,
-          autoGainControl: true,
-        },
-      });
+      // 2. Try with ideal constraints first, fall back to plain audio: true
+      try {
+        stream = await navigator.mediaDevices.getUserMedia({
+          audio: {
+            echoCancellation: true,
+            noiseSuppression: true,
+            autoGainControl: true,
+          },
+        });
+      } catch (constraintErr) {
+        // OverconstrainedError or NotReadableError on constraints — retry without them
+        const name = constraintErr instanceof DOMException ? constraintErr.name : "";
+        if (name === "OverconstrainedError" || name === "NotReadableError") {
+          stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        } else {
+          throw constraintErr;
+        }
+      }
+
       localStreamRef.current = stream;
 
       const socket = io({
@@ -227,15 +251,45 @@ export default function VoiceChannel({ channelId, channelName, onClose }: VoiceC
       });
 
       socket.on("connect_error", () => {
-        setError("Не удалось подключиться к серверу");
+        // Release mic if socket fails — don't hold the stream open
+        stream?.getTracks().forEach((t) => t.stop());
+        localStreamRef.current = null;
+        socketRef.current?.disconnect();
+        socketRef.current = null;
+        setError("Не удалось подключиться к серверу. Проверьте соединение и попробуйте снова.");
       });
 
       startSpeakingDetection();
     } catch (err) {
-      if (err instanceof DOMException && err.name === "NotAllowedError") {
-        setError("Доступ к микрофону запрещён. Разрешите доступ в настройках браузера.");
+      // Release any stream that was acquired before the error
+      stream?.getTracks().forEach((t) => t.stop());
+      localStreamRef.current = null;
+
+      if (err instanceof DOMException) {
+        switch (err.name) {
+          case "NotAllowedError":
+          case "PermissionDeniedError":
+            setError("Доступ к микрофону запрещён. Нажмите на иконку 🔒 в адресной строке и разрешите микрофон.");
+            break;
+          case "NotFoundError":
+          case "DevicesNotFoundError":
+            setError("Микрофон не найден. Подключите микрофон или гарнитуру и попробуйте снова.");
+            break;
+          case "NotReadableError":
+          case "TrackStartError":
+            setError("Микрофон занят другим приложением. Закройте остальные вкладки или приложения, использующие микрофон.");
+            break;
+          case "OverconstrainedError":
+            setError("Ваш микрофон не поддерживает нужные параметры. Попробуйте другой микрофон.");
+            break;
+          case "AbortError":
+            setError("Не удалось получить доступ к микрофону. Попробуйте снова.");
+            break;
+          default:
+            setError(`Ошибка микрофона: ${err.message}`);
+        }
       } else {
-        setError("Не удалось подключиться к голосовому каналу");
+        setError("Не удалось подключиться к голосовому каналу. Попробуйте обновить страницу.");
       }
     }
   }, [session, channelId, createPeerConnection, cleanupPeer, startSpeakingDetection]);
