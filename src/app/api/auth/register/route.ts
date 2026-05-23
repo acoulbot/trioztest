@@ -65,8 +65,9 @@ export async function POST(req: NextRequest) {
         },
       });
     } catch (e: unknown) {
+      const errObj = e as Record<string, unknown>;
       const isPrismaUniqueError =
-        e instanceof Error && "code" in (e as Record<string, unknown>) && (e as Record<string, unknown>).code === "P2002";
+        e instanceof Error && "code" in errObj && errObj.code === "P2002";
       if (isPrismaUniqueError) {
         return NextResponse.json({ error: "Email или юзернейм уже заняты" }, { status: 409 });
       }
