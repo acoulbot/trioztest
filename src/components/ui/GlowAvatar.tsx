@@ -1,0 +1,163 @@
+"use client";
+
+import { useMemo } from "react";
+
+/* ─── Presets ─── */
+export const GLOW_PRESETS: Record<string, { label: string; colors: string[] }> = {
+  royal:  { label: "Королевский",  colors: ["#8b5cf6", "#6366f1", "#a855f7", "#c084fc", "#818cf8"] },
+  flame:  { label: "Пламя",        colors: ["#ef4444", "#f97316", "#fbbf24", "#f97316", "#ef4444"] },
+  ocean:  { label: "Океан",        colors: ["#06b6d4", "#3b82f6", "#0ea5e9", "#38bdf8", "#67e8f9"] },
+  aurora: { label: "Аврора",       colors: ["#10b981", "#06b6d4", "#22d3ee", "#34d399", "#6ee7b7"] },
+  rose:   { label: "Роза",         colors: ["#ec4899", "#f43f5e", "#d946ef", "#fb7185", "#f472b6"] },
+  gold:   { label: "Золото",       colors: ["#fbbf24", "#f59e0b", "#fcd34d", "#d97706", "#fef08a"] },
+};
+
+export const DEFAULT_GLOW_COLORS = GLOW_PRESETS.royal.colors;
+
+export interface GlowAvatarUser {
+  id: string;
+  name: string;
+  avatar?: string | null;
+  role: string;
+  avatarGlowEnabled?: boolean;
+  avatarGlowColors?: string | null;
+}
+
+interface GlowAvatarProps {
+  user: GlowAvatarUser;
+  size?: number;
+  /** Pass online indicator color: "green" | "gray" | undefined (hidden) */
+  onlineColor?: "green" | "gray";
+  /** Speed in seconds for a full rotation, default 3 */
+  speed?: number;
+}
+
+function buildGradient(colors: string[]): string {
+  // End with same color as start → seamless infinite loop
+  return `conic-gradient(${[...colors, colors[0]].join(", ")})`;
+}
+
+function buildShadow(colors: string[]): string {
+  const hex = colors[0];
+  const r = parseInt(hex.slice(1, 3), 16);
+  const g = parseInt(hex.slice(3, 5), 16);
+  const b = parseInt(hex.slice(5, 7), 16);
+  return `0 0 14px 3px rgba(${r},${g},${b},0.55)`;
+}
+
+export default function GlowAvatar({ user, size = 32, onlineColor, speed = 3 }: GlowAvatarProps) {
+  const RING = Math.max(2, Math.round(size * 0.1));
+
+  const glowActive = user.role === "ADMIN" && !!user.avatarGlowEnabled;
+
+  const colors = useMemo(() => {
+    if (!glowActive) return DEFAULT_GLOW_COLORS;
+    if (!user.avatarGlowColors) return DEFAULT_GLOW_COLORS;
+    try {
+      const parsed = JSON.parse(user.avatarGlowColors) as string[];
+      if (Array.isArray(parsed) && parsed.length >= 2) return parsed;
+    } catch { /* fall through */ }
+    return DEFAULT_GLOW_COLORS;
+  }, [glowActive, user.avatarGlowColors]);
+
+  const gradient = useMemo(() => buildGradient(colors), [colors]);
+  const shadow   = useMemo(() => buildShadow(colors),   [colors]);
+
+  const totalSize = glowActive ? size + RING * 2 : size;
+  const initial   = user.name.charAt(0).toUpperCase();
+
+  const spinStyle: React.CSSProperties = {
+    animationName: "tz-glow-spin",
+    animationDuration: `${speed}s`,
+    animationTimingFunction: "linear",
+    animationIterationCount: "infinite",
+  };
+
+  return (
+    <div
+      style={{
+        position: "relative",
+        width: totalSize,
+        height: totalSize,
+        flexShrink: 0,
+        boxShadow: glowActive ? shadow : undefined,
+        borderRadius: "50%",
+      }}
+    >
+      {glowActive && (
+        <>
+          {/* Diffuse outer glow */}
+          <div
+            style={{
+              position: "absolute",
+              inset: -5,
+              borderRadius: "50%",
+              background: gradient,
+              filter: "blur(9px)",
+              opacity: 0.6,
+              ...spinStyle,
+            }}
+          />
+          {/* Sharp ring */}
+          <div
+            style={{
+              position: "absolute",
+              inset: 0,
+              borderRadius: "50%",
+              background: gradient,
+              ...spinStyle,
+            }}
+          />
+        </>
+      )}
+
+      {/* Avatar — sibling of ring layers, NOT a child, so it doesn't spin */}
+      <div
+        style={{
+          position: "absolute",
+          inset: glowActive ? RING : 0,
+          borderRadius: "50%",
+          overflow: "hidden",
+          zIndex: 1,
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          background: "linear-gradient(135deg, rgba(139,92,246,0.25), rgba(99,102,241,0.25))",
+          fontSize: Math.round(size * 0.4),
+          fontWeight: 700,
+        }}
+      >
+        {user.avatar ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={user.avatar}
+            alt={user.name}
+            style={{ width: "100%", height: "100%", objectFit: "cover" }}
+          />
+        ) : (
+          <span style={{ lineHeight: 1 }}>{initial}</span>
+        )}
+      </div>
+
+      {/* Online indicator */}
+      {onlineColor && (
+        <span
+          style={{
+            position: "absolute",
+            bottom: glowActive ? RING - 1 : 0,
+            right: glowActive ? RING - 1 : 0,
+            width: Math.max(8, Math.round(size * 0.28)),
+            height: Math.max(8, Math.round(size * 0.28)),
+            borderRadius: "50%",
+            background: onlineColor === "green" ? "#22c55e" : "#9ca3af",
+            zIndex: 2,
+            outline: "2px solid",
+            outlineColor: "var(--tz-online-border, #ffffff)",
+            outlineOffset: "-1px",
+          }}
+          className="dark:[--tz-online-border:#171717]"
+        />
+      )}
+    </div>
+  );
+}

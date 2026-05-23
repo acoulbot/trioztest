@@ -31,6 +31,8 @@ model User {
   gamePlayers       GamePlayer[]
   gameInvitesSent   GameInvite[]   @relation("GameInviteSender")
   gameInvitesRecvd  GameInvite[]   @relation("GameInviteReceiver")
+  avatarGlowEnabled Boolean         @default(false)
+  avatarGlowColors  String?
   lastSeen          DateTime?
   createdAt         DateTime        @default(now())
   updatedAt         DateTime        @updatedAt
