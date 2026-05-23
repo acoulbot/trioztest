@@ -1,0 +1,423 @@
+"use client";
+
+import { useSession, signOut } from "next-auth/react";
+import { useRouter } from "next/navigation";
+import { useEffect, useState, useRef } from "react";
+import { motion } from "framer-motion";
+import Link from "next/link";
+import Image from "next/image";
+import { useTheme } from "@/components/Providers";
+
+interface ProfileData {
+  id: string;
+  name: string;
+  username: string;
+  email: string;
+  avatar: string | null;
+  role: string;
+  emailVerified: boolean;
+  createdAt: string;
+  lastSeen: string | null;
+  _count: { messages: number; friendsSent: number; friendsReceived: number; gamePlayers: number };
+}
+
+const ROLE_LABELS: Record<string, { label: string; color: string }> = {
+  ADMIN:      { label: "Администратор", color: "text-red-400" },
+  EDITOR:     { label: "Редактор",      color: "text-violet-400" },
+  CONSULTANT: { label: "Консультант",   color: "text-blue-400" },
+  USER:       { label: "Пользователь",  color: "text-gray-400" },
+};
+
+function Section({ title, children }: { title: string; children: React.ReactNode }) {
+  return (
+    <div className="bg-white dark:bg-neutral-900 border border-neutral-200 dark:border-white/10 rounded-2xl p-6 space-y-5">
+      <h2 className="text-base font-semibold text-neutral-900 dark:text-white">{title}</h2>
+      {children}
+    </div>
+  );
+}
+
+function Field({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <div className="space-y-1.5">
+      <label className="block text-sm text-neutral-500 dark:text-gray-400">{label}</label>
+      {children}
+    </div>
+  );
+}
+
+function Input(props: React.InputHTMLAttributes<HTMLInputElement>) {
+  return (
+    <input
+      {...props}
+      className="w-full bg-neutral-50 dark:bg-white/5 border border-neutral-200 dark:border-white/10 rounded-xl px-4 py-2.5 text-neutral-900 dark:text-white placeholder-neutral-400 focus:outline-none focus:border-violet-500 dark:focus:border-cyan-500 text-sm transition-colors"
+    />
+  );
+}
+
+function SaveButton({ loading, label = "Сохранить" }: { loading: boolean; label?: string }) {
+  return (
+    <button
+      type="submit"
+      disabled={loading}
+      className="px-5 py-2 bg-violet-600 dark:bg-cyan-600 hover:bg-violet-500 dark:hover:bg-cyan-500 text-white rounded-xl text-sm font-medium transition-colors disabled:opacity-50"
+    >
+      {loading ? "Сохранение..." : label}
+    </button>
+  );
+}
+
+function Toast({ message, type }: { message: string; type: "success" | "error" }) {
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 20 }}
+      animate={{ opacity: 1, y: 0 }}
+      exit={{ opacity: 0, y: 20 }}
+      className={`fixed bottom-6 right-6 z-50 px-5 py-3 rounded-xl text-sm font-medium shadow-lg ${
+        type === "success"
+          ? "bg-green-500 text-white"
+          : "bg-red-500 text-white"
+      }`}
+    >
+      {message}
+    </motion.div>
+  );
+}
+
+export default function SettingsPage() {
+  const { data: session, status } = useSession();
+  const router = useRouter();
+  const { theme, toggleTheme } = useTheme();
+  const fileRef = useRef<HTMLInputElement>(null);
+
+  const [profile, setProfile] = useState<ProfileData | null>(null);
+  const [toast, setToast] = useState<{ message: string; type: "success" | "error" } | null>(null);
+
+  // Form states
+  const [nameForm, setNameForm] = useState({ name: "", username: "" });
+  const [emailForm, setEmailForm] = useState({ email: "" });
+  const [passForm, setPassForm] = useState({ currentPassword: "", newPassword: "", confirmPassword: "" });
+
+  // Loading states
+  const [savingProfile, setSavingProfile] = useState(false);
+  const [savingEmail, setSavingEmail] = useState(false);
+  const [savingPass, setSavingPass] = useState(false);
+  const [uploadingAvatar, setUploadingAvatar] = useState(false);
+
+  useEffect(() => {
+    if (status === "unauthenticated") router.push("/auth/signin?callbackUrl=/settings");
+  }, [status, router]);
+
+  useEffect(() => {
+    if (session?.user) {
+      fetch("/api/profile")
+        .then((r) => r.json())
+        .then((data) => {
+          setProfile(data);
+          setNameForm({ name: data.name, username: data.username });
+          setEmailForm({ email: data.email });
+        });
+    }
+  }, [session]);
+
+  const showToast = (message: string, type: "success" | "error") => {
+    setToast({ message, type });
+    setTimeout(() => setToast(null), 3500);
+  };
+
+  const patchProfile = async (body: Record<string, unknown>) => {
+    const res = await fetch("/api/profile", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || "Ошибка");
+    return data;
+  };
+
+  // Avatar upload
+  const handleAvatarChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setUploadingAvatar(true);
+    const fd = new FormData();
+    fd.append("avatar", file);
+    const res = await fetch("/api/profile/avatar", { method: "POST", body: fd });
+    const data = await res.json();
+    setUploadingAvatar(false);
+    if (!res.ok) { showToast(data.error || "Ошибка загрузки", "error"); return; }
+    setProfile((p) => p ? { ...p, avatar: data.avatar } : p);
+    showToast("Аватарка обновлена!", "success");
+  };
+
+  // Profile (name + username)
+  const handleSaveProfile = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setSavingProfile(true);
+    try {
+      await patchProfile({ name: nameForm.name, username: nameForm.username });
+      setProfile((p) => p ? { ...p, name: nameForm.name, username: nameForm.username } : p);
+      showToast("Профиль обновлён!", "success");
+    } catch (err) {
+      showToast((err as Error).message, "error");
+    } finally {
+      setSavingProfile(false);
+    }
+  };
+
+  // Email
+  const handleSaveEmail = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setSavingEmail(true);
+    try {
+      await patchProfile({ email: emailForm.email });
+      setProfile((p) => p ? { ...p, email: emailForm.email, emailVerified: false } : p);
+      showToast("Email обновлён! Потребуется повторная верификация.", "success");
+    } catch (err) {
+      showToast((err as Error).message, "error");
+    } finally {
+      setSavingEmail(false);
+    }
+  };
+
+  // Password
+  const handleSavePassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (passForm.newPassword !== passForm.confirmPassword) {
+      showToast("Пароли не совпадают", "error"); return;
+    }
+    setSavingPass(true);
+    try {
+      await patchProfile({ currentPassword: passForm.currentPassword, newPassword: passForm.newPassword });
+      setPassForm({ currentPassword: "", newPassword: "", confirmPassword: "" });
+      showToast("Пароль изменён!", "success");
+    } catch (err) {
+      showToast((err as Error).message, "error");
+    } finally {
+      setSavingPass(false);
+    }
+  };
+
+  if (status === "loading" || !profile) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="animate-spin w-8 h-8 border-2 border-violet-500 dark:border-cyan-400 border-t-transparent rounded-full" />
+      </div>
+    );
+  }
+
+  const role = ROLE_LABELS[profile.role] ?? ROLE_LABELS.USER;
+  const friendCount = profile._count.friendsSent + profile._count.friendsReceived;
+
+  return (
+    <div className="min-h-screen bg-neutral-50 dark:bg-neutral-950 pt-20 pb-12 px-4">
+      <div className="max-w-2xl mx-auto space-y-6">
+
+        {/* Header */}
+        <div className="flex items-center gap-3 mb-2">
+          <Link href="/" className="text-violet-600 dark:text-cyan-400 hover:opacity-70 transition-opacity">
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+            </svg>
+          </Link>
+          <h1 className="text-xl font-bold text-neutral-900 dark:text-white">Настройки профиля</h1>
+        </div>
+
+        {/* ── Avatar + stats ── */}
+        <Section title="Аккаунт">
+          <div className="flex items-center gap-5">
+            {/* Avatar */}
+            <div className="relative flex-shrink-0">
+              <div
+                className="w-20 h-20 rounded-2xl overflow-hidden bg-gradient-to-br from-violet-400 to-indigo-500 dark:from-cyan-400 dark:to-blue-500 flex items-center justify-center cursor-pointer"
+                onClick={() => fileRef.current?.click()}
+                title="Нажмите для смены аватарки"
+              >
+                {profile.avatar ? (
+                  <Image src={profile.avatar} alt="avatar" width={80} height={80} className="object-cover w-full h-full" />
+                ) : (
+                  <span className="text-white text-3xl font-bold">{profile.name.charAt(0).toUpperCase()}</span>
+                )}
+              </div>
+              {/* Upload overlay */}
+              <button
+                onClick={() => fileRef.current?.click()}
+                disabled={uploadingAvatar}
+                className="absolute -bottom-1 -right-1 w-7 h-7 bg-violet-600 dark:bg-cyan-600 rounded-lg flex items-center justify-center text-white shadow-lg hover:opacity-90 transition-opacity"
+                title="Загрузить аватарку"
+              >
+                {uploadingAvatar ? (
+                  <div className="w-3 h-3 border border-white border-t-transparent rounded-full animate-spin" />
+                ) : (
+                  <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
+                  </svg>
+                )}
+              </button>
+              <input ref={fileRef} type="file" accept="image/png,image/jpeg,image/webp,image/gif" onChange={handleAvatarChange} className="hidden" />
+            </div>
+
+            {/* Info */}
+            <div className="flex-1 min-w-0">
+              <p className="text-lg font-semibold text-neutral-900 dark:text-white truncate">{profile.name}</p>
+              <p className="text-sm text-neutral-500 dark:text-gray-400">@{profile.username}</p>
+              <span className={`text-xs font-medium ${role.color}`}>{role.label}</span>
+            </div>
+          </div>
+
+          {/* Stats */}
+          <div className="grid grid-cols-3 gap-3 pt-2">
+            {[
+              { label: "Сообщений", value: profile._count.messages },
+              { label: "Друзей", value: friendCount },
+              { label: "Игр сыграно", value: profile._count.gamePlayers },
+            ].map((stat) => (
+              <div key={stat.label} className="bg-neutral-100 dark:bg-white/5 rounded-xl p-3 text-center">
+                <p className="text-lg font-bold text-neutral-900 dark:text-white">{stat.value}</p>
+                <p className="text-xs text-neutral-500 dark:text-gray-500">{stat.label}</p>
+              </div>
+            ))}
+          </div>
+
+          {/* Meta */}
+          <div className="flex flex-wrap gap-x-6 gap-y-1 text-xs text-neutral-400 pt-1">
+            <span>На сайте с {new Date(profile.createdAt).toLocaleDateString("ru-RU", { day: "numeric", month: "long", year: "numeric" })}</span>
+            <span className={profile.emailVerified ? "text-green-500" : "text-yellow-500"}>
+              {profile.emailVerified ? "✓ Email подтверждён" : "⚠ Email не подтверждён"}
+            </span>
+          </div>
+        </Section>
+
+        {/* ── Name + username ── */}
+        <Section title="Имя и юзернейм">
+          <form onSubmit={handleSaveProfile} className="space-y-4">
+            <Field label="Отображаемое имя">
+              <Input
+                value={nameForm.name}
+                onChange={(e) => setNameForm((f) => ({ ...f, name: e.target.value }))}
+                placeholder="Ваше имя"
+                minLength={2}
+                maxLength={50}
+                required
+              />
+            </Field>
+            <Field label="Юзернейм">
+              <div className="relative">
+                <span className="absolute left-4 top-1/2 -translate-y-1/2 text-neutral-400 text-sm">@</span>
+                <Input
+                  value={nameForm.username}
+                  onChange={(e) => setNameForm((f) => ({ ...f, username: e.target.value }))}
+                  placeholder="username"
+                  pattern="[a-zA-Z0-9_]{3,20}"
+                  title="3–20 символов: буквы, цифры, _"
+                  required
+                  className="!pl-8"
+                  style={{ paddingLeft: "2rem" }}
+                />
+              </div>
+              <p className="text-xs text-neutral-400 mt-1">3–20 символов, только латиница, цифры и _</p>
+            </Field>
+            <SaveButton loading={savingProfile} />
+          </form>
+        </Section>
+
+        {/* ── Email ── */}
+        <Section title="Email">
+          <form onSubmit={handleSaveEmail} className="space-y-4">
+            <Field label="Адрес электронной почты">
+              <Input
+                type="email"
+                value={emailForm.email}
+                onChange={(e) => setEmailForm({ email: e.target.value })}
+                placeholder="you@example.com"
+                required
+              />
+            </Field>
+            <p className="text-xs text-neutral-400">При смене email потребуется повторная верификация.</p>
+            <SaveButton loading={savingEmail} />
+          </form>
+        </Section>
+
+        {/* ── Password ── */}
+        <Section title="Смена пароля">
+          <form onSubmit={handleSavePassword} className="space-y-4">
+            <Field label="Текущий пароль">
+              <Input
+                type="password"
+                value={passForm.currentPassword}
+                onChange={(e) => setPassForm((f) => ({ ...f, currentPassword: e.target.value }))}
+                placeholder="••••••••"
+                required
+              />
+            </Field>
+            <Field label="Новый пароль">
+              <Input
+                type="password"
+                value={passForm.newPassword}
+                onChange={(e) => setPassForm((f) => ({ ...f, newPassword: e.target.value }))}
+                placeholder="Минимум 8 символов"
+                minLength={8}
+                required
+              />
+            </Field>
+            <Field label="Повторите новый пароль">
+              <Input
+                type="password"
+                value={passForm.confirmPassword}
+                onChange={(e) => setPassForm((f) => ({ ...f, confirmPassword: e.target.value }))}
+                placeholder="••••••••"
+                required
+              />
+            </Field>
+            <SaveButton loading={savingPass} label="Изменить пароль" />
+          </form>
+        </Section>
+
+        {/* ── Appearance ── */}
+        <Section title="Внешний вид">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm text-neutral-900 dark:text-white font-medium">Тема интерфейса</p>
+              <p className="text-xs text-neutral-400 mt-0.5">{theme === "dark" ? "Тёмная тема" : "Светлая тема"}</p>
+            </div>
+            <button
+              onClick={toggleTheme}
+              className="flex items-center gap-2 px-4 py-2 bg-neutral-100 dark:bg-white/10 hover:bg-neutral-200 dark:hover:bg-white/15 rounded-xl text-sm text-neutral-700 dark:text-gray-300 transition-colors"
+            >
+              {theme === "dark" ? (
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z" />
+                </svg>
+              ) : (
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z" />
+                </svg>
+              )}
+              Переключить
+            </button>
+          </div>
+        </Section>
+
+        {/* ── Danger zone ── */}
+        <Section title="Выход">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm text-neutral-900 dark:text-white font-medium">Выйти из аккаунта</p>
+              <p className="text-xs text-neutral-400 mt-0.5">Завершить текущую сессию</p>
+            </div>
+            <button
+              onClick={() => signOut({ callbackUrl: "/" })}
+              className="px-4 py-2 bg-red-500/10 hover:bg-red-500/20 text-red-500 rounded-xl text-sm font-medium transition-colors"
+            >
+              Выйти
+            </button>
+          </div>
+        </Section>
+      </div>
+
+      {/* Toast */}
+      {toast && <Toast message={toast.message} type={toast.type} />}
+    </div>
+  );
+}
