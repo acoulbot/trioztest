@@ -75,23 +75,33 @@ export async function PATCH(req: NextRequest) {
     if (invite.room.status !== "LOBBY") {
       return NextResponse.json({ error: "Игра уже началась" }, { status: 400 });
     }
-    if (invite.room._count.players >= invite.room.maxPlayers) {
-      return NextResponse.json({ error: "Комната полна" }, { status: 400 });
+
+    // Use an interactive transaction to atomically re-check the player count and join
+    try {
+      await prisma.$transaction(async (tx) => {
+        const currentCount = await tx.gamePlayer.count({ where: { roomId: invite.roomId } });
+        if (currentCount >= invite.room.maxPlayers) {
+          throw new Error("ROOM_FULL");
+        }
+        await tx.gameInvite.update({
+          where: { id: inviteId },
+          data: { status: "ACCEPTED" },
+        });
+        await tx.gamePlayer.create({
+          data: {
+            roomId: invite.roomId,
+            userId,
+            turnOrder: currentCount,
+          },
+        });
+      });
+    } catch (e) {
+      if (e instanceof Error && e.message === "ROOM_FULL") {
+        return NextResponse.json({ error: "Комната полна" }, { status: 400 });
+      }
+      throw e;
     }
 
-    await prisma.$transaction([
-      prisma.gameInvite.update({
-        where: { id: inviteId },
-        data: { status: "ACCEPTED" },
-      }),
-      prisma.gamePlayer.create({
-        data: {
-          roomId: invite.roomId,
-          userId,
-          turnOrder: invite.room._count.players,
-        },
-      }),
-    ]);
     return NextResponse.json({ ok: true });
   }
 

@@ -18,6 +18,15 @@ interface AiChatData {
   updatedAt: string;
 }
 
+interface LimitInfo {
+  unlimited: boolean;
+  used: number;
+  limit: number | null;
+  remaining?: number;
+}
+
+const UNLIMITED_ROLES = ["ADMIN", "EDITOR", "CONSULTANT"];
+
 export default function AiChatPanel() {
   const { data: session } = useSession();
   const [isOpen, setIsOpen] = useState(false);
@@ -27,13 +36,21 @@ export default function AiChatPanel() {
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
+  const [limitInfo, setLimitInfo] = useState<LimitInfo | null>(null);
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+
+  const userRole = (session?.user as { role?: string } | undefined)?.role ?? "USER";
+  const isUnlimited = UNLIMITED_ROLES.includes(userRole);
 
   useEffect(() => {
     if (session?.user && isOpen) {
       fetch("/api/ai/chat").then((r) => r.json()).then(setChats).catch(() => {});
+      if (!isUnlimited) {
+        fetch("/api/ai/limit").then((r) => r.json()).then(setLimitInfo).catch(() => {});
+      }
     }
-  }, [session, isOpen]);
+  }, [session, isOpen, isUnlimited]);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -43,6 +60,7 @@ export default function AiChatPanel() {
     e.preventDefault();
     if (!input.trim() || loading) return;
 
+    setErrorMsg(null);
     const message = input;
     setInput("");
     setLoading(true);
@@ -54,15 +72,29 @@ export default function AiChatPanel() {
         body: JSON.stringify({ chatId: activeChat?.id, message }),
       });
       const data = await res.json();
-      setActiveChat(data);
 
-      if (!activeChat?.id) {
-        setChats((prev) => [data, ...prev]);
+      if (!res.ok) {
+        // Restore input on error so user doesn't lose their message
+        setInput(message);
+        setErrorMsg(data.error ?? "Произошла ошибка. Попробуйте ещё раз.");
+        if (data.limitReached) {
+          setLimitInfo({ unlimited: false, used: data.used, limit: data.limit, remaining: 0 });
+        }
       } else {
-        setChats((prev) => prev.map((c) => (c.id === data.id ? data : c)));
+        setActiveChat(data);
+        if (!activeChat?.id) {
+          setChats((prev) => [data, ...prev]);
+        } else {
+          setChats((prev) => prev.map((c) => (c.id === data.id ? data : c)));
+        }
+        // Refresh limit counter after successful send
+        if (!isUnlimited) {
+          fetch("/api/ai/limit").then((r) => r.json()).then(setLimitInfo).catch(() => {});
+        }
       }
     } catch {
-      // silently fail
+      setInput(message);
+      setErrorMsg("Ошибка сети. Проверьте соединение.");
     }
 
     setLoading(false);
@@ -71,11 +103,13 @@ export default function AiChatPanel() {
   const newChat = () => {
     setActiveChat(null);
     setShowHistory(false);
+    setErrorMsg(null);
   };
 
   const loadChat = (chat: AiChatData) => {
     setActiveChat(chat);
     setShowHistory(false);
+    setErrorMsg(null);
   };
 
   const deleteChat = async (chatId: string) => {
@@ -85,6 +119,8 @@ export default function AiChatPanel() {
   };
 
   if (!session) return null;
+
+  const limitExhausted = !isUnlimited && limitInfo && limitInfo.remaining === 0;
 
   return (
     <>
@@ -99,7 +135,6 @@ export default function AiChatPanel() {
         <motion.button
           className="fixed right-0 top-1/2 -translate-y-1/2 z-50 bg-gradient-to-l from-violet-600 to-indigo-600 text-white px-2 py-6 rounded-l-xl shadow-2xl"
           onClick={() => setIsOpen(true)}
-
           whileHover={{ x: -4 }}
           initial={{ x: 0 }}
         >
@@ -128,7 +163,13 @@ export default function AiChatPanel() {
                 </div>
                 <div>
                   <h3 className="font-semibold text-sm text-neutral-900 dark:text-white">TZ.AI Ассистент</h3>
-                  <p className="text-[10px] text-neutral-500">Нейросеть экосистемы</p>
+                  <p className="text-[10px] text-neutral-500">
+                    {isUnlimited
+                      ? "Безлимитный доступ"
+                      : limitInfo
+                      ? `${limitInfo.remaining ?? 0} из ${limitInfo.limit} запросов сегодня`
+                      : "Нейросеть экосистемы"}
+                  </p>
                 </div>
               </div>
               <div className="flex items-center gap-1">
@@ -160,6 +201,30 @@ export default function AiChatPanel() {
                 </button>
               </div>
             </div>
+
+            {/* Limit progress bar (only for limited users) */}
+            {!isUnlimited && limitInfo && (
+              <div className="px-4 pt-2 pb-1">
+                <div className="flex justify-between text-[10px] text-neutral-400 mb-1">
+                  <span>Запросов сегодня</span>
+                  <span className={limitExhausted ? "text-red-500 font-medium" : ""}>
+                    {limitInfo.used} / {limitInfo.limit}
+                  </span>
+                </div>
+                <div className="h-1 bg-neutral-200 dark:bg-white/10 rounded-full overflow-hidden">
+                  <div
+                    className={`h-full rounded-full transition-all ${
+                      limitExhausted
+                        ? "bg-red-500"
+                        : (limitInfo.used / (limitInfo.limit ?? 1)) > 0.7
+                        ? "bg-amber-400"
+                        : "bg-violet-500"
+                    }`}
+                    style={{ width: `${Math.min(100, ((limitInfo.used ?? 0) / (limitInfo.limit ?? 1)) * 100)}%` }}
+                  />
+                </div>
+              </div>
+            )}
 
             {/* Chat history sidebar */}
             {showHistory ? (
@@ -244,6 +309,16 @@ export default function AiChatPanel() {
                   <div ref={messagesEndRef} />
                 </div>
 
+                {/* Error message */}
+                {errorMsg && (
+                  <div className="mx-3 mb-1 px-3 py-2 rounded-xl bg-red-50 dark:bg-red-500/10 border border-red-200 dark:border-red-500/20 text-xs text-red-600 dark:text-red-400 flex items-start gap-2">
+                    <svg className="w-3.5 h-3.5 mt-0.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                    <span>{errorMsg}</span>
+                  </div>
+                )}
+
                 {/* Input */}
                 <form onSubmit={sendMessage} className="p-3 border-t border-neutral-200 dark:border-white/10">
                   <div className="flex gap-2">
@@ -251,17 +326,17 @@ export default function AiChatPanel() {
                       type="text"
                       value={input}
                       onChange={(e) => setInput(e.target.value)}
-                      placeholder="Напишите сообщение..."
+                      placeholder={limitExhausted ? "Лимит исчерпан — сбросится в полночь" : "Напишите сообщение..."}
                       className="flex-1 px-3 py-2.5 rounded-xl text-sm
                         bg-neutral-100 dark:bg-white/5 border border-neutral-200 dark:border-white/10
                         text-neutral-900 dark:text-white placeholder:text-neutral-400
                         focus:outline-none focus:ring-2 focus:ring-violet-500/30 focus:border-violet-500/50
-                        transition-all"
-                      disabled={loading}
+                        disabled:opacity-50 transition-all"
+                      disabled={loading || !!limitExhausted}
                     />
                     <button
                       type="submit"
-                      disabled={loading || !input.trim()}
+                      disabled={loading || !input.trim() || !!limitExhausted}
                       className="px-3 py-2.5 bg-gradient-to-r from-violet-600 to-indigo-600 text-white rounded-xl
                         hover:shadow-lg hover:shadow-violet-500/20 disabled:opacity-40 transition-all"
                     >

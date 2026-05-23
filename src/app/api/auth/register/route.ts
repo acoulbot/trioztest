@@ -14,6 +14,14 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "Юзернейм: 3-20 символов, латиница, цифры и _" }, { status: 400 });
     }
 
+    if (typeof password !== "string" || password.length < 8) {
+      return NextResponse.json({ error: "Пароль должен содержать минимум 8 символов" }, { status: 400 });
+    }
+
+    if (password.length > 128) {
+      return NextResponse.json({ error: "Пароль слишком длинный (максимум 128 символов)" }, { status: 400 });
+    }
+
     if (verificationCode) {
       const record = await prisma.verificationCode.findFirst({
         where: {

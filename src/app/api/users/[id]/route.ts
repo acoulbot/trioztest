@@ -64,12 +64,30 @@ export async function PUT(req: Request, { params }: { params: { id: string } }) 
 
   const { role, banned, banReason, bannedUntil } = await req.json();
 
-  // Prevent admin from banning another admin
-  if (banned === true) {
-    const targetUser = await prisma.user.findUnique({ where: { id: params.id } });
-    if (targetUser?.role === "ADMIN") {
-      return NextResponse.json({ error: "Cannot ban an admin" }, { status: 403 });
+  const myRank = ROLE_RANK[session.user.role] || 0;
+  const targetUser = await prisma.user.findUnique({ where: { id: params.id } });
+  if (!targetUser) {
+    return NextResponse.json({ error: "User not found" }, { status: 404 });
+  }
+  const targetRank = ROLE_RANK[targetUser.role] || 0;
+  const isSelf = session.user.id === params.id;
+
+  // Cannot modify a user with equal or higher rank (unless self)
+  if (!isSelf && targetRank >= myRank) {
+    return NextResponse.json({ error: "Cannot modify a user with equal or higher rank" }, { status: 403 });
+  }
+
+  // Cannot promote someone to a rank equal to or higher than your own
+  if (role !== undefined && !isSelf) {
+    const newRank = ROLE_RANK[role as string] || 0;
+    if (newRank >= myRank) {
+      return NextResponse.json({ error: "Cannot assign a role equal to or higher than your own" }, { status: 403 });
     }
+  }
+
+  // Prevent admin from banning another admin (already covered by rank check above, kept for clarity)
+  if (banned === true && targetUser.role === "ADMIN") {
+    return NextResponse.json({ error: "Cannot ban an admin" }, { status: 403 });
   }
 
   const data: Record<string, unknown> = {};
@@ -109,6 +127,17 @@ export async function DELETE(req: Request, { params }: { params: { id: string } 
 
   if (session.user.id === params.id) {
     return NextResponse.json({ error: "Cannot delete your own account" }, { status: 400 });
+  }
+
+  const targetUser = await prisma.user.findUnique({ where: { id: params.id } });
+  if (!targetUser) {
+    return NextResponse.json({ error: "User not found" }, { status: 404 });
+  }
+
+  const myRank = ROLE_RANK[session.user.role] || 0;
+  const targetRank = ROLE_RANK[targetUser.role] || 0;
+  if (targetRank >= myRank) {
+    return NextResponse.json({ error: "Cannot delete a user with equal or higher rank" }, { status: 403 });
   }
 
   await prisma.user.delete({ where: { id: params.id } });
