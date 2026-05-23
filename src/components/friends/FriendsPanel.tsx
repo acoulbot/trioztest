@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
+import { isOnline, timeAgo } from "@/lib/timeAgo";
 
 interface Friend {
   id: string;
@@ -10,6 +11,7 @@ interface Friend {
   avatar: string | null;
   friendshipId: string;
   role?: string;
+  lastSeen?: string | null;
 }
 
 interface PendingRequest {
@@ -155,12 +157,17 @@ export default function FriendsPanel({ onClose }: { onClose: () => void }) {
               ) : (
                 data.friends.map((f) => (
                   <div key={f.id} className="flex items-center gap-2 px-2 py-2 rounded-lg hover:bg-neutral-100 dark:hover:bg-white/5 transition-colors group">
-                    <div className="w-8 h-8 rounded-full bg-gradient-to-br from-violet-400/30 to-indigo-400/30 flex items-center justify-center text-xs font-bold text-neutral-700 dark:text-white flex-shrink-0">
-                      {f.name.charAt(0).toUpperCase()}
+                    <div className="relative flex-shrink-0">
+                      <div className="w-8 h-8 rounded-full bg-gradient-to-br from-violet-400/30 to-indigo-400/30 flex items-center justify-center text-xs font-bold text-neutral-700 dark:text-white">
+                        {f.name.charAt(0).toUpperCase()}
+                      </div>
+                      <span className={`absolute bottom-0 right-0 w-2.5 h-2.5 rounded-full border-2 border-white dark:border-neutral-900 ${isOnline(f.lastSeen) ? "bg-green-500" : "bg-gray-400"}`} />
                     </div>
                     <div className="flex-1 min-w-0">
                       <div className="text-sm text-neutral-900 dark:text-white truncate">{f.name}</div>
-                      <div className="text-[10px] text-neutral-400">@{f.username}</div>
+                      <div className="text-[10px] text-neutral-400">
+                        @{f.username} {!isOnline(f.lastSeen) && f.lastSeen && <span className="text-neutral-400/70">· {timeAgo(f.lastSeen)}</span>}
+                      </div>
                     </div>
                     <button
                       onClick={() => removeFriend(f.friendshipId)}

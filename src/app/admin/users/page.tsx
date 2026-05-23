@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import Link from "next/link";
+import { isOnline, timeAgo } from "@/lib/timeAgo";
 
 interface User {
   id: string;
@@ -16,6 +17,7 @@ interface User {
   banned: boolean;
   banReason: string | null;
   bannedUntil: string | null;
+  lastSeen: string | null;
   createdAt: string;
   _count: { messages: number };
 }
@@ -251,8 +253,11 @@ export default function AdminUsersPage() {
                 user.banned ? "border-red-500/30 bg-red-900/10" : ""
               }`}
             >
-              <div className="w-10 h-10 rounded-full bg-gradient-to-br from-cyan-400/30 to-fantasy-purple/30 flex items-center justify-center flex-shrink-0 text-sm font-bold text-white">
-                {user.name.charAt(0).toUpperCase()}
+              <div className="relative flex-shrink-0">
+                <div className="w-10 h-10 rounded-full bg-gradient-to-br from-cyan-400/30 to-fantasy-purple/30 flex items-center justify-center text-sm font-bold text-white">
+                  {user.name.charAt(0).toUpperCase()}
+                </div>
+                <span className={`absolute bottom-0 right-0 w-3 h-3 rounded-full border-2 border-dark-800 ${isOnline(user.lastSeen) ? "bg-green-500" : "bg-gray-500"}`} title={isOnline(user.lastSeen) ? "Онлайн" : user.lastSeen ? timeAgo(user.lastSeen) : "Не был в сети"} />
               </div>
 
               <div className="flex-1 min-w-0">
@@ -301,6 +306,10 @@ export default function AdminUsersPage() {
                 </div>
                 <div className="text-xs text-gray-500 mt-1">
                   {user._count.messages} сообщений • Регистрация: {new Date(user.createdAt).toLocaleDateString("ru-RU")}
+                  {" • "}
+                  <span className={isOnline(user.lastSeen) ? "text-green-400" : ""}>
+                    {isOnline(user.lastSeen) ? "Онлайн" : user.lastSeen ? timeAgo(user.lastSeen) : "Не был в сети"}
+                  </span>
                   {user.banned && user.banReason && (
                     <span className="text-red-400"> • Причина: {user.banReason}</span>
                   )}

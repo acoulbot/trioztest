@@ -6,6 +6,8 @@ import { motion, AnimatePresence } from "framer-motion";
 import Link from "next/link";
 import dynamic from "next/dynamic";
 
+import { isOnline, timeAgo } from "@/lib/timeAgo";
+
 const VoiceChannel = dynamic(() => import("@/components/voice/VoiceChannel"), { ssr: false });
 const FriendsPanel = dynamic(() => import("@/components/friends/FriendsPanel"), { ssr: false });
 
@@ -39,7 +41,7 @@ interface Message {
 interface GroupDetail extends Group {
   myRole: string;
   channels: Channel[];
-  members: { user: { id: string; name: string; username: string; avatar: string | null; role: string }; role: string }[];
+  members: { user: { id: string; name: string; username: string; avatar: string | null; role: string; lastSeen?: string | null }; role: string }[];
   invites?: { code: string; uses: number; maxUses: number; expiresAt: string | null }[];
 }
 
@@ -225,12 +227,18 @@ function MembersPanel({ group, onClose }: { group: GroupDetail; onClose: () => v
       <div className="flex-1 overflow-y-auto p-2 space-y-0.5">
         {group.members.map((m) => (
           <div key={m.user.id} className="flex items-center gap-2 px-2 py-1.5 rounded-lg hover:bg-neutral-100 dark:hover:bg-white/5 transition-colors">
-            <div className="w-7 h-7 rounded-full bg-gradient-to-br from-violet-400/30 to-indigo-400/30 flex items-center justify-center text-xs font-bold text-neutral-700 dark:text-white flex-shrink-0">
-              {m.user.name.charAt(0).toUpperCase()}
+            <div className="relative flex-shrink-0">
+              <div className="w-7 h-7 rounded-full bg-gradient-to-br from-violet-400/30 to-indigo-400/30 flex items-center justify-center text-xs font-bold text-neutral-700 dark:text-white">
+                {m.user.name.charAt(0).toUpperCase()}
+              </div>
+              <span className={`absolute bottom-0 right-0 w-2 h-2 rounded-full border-[1.5px] border-white dark:border-neutral-900 ${isOnline(m.user.lastSeen) ? "bg-green-500" : "bg-gray-400"}`} />
             </div>
             <div className="min-w-0">
               <div className="text-sm text-neutral-900 dark:text-white truncate">{m.user.name}</div>
-              <div className="text-[10px] text-neutral-400 truncate">@{m.user.username}</div>
+              <div className="text-[10px] text-neutral-400 truncate">
+                @{m.user.username}
+                {!isOnline(m.user.lastSeen) && m.user.lastSeen && <span className="text-neutral-400/70"> · {timeAgo(m.user.lastSeen)}</span>}
+              </div>
             </div>
             {m.role === "OWNER" && <span className="text-[10px] text-amber-500 ml-auto flex-shrink-0">👑</span>}
             {m.role === "ADMIN" && <span className="text-[10px] text-violet-500 ml-auto flex-shrink-0">⚡</span>}

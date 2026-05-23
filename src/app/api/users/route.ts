@@ -20,6 +20,7 @@ export async function GET() {
       banned: true,
       banReason: true,
       bannedUntil: true,
+      lastSeen: true,
       createdAt: true,
       _count: { select: { messages: true } },
     },
