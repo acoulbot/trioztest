@@ -7,13 +7,13 @@ export async function GET(req: Request) {
   const { searchParams } = new URL(req.url);
   const groupId = searchParams.get("groupId");
 
-  if (!groupId) {
-    return NextResponse.json([]);
-  }
-
   const session = await getServerSession(authOptions);
   if (!session?.user) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  if (!groupId) {
+    return NextResponse.json([]);
   }
 
   const membership = await prisma.groupMember.findUnique({

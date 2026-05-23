@@ -3,6 +3,10 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import prisma from "@/lib/prisma";
 
+// Roles that bypass the daily request limit
+const UNLIMITED_ROLES = ["ADMIN", "EDITOR", "CONSULTANT"];
+const DAILY_LIMIT = 10;
+
 export async function GET() {
   const session = await getServerSession(authOptions);
   if (!session?.user) {
@@ -34,6 +38,33 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Message too long (max 8000 characters)" }, { status: 400 });
   }
 
+  // --- Daily rate limit for regular users ---
+  const userRole = (session.user as { role: string }).role;
+  if (!UNLIMITED_ROLES.includes(userRole)) {
+    const startOfDay = new Date();
+    startOfDay.setHours(0, 0, 0, 0);
+
+    const usedToday = await prisma.aiMessage.count({
+      where: {
+        role: "user",
+        createdAt: { gte: startOfDay },
+        chat: { userId: session.user.id },
+      },
+    });
+
+    if (usedToday >= DAILY_LIMIT) {
+      return NextResponse.json(
+        {
+          error: `Достигнут дневной лимит запросов (${DAILY_LIMIT}). Лимит сбрасывается в полночь.`,
+          limitReached: true,
+          used: usedToday,
+          limit: DAILY_LIMIT,
+        },
+        { status: 429 }
+      );
+    }
+  }
+
   let chat;
   if (chatId) {
     chat = await prisma.aiChat.findFirst({
@@ -58,9 +89,14 @@ export async function POST(req: Request) {
   const promptConfig = await prisma.siteConfig.findUnique({ where: { key: "ai_system_prompt" } });
   const providerConfig = await prisma.siteConfig.findUnique({ where: { key: "ai_provider" } });
 
-  let aiResponse = "ИИ-ассистент пока не подключён. Администратор может настроить API в панели управления.";
+  // Flag to track whether we got a real AI response or an error/fallback
+  let aiResponseContent: string | null = null;
+  let isError = false;
 
-  if (apiKeyConfig?.value) {
+  if (!apiKeyConfig?.value) {
+    // No API configured — save a one-time info message (not counted as AI response)
+    aiResponseContent = "ИИ-ассистент пока не подключён. Администратор может настроить API в панели управления.";
+  } else {
     try {
       const allMessages = await prisma.aiMessage.findMany({
         where: { chatId: chat.id },
@@ -95,14 +131,16 @@ export async function POST(req: Request) {
         });
         const data = await res.json();
         if (data.content?.[0]?.text) {
-          aiResponse = data.content[0].text;
+          aiResponseContent = data.content[0].text;
+        } else {
+          isError = true;
         }
       } else {
         const res = await fetch(apiUrl, {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
-            "Authorization": `Bearer ${apiKeyConfig.value}`,
+            Authorization: `Bearer ${apiKeyConfig.value}`,
           },
           body: JSON.stringify({
             model: modelConfig?.value || "gpt-4o-mini",
@@ -112,16 +150,31 @@ export async function POST(req: Request) {
         });
         const data = await res.json();
         if (data.choices?.[0]?.message?.content) {
-          aiResponse = data.choices[0].message.content;
+          aiResponseContent = data.choices[0].message.content;
+        } else {
+          isError = true;
         }
       }
     } catch {
-      aiResponse = "Ошибка при обращении к ИИ API. Проверьте настройки.";
+      isError = true;
     }
   }
 
+  // Only persist the assistant message if we got a real response.
+  // On error, return 502 without polluting the chat history.
+  if (isError) {
+    // Roll back the user message so the request doesn't count against the limit
+    await prisma.aiMessage.deleteMany({
+      where: { chatId: chat.id, role: "user", content: message },
+    });
+    return NextResponse.json(
+      { error: "Ошибка при обращении к ИИ API. Проверьте настройки." },
+      { status: 502 }
+    );
+  }
+
   await prisma.aiMessage.create({
-    data: { chatId: chat.id, role: "assistant", content: aiResponse },
+    data: { chatId: chat.id, role: "assistant", content: aiResponseContent! },
   });
 
   await prisma.aiChat.update({
