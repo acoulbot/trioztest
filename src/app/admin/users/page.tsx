@@ -10,6 +10,7 @@ interface User {
   id: string;
   email: string;
   name: string;
+  username: string;
   avatar: string | null;
   role: string;
   banned: boolean;
@@ -130,6 +131,9 @@ export default function AdminUsersPage() {
   const [users, setUsers] = useState<User[]>([]);
   const [loading, setLoading] = useState(true);
   const [banTarget, setBanTarget] = useState<User | null>(null);
+  const [editingUsername, setEditingUsername] = useState<string | null>(null);
+  const [newUsername, setNewUsername] = useState("");
+  const [usernameError, setUsernameError] = useState("");
 
   useEffect(() => {
     if (status === "authenticated" && session?.user?.role !== "ADMIN") {
@@ -178,6 +182,28 @@ export default function AdminUsersPage() {
   const deleteUser = async (userId: string) => {
     if (!confirm("Удалить пользователя? Это действие необратимо.")) return;
     await fetch(`/api/users/${userId}`, { method: "DELETE" });
+    fetchUsers();
+  };
+
+  const startEditUsername = (user: User) => {
+    setEditingUsername(user.id);
+    setNewUsername(user.username);
+    setUsernameError("");
+  };
+
+  const saveUsername = async (userId: string) => {
+    setUsernameError("");
+    const res = await fetch(`/api/users/${userId}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ username: newUsername }),
+    });
+    if (!res.ok) {
+      const data = await res.json();
+      setUsernameError(data.error || "Ошибка");
+      return;
+    }
+    setEditingUsername(null);
     fetchUsers();
   };
 
@@ -232,6 +258,32 @@ export default function AdminUsersPage() {
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-2 flex-wrap">
                   <span className="font-medium text-white">{user.name}</span>
+                  {editingUsername === user.id ? (
+                    <div className="flex items-center gap-1">
+                      <input
+                        type="text"
+                        value={newUsername}
+                        onChange={(e) => setNewUsername(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") saveUsername(user.id);
+                          if (e.key === "Escape") setEditingUsername(null);
+                        }}
+                        className="bg-dark-700 border border-cyan-400/30 rounded px-2 py-0.5 text-xs text-white w-32"
+                        autoFocus
+                      />
+                      <button onClick={() => saveUsername(user.id)} className="text-cyan-400 hover:text-cyan-300 text-xs">✓</button>
+                      <button onClick={() => setEditingUsername(null)} className="text-gray-500 hover:text-gray-300 text-xs">✕</button>
+                      {usernameError && <span className="text-red-400 text-xs">{usernameError}</span>}
+                    </div>
+                  ) : (
+                    <button
+                      onClick={() => startEditUsername(user)}
+                      className="text-xs text-cyan-400/60 hover:text-cyan-400 transition-colors cursor-pointer"
+                      title="Изменить логин"
+                    >
+                      @{user.username}
+                    </button>
+                  )}
                   <span className="text-xs text-gray-500">{user.email}</span>
                   <span className={`px-2 py-0.5 rounded text-xs ${
                     user.role === "ADMIN" ? "bg-fantasy-gold/20 text-fantasy-gold" :
