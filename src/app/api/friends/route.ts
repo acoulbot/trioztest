@@ -18,8 +18,8 @@ export async function GET() {
       ],
     },
     include: {
-      sender: { select: { id: true, name: true, username: true, avatar: true, role: true } },
-      receiver: { select: { id: true, name: true, username: true, avatar: true, role: true } },
+      sender: { select: { id: true, name: true, username: true, avatar: true, role: true, lastSeen: true } },
+      receiver: { select: { id: true, name: true, username: true, avatar: true, role: true, lastSeen: true } },
     },
     orderBy: { updatedAt: "desc" },
   });

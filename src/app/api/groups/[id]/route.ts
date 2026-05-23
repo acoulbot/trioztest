@@ -25,7 +25,7 @@ export async function GET(_req: Request, { params }: { params: { id: string } })
         orderBy: { createdAt: "asc" },
       },
       members: {
-        include: { user: { select: { id: true, name: true, username: true, avatar: true, role: true } } },
+        include: { user: { select: { id: true, name: true, username: true, avatar: true, role: true, lastSeen: true } } },
         orderBy: { joinedAt: "asc" },
       },
       owner: { select: { id: true, name: true, username: true } },
