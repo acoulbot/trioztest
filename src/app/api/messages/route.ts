@@ -77,6 +77,21 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Message too long (max 4000 characters)" }, { status: 400 });
   }
 
+  // Verify user is a member of the group that owns this channel
+  const channel = await prisma.channel.findUnique({
+    where: { id: channelId },
+    select: { groupId: true },
+  });
+  if (!channel) {
+    return NextResponse.json({ error: "Channel not found" }, { status: 404 });
+  }
+  const membership = await prisma.groupMember.findUnique({
+    where: { userId_groupId: { userId: session.user.id, groupId: channel.groupId } },
+  });
+  if (!membership) {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
+
   const sanitizedContent = sanitizeText(content);
   if (!sanitizedContent) {
     return NextResponse.json({ error: "Message content cannot be empty" }, { status: 400 });
