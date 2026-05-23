@@ -17,6 +17,14 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Юзернейм: 3-20 символов, латиница, цифры и _" }, { status: 400 });
     }
 
+    if (typeof password !== "string" || password.length < 8) {
+      return NextResponse.json({ error: "Пароль должен содержать минимум 8 символов" }, { status: 400 });
+    }
+
+    if (password.length > 128) {
+      return NextResponse.json({ error: "Пароль слишком длинный (максимум 128 символов)" }, { status: 400 });
+    }
+
     if (verificationCode) {
       const record = await prisma.verificationCode.findFirst({
         where: {
@@ -24,7 +32,7 @@ export async function POST(req: NextRequest) {
           code: verificationCode,
           type: "register",
           used: true,
-          expiresAt: { gte: new Date(Date.now() - 15 * 60 * 1000) },
+          expiresAt: { gte: new Date() },
         },
         orderBy: { createdAt: "desc" },
       });
@@ -45,15 +53,25 @@ export async function POST(req: NextRequest) {
     }
 
     const hashed = await bcrypt.hash(password, 12);
-    const user = await prisma.user.create({
-      data: {
-        email,
-        name,
-        username,
-        password: hashed,
-        emailVerified: !!verificationCode,
-      },
-    });
+    let user;
+    try {
+      user = await prisma.user.create({
+        data: {
+          email,
+          name,
+          username,
+          password: hashed,
+          emailVerified: !!verificationCode,
+        },
+      });
+    } catch (e: unknown) {
+      const isPrismaUniqueError =
+        e instanceof Error && "code" in (e as Record<string, unknown>) && (e as Record<string, unknown>).code === "P2002";
+      if (isPrismaUniqueError) {
+        return NextResponse.json({ error: "Email или юзернейм уже заняты" }, { status: 409 });
+      }
+      throw e;
+    }
 
     return NextResponse.json({ id: user.id, email: user.email, name: user.name, username: user.username });
   } catch {

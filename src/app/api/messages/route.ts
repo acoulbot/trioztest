@@ -17,6 +17,22 @@ export async function GET(req: Request) {
     return NextResponse.json({ error: "channelId required" }, { status: 400 });
   }
 
+  // Verify the user is a member of the group that owns this channel
+  const channel = await prisma.channel.findUnique({
+    where: { id: channelId },
+    select: { groupId: true },
+  });
+  if (!channel) {
+    return NextResponse.json({ error: "Channel not found" }, { status: 404 });
+  }
+
+  const membership = await prisma.groupMember.findUnique({
+    where: { userId_groupId: { userId: session.user.id, groupId: channel.groupId } },
+  });
+  if (!membership) {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
+
   const messages = await prisma.message.findMany({
     where: { channelId },
     include: { user: { select: { id: true, name: true, username: true, avatar: true } } },

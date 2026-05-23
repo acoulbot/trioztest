@@ -7,18 +7,20 @@ export async function GET(req: Request) {
   const { searchParams } = new URL(req.url);
   const groupId = searchParams.get("groupId");
 
+  const session = await getServerSession(authOptions);
+  if (!session?.user) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
   if (!groupId) {
     return NextResponse.json([]);
   }
 
-  const session = await getServerSession(authOptions);
-  if (session?.user) {
-    const membership = await prisma.groupMember.findUnique({
-      where: { userId_groupId: { userId: session.user.id, groupId } },
-    });
-    if (!membership) {
-      return NextResponse.json({ error: "Not a member" }, { status: 403 });
-    }
+  const membership = await prisma.groupMember.findUnique({
+    where: { userId_groupId: { userId: session.user.id, groupId } },
+  });
+  if (!membership) {
+    return NextResponse.json({ error: "Not a member" }, { status: 403 });
   }
 
   const channels = await prisma.channel.findMany({

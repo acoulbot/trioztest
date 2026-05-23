@@ -24,7 +24,20 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Need ADMIN or OWNER role to create invites" }, { status: 403 });
   }
 
-  const code = uuidv4().split("-")[0];
+  // Generate a unique invite code with sufficient entropy (12 chars)
+  let code: string;
+  let attempts = 0;
+  do {
+    code = uuidv4().replace(/-/g, "").slice(0, 12);
+    const existing = await prisma.invite.findUnique({ where: { code } });
+    if (!existing) break;
+    attempts++;
+  } while (attempts < 5);
+
+  if (attempts >= 5) {
+    return NextResponse.json({ error: "Failed to generate unique code, try again" }, { status: 500 });
+  }
+
   const expiresAt = expiresInHours
     ? new Date(Date.now() + expiresInHours * 3600000)
     : null;
