@@ -59,6 +59,11 @@ body {
   color: #fff;
 }
 
+@keyframes tz-glow-spin {
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(360deg); }
+}
+
 @layer components {
   .glass-card {
     @apply bg-neutral-50 dark:bg-white/5 backdrop-blur-xl border border-neutral-200 dark:border-white/10 rounded-2xl;

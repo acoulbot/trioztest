@@ -7,6 +7,8 @@ import Link from "next/link";
 import dynamic from "next/dynamic";
 
 import { isOnline, timeAgo } from "@/lib/timeAgo";
+import GlowAvatar, { GlowAvatarUser } from "@/components/ui/GlowAvatar";
+import ProfileSettingsModal from "@/components/profile/ProfileSettingsModal";
 
 const VoiceChannel = dynamic(() => import("@/components/voice/VoiceChannel"), { ssr: false });
 const FriendsPanel = dynamic(() => import("@/components/friends/FriendsPanel"), { ssr: false });
@@ -35,13 +37,13 @@ interface Message {
   id: string;
   content: string;
   createdAt: string;
-  user: { id: string; name: string; username?: string; avatar: string | null };
+  user: { id: string; name: string; username?: string; avatar: string | null; role: string; avatarGlowEnabled?: boolean; avatarGlowColors?: string | null };
 }
 
 interface GroupDetail extends Group {
   myRole: string;
   channels: Channel[];
-  members: { user: { id: string; name: string; username: string; avatar: string | null; role: string; lastSeen?: string | null }; role: string }[];
+  members: { user: { id: string; name: string; username: string; avatar: string | null; role: string; lastSeen?: string | null; avatarGlowEnabled?: boolean; avatarGlowColors?: string | null }; role: string }[];
   invites?: { code: string; uses: number; maxUses: number; expiresAt: string | null }[];
 }
 
@@ -228,10 +230,11 @@ function MembersPanel({ group, onClose }: { group: GroupDetail; onClose: () => v
         {group.members.map((m) => (
           <div key={m.user.id} className="flex items-center gap-2 px-2 py-1.5 rounded-lg hover:bg-neutral-100 dark:hover:bg-white/5 transition-colors">
             <div className="relative flex-shrink-0">
-              <div className="w-7 h-7 rounded-full bg-gradient-to-br from-violet-400/30 to-indigo-400/30 flex items-center justify-center text-xs font-bold text-neutral-700 dark:text-white">
-                {m.user.name.charAt(0).toUpperCase()}
-              </div>
-              <span className={`absolute bottom-0 right-0 w-2 h-2 rounded-full border-[1.5px] border-white dark:border-neutral-900 ${isOnline(m.user.lastSeen) ? "bg-green-500" : "bg-gray-400"}`} />
+              <GlowAvatar
+                user={m.user}
+                size={28}
+                onlineColor={isOnline(m.user.lastSeen) ? "green" : "gray"}
+              />
             </div>
             <div className="min-w-0">
               <div className="text-sm text-neutral-900 dark:text-white truncate">{m.user.name}</div>
@@ -279,6 +282,8 @@ export default function ConnectPage() {
   const [showInvite, setShowInvite] = useState(false);
   const [showMembers, setShowMembers] = useState(false);
   const [showFriends, setShowFriends] = useState(false);
+  const [showProfileSettings, setShowProfileSettings] = useState(false);
+  const [myGlowSettings, setMyGlowSettings] = useState<{ avatarGlowEnabled: boolean; avatarGlowColors: string | null } | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const pollRef = useRef<NodeJS.Timeout | null>(null);
 
@@ -306,6 +311,26 @@ export default function ConnectPage() {
       setMessages(data);
     }
   }, []);
+
+  // Fetch own glow settings (ADMINs only, lazy)
+  useEffect(() => {
+    if (session?.user && (session.user as { role?: string }).role === "ADMIN") {
+      fetch("/api/profile/me")
+        .then((r) => r.json())
+        .then((d) => setMyGlowSettings({ avatarGlowEnabled: d.avatarGlowEnabled, avatarGlowColors: d.avatarGlowColors }))
+        .catch(() => {});
+    }
+  }, [session]);
+
+  // Build a GlowAvatarUser for the current session user
+  const myProfileUser: GlowAvatarUser = {
+    id: (session?.user as { id?: string } | undefined)?.id ?? "",
+    name: session?.user?.name ?? "",
+    role: (session?.user as { role?: string } | undefined)?.role ?? "USER",
+    avatar: null,
+    avatarGlowEnabled: myGlowSettings?.avatarGlowEnabled ?? false,
+    avatarGlowColors: myGlowSettings?.avatarGlowColors ?? null,
+  };
 
   useEffect(() => {
     if (session?.user) fetchGroups();
@@ -511,13 +536,23 @@ export default function ConnectPage() {
           {/* User info */}
           <div className="p-2 border-t border-neutral-200 dark:border-white/5">
             <div className="flex items-center gap-2 px-2 py-1.5">
-              <div className="w-8 h-8 rounded-full bg-gradient-to-br from-violet-400/30 to-indigo-400/30 flex items-center justify-center text-xs font-bold text-neutral-700 dark:text-white">
-                {session.user.name.charAt(0).toUpperCase()}
-              </div>
-              <div className="min-w-0">
+              <GlowAvatar user={myProfileUser} size={32} />
+              <div className="min-w-0 flex-1">
                 <div className="text-sm font-medium text-neutral-900 dark:text-white truncate">{session.user.name}</div>
                 <div className="text-[10px] text-neutral-400 truncate">@{session.user.username}</div>
               </div>
+              {(session.user as { role?: string }).role === "ADMIN" && (
+                <button
+                  onClick={() => setShowProfileSettings(true)}
+                  title="Настройки профиля"
+                  className="p-1.5 rounded-lg hover:bg-neutral-100 dark:hover:bg-white/10 text-neutral-400 hover:text-violet-500 dark:hover:text-violet-400 transition-colors flex-shrink-0"
+                >
+                  <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                  </svg>
+                </button>
+              )}
             </div>
           </div>
         </div>
@@ -557,9 +592,7 @@ export default function ConnectPage() {
               ) : (
                 messages.map((msg) => (
                   <motion.div key={msg.id} initial={{ opacity: 0, y: 5 }} animate={{ opacity: 1, y: 0 }} className="flex gap-3 group">
-                    <div className="w-9 h-9 rounded-full bg-gradient-to-br from-violet-400/30 dark:from-cyan-400/30 to-indigo-400/30 dark:to-indigo-500/30 flex items-center justify-center flex-shrink-0 text-sm font-bold text-neutral-700 dark:text-white">
-                      {msg.user.name.charAt(0).toUpperCase()}
-                    </div>
+                    <GlowAvatar user={msg.user} size={36} />
                     <div className="flex-1 min-w-0">
                       <div className="flex items-baseline gap-2">
                         <span className="font-medium text-neutral-900 dark:text-white text-sm">{msg.user.name}</span>
@@ -632,6 +665,15 @@ export default function ConnectPage() {
         {showJoinGroup && <JoinGroupModal onClose={() => setShowJoinGroup(false)} onJoined={fetchGroups} />}
         {showCreateChannel && selectedGroup && <CreateChannelModal groupId={selectedGroup} onClose={() => setShowCreateChannel(false)} onCreated={() => { if (selectedGroup) fetchGroupDetail(selectedGroup); }} />}
         {showInvite && selectedGroup && <InviteModal groupId={selectedGroup} onClose={() => setShowInvite(false)} />}
+        {showProfileSettings && session?.user && (
+          <ProfileSettingsModal
+            user={myProfileUser}
+            onClose={() => setShowProfileSettings(false)}
+            onSaved={(settings) => {
+              setMyGlowSettings(settings);
+            }}
+          />
+        )}
       </AnimatePresence>
 
       {/* Voice Channel Modal */}
