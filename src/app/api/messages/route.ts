@@ -47,6 +47,14 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Missing fields" }, { status: 400 });
   }
 
+  if (typeof content !== "string" || content.trim().length === 0) {
+    return NextResponse.json({ error: "Message content cannot be empty" }, { status: 400 });
+  }
+
+  if (content.length > 4000) {
+    return NextResponse.json({ error: "Message too long (max 4000 characters)" }, { status: 400 });
+  }
+
   const message = await prisma.message.create({
     data: {
       content,

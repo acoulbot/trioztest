@@ -12,13 +12,15 @@ export async function GET(req: Request) {
   }
 
   const session = await getServerSession(authOptions);
-  if (session?.user) {
-    const membership = await prisma.groupMember.findUnique({
-      where: { userId_groupId: { userId: session.user.id, groupId } },
-    });
-    if (!membership) {
-      return NextResponse.json({ error: "Not a member" }, { status: 403 });
-    }
+  if (!session?.user) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  const membership = await prisma.groupMember.findUnique({
+    where: { userId_groupId: { userId: session.user.id, groupId } },
+  });
+  if (!membership) {
+    return NextResponse.json({ error: "Not a member" }, { status: 403 });
   }
 
   const channels = await prisma.channel.findMany({

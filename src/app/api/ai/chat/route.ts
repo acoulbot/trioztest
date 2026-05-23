@@ -26,6 +26,14 @@ export async function POST(req: Request) {
 
   const { chatId, message } = await req.json();
 
+  if (!message || typeof message !== "string" || message.trim().length === 0) {
+    return NextResponse.json({ error: "Message is required" }, { status: 400 });
+  }
+
+  if (message.length > 8000) {
+    return NextResponse.json({ error: "Message too long (max 8000 characters)" }, { status: 400 });
+  }
+
   let chat;
   if (chatId) {
     chat = await prisma.aiChat.findFirst({
