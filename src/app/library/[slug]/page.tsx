@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import { useParams } from "next/navigation";
 import { motion } from "framer-motion";
 import Link from "next/link";
+import DOMPurify from "dompurify";
 
 interface Article {
   id: string;
@@ -17,7 +18,7 @@ interface Article {
 }
 
 function renderMarkdown(content: string) {
-  return content
+  const raw = content
     .split("\n")
     .map((line) => {
       if (line.startsWith("# ")) return `<h1 class="text-3xl font-bold text-white mb-4 mt-8">${line.slice(2)}</h1>`;
@@ -32,6 +33,11 @@ function renderMarkdown(content: string) {
       return `<p class="text-gray-300 leading-relaxed">${formatted}</p>`;
     })
     .join("\n");
+  // Sanitize the generated HTML to prevent XSS
+  return DOMPurify.sanitize(raw, {
+    ALLOWED_TAGS: ["h1","h2","h3","p","br","li","ul","ol","strong","em"],
+    ALLOWED_ATTR: ["class"],
+  });
 }
 
 export default function ArticlePage() {

@@ -15,7 +15,7 @@ export async function GET(req: Request) {
   const where: Record<string, unknown> = {};
   if (category) where.category = category;
 
-  // Non-admins can only see published articles
+  // Non-admins can ONLY see published articles — ignore any ?published= param
   if (!isAdmin) {
     where.published = true;
   } else if (published !== null) {
