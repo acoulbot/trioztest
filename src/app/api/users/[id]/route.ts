@@ -107,6 +107,10 @@ export async function DELETE(req: Request, { params }: { params: { id: string } 
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
+  if (session.user.id === params.id) {
+    return NextResponse.json({ error: "Cannot delete your own account" }, { status: 400 });
+  }
+
   await prisma.user.delete({ where: { id: params.id } });
   return NextResponse.json({ success: true });
 }

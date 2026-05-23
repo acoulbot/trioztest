@@ -58,9 +58,22 @@ export const authOptions: NextAuthOptions = {
         u.role = token.role as string;
         u.id = token.id as string;
         u.username = token.username as string;
-        u.banned = token.banned as boolean;
-        u.bannedUntil = token.bannedUntil as string | null;
-        u.banReason = token.banReason as string | null;
+
+        // Always fetch fresh ban status from DB to prevent stale JWT data
+        const dbUser = await prisma.user.findUnique({
+          where: { id: token.id as string },
+          select: { banned: true, bannedUntil: true, banReason: true },
+        });
+        if (dbUser) {
+          const isBanned = dbUser.banned && (!dbUser.bannedUntil || new Date(dbUser.bannedUntil) > new Date());
+          u.banned = isBanned;
+          u.bannedUntil = dbUser.bannedUntil?.toISOString() || null;
+          u.banReason = dbUser.banReason || null;
+        } else {
+          u.banned = token.banned as boolean;
+          u.bannedUntil = token.bannedUntil as string | null;
+          u.banReason = token.banReason as string | null;
+        }
       }
       return session;
     },

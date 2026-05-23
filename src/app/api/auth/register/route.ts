@@ -21,7 +21,7 @@ export async function POST(req: Request) {
           code: verificationCode,
           type: "register",
           used: true,
-          expiresAt: { gte: new Date(Date.now() - 15 * 60 * 1000) },
+          expiresAt: { gte: new Date() },
         },
         orderBy: { createdAt: "desc" },
       });
@@ -42,15 +42,25 @@ export async function POST(req: Request) {
     }
 
     const hashed = await bcrypt.hash(password, 12);
-    const user = await prisma.user.create({
-      data: {
-        email,
-        name,
-        username,
-        password: hashed,
-        emailVerified: !!verificationCode,
-      },
-    });
+    let user;
+    try {
+      user = await prisma.user.create({
+        data: {
+          email,
+          name,
+          username,
+          password: hashed,
+          emailVerified: !!verificationCode,
+        },
+      });
+    } catch (e: unknown) {
+      const isPrismaUniqueError =
+        e instanceof Error && "code" in (e as Record<string, unknown>) && (e as Record<string, unknown>).code === "P2002";
+      if (isPrismaUniqueError) {
+        return NextResponse.json({ error: "Email или юзернейм уже заняты" }, { status: 409 });
+      }
+      throw e;
+    }
 
     return NextResponse.json({ id: user.id, email: user.email, name: user.name, username: user.username });
   } catch {

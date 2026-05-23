@@ -42,7 +42,19 @@ export async function POST(req: NextRequest) {
   const userId = (session.user as { id: string }).id;
   const { name, maxPlayers } = await req.json();
 
-  const inviteCode = uuidv4().slice(0, 8);
+  // Generate a unique invite code with sufficient entropy (12 chars)
+  let inviteCode: string;
+  let attempts = 0;
+  do {
+    inviteCode = uuidv4().replace(/-/g, "").slice(0, 12);
+    const existing = await prisma.gameRoom.findUnique({ where: { inviteCode } });
+    if (!existing) break;
+    attempts++;
+  } while (attempts < 5);
+
+  if (attempts >= 5) {
+    return NextResponse.json({ error: "Failed to generate unique invite code, try again" }, { status: 500 });
+  }
 
   const room = await prisma.gameRoom.create({
     data: {
