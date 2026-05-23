@@ -1,7 +1,8 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import prisma from "@/lib/prisma";
+import { rateLimit } from "@/lib/rateLimit";
 
 // Roles that bypass the daily request limit
 const UNLIMITED_ROLES = ["ADMIN", "EDITOR", "CONSULTANT"];
@@ -22,7 +23,10 @@ export async function GET() {
   return NextResponse.json(chats);
 }
 
-export async function POST(req: Request) {
+export async function POST(req: NextRequest) {
+  const limited = rateLimit(req, "ai-chat", { limit: 30, windowMs: 60 * 60 * 1000 });
+  if (limited) return limited;
+
   const session = await getServerSession(authOptions);
   if (!session?.user) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });

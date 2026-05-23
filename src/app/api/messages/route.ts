@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import prisma from "@/lib/prisma";
+import { sanitizeText } from "@/lib/sanitize";
 
 export async function GET(req: Request) {
   const session = await getServerSession(authOptions);
@@ -76,9 +77,14 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Message too long (max 4000 characters)" }, { status: 400 });
   }
 
+  const sanitizedContent = sanitizeText(content);
+  if (!sanitizedContent) {
+    return NextResponse.json({ error: "Message content cannot be empty" }, { status: 400 });
+  }
+
   const message = await prisma.message.create({
     data: {
-      content,
+      content: sanitizedContent,
       channelId,
       userId: session.user.id,
     },

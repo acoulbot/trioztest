@@ -2,15 +2,25 @@ import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import prisma from "@/lib/prisma";
+import { sanitizeRichText } from "@/lib/sanitize";
 
 export async function GET(req: Request) {
+  const session = await getServerSession(authOptions);
+  const isAdmin = session?.user?.role === "ADMIN" || session?.user?.role === "EDITOR";
+
   const { searchParams } = new URL(req.url);
   const category = searchParams.get("category");
   const published = searchParams.get("published");
 
   const where: Record<string, unknown> = {};
   if (category) where.category = category;
-  if (published !== null) where.published = published === "true";
+
+  // Non-admins can only see published articles
+  if (!isAdmin) {
+    where.published = true;
+  } else if (published !== null) {
+    where.published = published === "true";
+  }
 
   const articles = await prisma.article.findMany({
     where,
@@ -31,7 +41,14 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Missing fields" }, { status: 400 });
   }
 
-  const slug = title
+  const sanitizedTitle = sanitizeRichText(title);
+  const sanitizedContent = sanitizeRichText(content);
+
+  if (!sanitizedTitle || !sanitizedContent) {
+    return NextResponse.json({ error: "Title and content cannot be empty" }, { status: 400 });
+  }
+
+  const slug = sanitizedTitle
     .toLowerCase()
     .replace(/[^a-zа-яё0-9\s]/gi, "")
     .replace(/\s+/g, "-")
@@ -39,9 +56,9 @@ export async function POST(req: Request) {
 
   const article = await prisma.article.create({
     data: {
-      title,
+      title: sanitizedTitle,
       slug: `${slug}-${Date.now()}`,
-      content,
+      content: sanitizedContent,
       category,
       tags: tags || "",
       published: published ?? false,
