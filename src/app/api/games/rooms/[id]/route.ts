@@ -3,14 +3,15 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import prisma from "@/lib/prisma";
 
-export async function GET(_req: NextRequest, { params }: { params: { id: string } }) {
+export async function GET(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const session = await getServerSession(authOptions);
   if (!session?.user) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
+  const { id } = await params;
   const room = await prisma.gameRoom.findUnique({
-    where: { id: params.id },
+    where: { id },
     include: {
       host: { select: { id: true, name: true, username: true, avatar: true } },
       players: {
@@ -35,15 +36,16 @@ export async function GET(_req: NextRequest, { params }: { params: { id: string 
   return NextResponse.json(room);
 }
 
-export async function PATCH(req: NextRequest, { params }: { params: { id: string } }) {
+export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const session = await getServerSession(authOptions);
   if (!session?.user) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
   const userId = (session.user as { id: string }).id;
   const body = await req.json();
+  const { id } = await params;
 
-  const room = await prisma.gameRoom.findUnique({ where: { id: params.id } });
+  const room = await prisma.gameRoom.findUnique({ where: { id } });
   if (!room) {
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
@@ -52,13 +54,13 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
     if (room.hostId !== userId) {
       return NextResponse.json({ error: "Только хост может начать игру" }, { status: 403 });
     }
-    const players = await prisma.gamePlayer.findMany({ where: { roomId: params.id } });
+    const players = await prisma.gamePlayer.findMany({ where: { roomId: id } });
     const allReady = players.length >= 2 && players.every((p) => p.isReady || p.userId === userId);
     if (!allReady) {
       return NextResponse.json({ error: "Не все игроки готовы" }, { status: 400 });
     }
     const updated = await prisma.gameRoom.update({
-      where: { id: params.id },
+      where: { id },
       data: { status: "PLAYING" },
     });
     return NextResponse.json(updated);
@@ -67,14 +69,15 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
   return NextResponse.json({ error: "Invalid action" }, { status: 400 });
 }
 
-export async function DELETE(_req: NextRequest, { params }: { params: { id: string } }) {
+export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const session = await getServerSession(authOptions);
   if (!session?.user) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
   const userId = (session.user as { id: string }).id;
+  const { id } = await params;
 
-  const room = await prisma.gameRoom.findUnique({ where: { id: params.id } });
+  const room = await prisma.gameRoom.findUnique({ where: { id } });
   if (!room) {
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
@@ -82,6 +85,6 @@ export async function DELETE(_req: NextRequest, { params }: { params: { id: stri
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
-  await prisma.gameRoom.delete({ where: { id: params.id } });
+  await prisma.gameRoom.delete({ where: { id } });
   return NextResponse.json({ ok: true });
 }

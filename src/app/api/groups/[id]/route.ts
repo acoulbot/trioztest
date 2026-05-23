@@ -3,14 +3,15 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import prisma from "@/lib/prisma";
 
-export async function GET(_req: Request, { params }: { params: { id: string } }) {
+export async function GET(_req: Request, { params }: { params: Promise<{ id: string }> }) {
   const session = await getServerSession(authOptions);
   if (!session?.user) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
+  const { id } = await params;
   const membership = await prisma.groupMember.findUnique({
-    where: { userId_groupId: { userId: session.user.id, groupId: params.id } },
+    where: { userId_groupId: { userId: session.user.id, groupId: id } },
   });
 
   if (!membership) {
@@ -18,7 +19,7 @@ export async function GET(_req: Request, { params }: { params: { id: string } })
   }
 
   const group = await prisma.group.findUnique({
-    where: { id: params.id },
+    where: { id },
     include: {
       channels: {
         include: { _count: { select: { messages: true, members: true } } },
@@ -42,14 +43,15 @@ export async function GET(_req: Request, { params }: { params: { id: string } })
   return NextResponse.json({ ...group, myRole: membership.role });
 }
 
-export async function PUT(req: Request, { params }: { params: { id: string } }) {
+export async function PUT(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const session = await getServerSession(authOptions);
   if (!session?.user) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
+  const { id } = await params;
   const membership = await prisma.groupMember.findUnique({
-    where: { userId_groupId: { userId: session.user.id, groupId: params.id } },
+    where: { userId_groupId: { userId: session.user.id, groupId: id } },
   });
 
   if (!membership || (membership.role !== "OWNER" && membership.role !== "ADMIN")) {
@@ -59,7 +61,7 @@ export async function PUT(req: Request, { params }: { params: { id: string } }) 
   const { name, icon, description } = await req.json();
 
   const group = await prisma.group.update({
-    where: { id: params.id },
+    where: { id },
     data: {
       ...(name !== undefined && { name }),
       ...(icon !== undefined && { icon }),
@@ -70,18 +72,19 @@ export async function PUT(req: Request, { params }: { params: { id: string } }) 
   return NextResponse.json(group);
 }
 
-export async function DELETE(_req: Request, { params }: { params: { id: string } }) {
+export async function DELETE(_req: Request, { params }: { params: Promise<{ id: string }> }) {
   const session = await getServerSession(authOptions);
   if (!session?.user) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const group = await prisma.group.findUnique({ where: { id: params.id } });
+  const { id } = await params;
+  const group = await prisma.group.findUnique({ where: { id } });
   if (!group || group.ownerId !== session.user.id) {
     return NextResponse.json({ error: "Only owner can delete" }, { status: 403 });
   }
 
-  await prisma.group.delete({ where: { id: params.id } });
+  await prisma.group.delete({ where: { id } });
 
   return NextResponse.json({ ok: true });
 }

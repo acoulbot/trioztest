@@ -10,7 +10,7 @@ const ROLE_RANK: Record<string, number> = {
   ADMIN: 4,
 };
 
-export async function PATCH(req: Request, { params }: { params: { id: string } }) {
+export async function PATCH(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const session = await getServerSession(authOptions);
   if (!session?.user || session.user.role !== "ADMIN") {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
@@ -29,26 +29,27 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
     return NextResponse.json({ error: "Username can only contain letters, numbers and underscores" }, { status: 400 });
   }
 
-  const targetUser = await prisma.user.findUnique({ where: { id: params.id } });
+  const { id } = await params;
+  const targetUser = await prisma.user.findUnique({ where: { id } });
   if (!targetUser) {
     return NextResponse.json({ error: "User not found" }, { status: 404 });
   }
 
   const myRank = ROLE_RANK[session.user.role] || 0;
   const targetRank = ROLE_RANK[targetUser.role] || 0;
-  const isSelf = session.user.id === params.id;
+  const isSelf = session.user.id === id;
 
   if (!isSelf && targetRank >= myRank) {
     return NextResponse.json({ error: "Cannot change username of a user with equal or higher rank" }, { status: 403 });
   }
 
   const existing = await prisma.user.findUnique({ where: { username: trimmed } });
-  if (existing && existing.id !== params.id) {
+  if (existing && existing.id !== id) {
     return NextResponse.json({ error: "Username already taken" }, { status: 409 });
   }
 
   const updated = await prisma.user.update({
-    where: { id: params.id },
+    where: { id },
     data: { username: trimmed },
     select: { id: true, username: true, email: true, name: true, role: true },
   });
@@ -56,7 +57,7 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
   return NextResponse.json(updated);
 }
 
-export async function PUT(req: Request, { params }: { params: { id: string } }) {
+export async function PUT(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const session = await getServerSession(authOptions);
   if (!session?.user || session.user.role !== "ADMIN") {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
@@ -64,13 +65,14 @@ export async function PUT(req: Request, { params }: { params: { id: string } }) 
 
   const { role, banned, banReason, bannedUntil } = await req.json();
 
+  const { id } = await params;
   const myRank = ROLE_RANK[session.user.role] || 0;
-  const targetUser = await prisma.user.findUnique({ where: { id: params.id } });
+  const targetUser = await prisma.user.findUnique({ where: { id } });
   if (!targetUser) {
     return NextResponse.json({ error: "User not found" }, { status: 404 });
   }
   const targetRank = ROLE_RANK[targetUser.role] || 0;
-  const isSelf = session.user.id === params.id;
+  const isSelf = session.user.id === id;
 
   // Cannot modify a user with equal or higher rank (unless self)
   if (!isSelf && targetRank >= myRank) {
@@ -103,7 +105,7 @@ export async function PUT(req: Request, { params }: { params: { id: string } }) 
   }
 
   const user = await prisma.user.update({
-    where: { id: params.id },
+    where: { id },
     data,
     select: {
       id: true,
@@ -119,17 +121,18 @@ export async function PUT(req: Request, { params }: { params: { id: string } }) 
   return NextResponse.json(user);
 }
 
-export async function DELETE(req: Request, { params }: { params: { id: string } }) {
+export async function DELETE(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const session = await getServerSession(authOptions);
   if (!session?.user || session.user.role !== "ADMIN") {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
-  if (session.user.id === params.id) {
+  const { id } = await params;
+  if (session.user.id === id) {
     return NextResponse.json({ error: "Cannot delete your own account" }, { status: 400 });
   }
 
-  const targetUser = await prisma.user.findUnique({ where: { id: params.id } });
+  const targetUser = await prisma.user.findUnique({ where: { id } });
   if (!targetUser) {
     return NextResponse.json({ error: "User not found" }, { status: 404 });
   }
@@ -140,6 +143,6 @@ export async function DELETE(req: Request, { params }: { params: { id: string } 
     return NextResponse.json({ error: "Cannot delete a user with equal or higher rank" }, { status: 403 });
   }
 
-  await prisma.user.delete({ where: { id: params.id } });
+  await prisma.user.delete({ where: { id } });
   return NextResponse.json({ success: true });
 }

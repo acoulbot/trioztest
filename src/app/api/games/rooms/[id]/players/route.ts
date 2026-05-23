@@ -3,22 +3,23 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import prisma from "@/lib/prisma";
 
-export async function PATCH(req: NextRequest, { params }: { params: { id: string } }) {
+export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const session = await getServerSession(authOptions);
   if (!session?.user) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
   const userId = (session.user as { id: string }).id;
   const body = await req.json();
+  const { id } = await params;
 
   const player = await prisma.gamePlayer.findUnique({
-    where: { roomId_userId: { roomId: params.id, userId } },
+    where: { roomId_userId: { roomId: id, userId } },
   });
   if (!player) {
     return NextResponse.json({ error: "Вы не в этой комнате" }, { status: 403 });
   }
 
-  const room = await prisma.gameRoom.findUnique({ where: { id: params.id } });
+  const room = await prisma.gameRoom.findUnique({ where: { id } });
   if (!room || room.status !== "LOBBY") {
     return NextResponse.json({ error: "Комната не в режиме лобби" }, { status: 400 });
   }
@@ -26,7 +27,7 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
   if (body.faction !== undefined) {
     if (body.faction) {
       const taken = await prisma.gamePlayer.findFirst({
-        where: { roomId: params.id, faction: body.faction, NOT: { userId } },
+        where: { roomId: id, faction: body.faction, NOT: { userId } },
       });
       if (taken) {
         return NextResponse.json({ error: "Фракция уже занята" }, { status: 400 });
@@ -56,14 +57,15 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
   return NextResponse.json(updated);
 }
 
-export async function DELETE(req: NextRequest, { params }: { params: { id: string } }) {
+export async function DELETE(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const session = await getServerSession(authOptions);
   if (!session?.user) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
   const userId = (session.user as { id: string }).id;
+  const { id } = await params;
 
-  const room = await prisma.gameRoom.findUnique({ where: { id: params.id } });
+  const room = await prisma.gameRoom.findUnique({ where: { id } });
   if (!room) {
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
@@ -73,7 +75,7 @@ export async function DELETE(req: NextRequest, { params }: { params: { id: strin
   }
 
   await prisma.gamePlayer.deleteMany({
-    where: { roomId: params.id, userId },
+    where: { roomId: id, userId },
   });
 
   return NextResponse.json({ ok: true });

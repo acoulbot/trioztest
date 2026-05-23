@@ -234,9 +234,7 @@ export default function InlineEditOverlay() {
         }
       `}</style>
       <div
-        className="fixed bottom-4 left-1/2 -translate-x-1/2 z-[9999] px-4 py-2 rounded-xl 
-          bg-violet-500 dark:bg-cyan-500 text-white text-sm font-medium shadow-xl
-          flex items-center gap-2 animate-pulse"
+        className="fixed bottom-4 left-1/2 -translate-x-1/2 z-[9999] px-4 py-2 rounded-xl bg-violet-500 dark:bg-cyan-500 text-white text-sm font-medium shadow-xl flex items-center gap-2 animate-pulse"
         data-no-edit
       >
         <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">

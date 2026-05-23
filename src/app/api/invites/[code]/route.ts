@@ -3,9 +3,10 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import prisma from "@/lib/prisma";
 
-export async function GET(_req: Request, { params }: { params: { code: string } }) {
+export async function GET(_req: Request, { params }: { params: Promise<{ code: string }> }) {
+  const { code } = await params;
   const invite = await prisma.invite.findUnique({
-    where: { code: params.code },
+    where: { code },
     include: {
       group: {
         select: { id: true, name: true, icon: true, description: true, _count: { select: { members: true } } },
@@ -32,14 +33,15 @@ export async function GET(_req: Request, { params }: { params: { code: string } 
   });
 }
 
-export async function POST(_req: Request, { params }: { params: { code: string } }) {
+export async function POST(_req: Request, { params }: { params: Promise<{ code: string }> }) {
   const session = await getServerSession(authOptions);
   if (!session?.user) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
+  const { code } = await params;
   const invite = await prisma.invite.findUnique({
-    where: { code: params.code },
+    where: { code },
     include: { group: true },
   });
 
@@ -68,7 +70,7 @@ export async function POST(_req: Request, { params }: { params: { code: string }
       data: { userId: session.user.id, groupId: invite.groupId },
     }),
     prisma.invite.update({
-      where: { code: params.code },
+      where: { code },
       data: { uses: { increment: 1 } },
     }),
   ]);
