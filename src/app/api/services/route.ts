@@ -3,9 +3,15 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import prisma from "@/lib/prisma";
 
-export async function GET() {
+export async function GET(req: Request) {
+  const session = await getServerSession(authOptions);
+  const isAdmin = session?.user?.role === "ADMIN";
+  const { searchParams } = new URL(req.url);
+  const all = searchParams.get("all") === "true";
+
   const services = await prisma.service.findMany({
-    where: { active: true },
+    // Admins requesting all=true see everything; public sees only active
+    where: isAdmin && all ? {} : { active: true },
     orderBy: { order: "asc" },
   });
 
@@ -43,8 +49,27 @@ export async function PUT(req: Request) {
 
   const service = await prisma.service.update({
     where: { id },
-    data: { title, description, icon, order, active },
+    data: {
+      ...(title !== undefined && { title }),
+      ...(description !== undefined && { description }),
+      ...(icon !== undefined && { icon }),
+      ...(order !== undefined && { order }),
+      ...(active !== undefined && { active }),
+    },
   });
 
   return NextResponse.json(service);
+}
+
+export async function DELETE(req: Request) {
+  const session = await getServerSession(authOptions);
+  if (!session?.user || session.user.role !== "ADMIN") {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
+
+  const { id } = await req.json();
+  if (!id) return NextResponse.json({ error: "ID required" }, { status: 400 });
+
+  await prisma.service.delete({ where: { id } });
+  return NextResponse.json({ success: true });
 }

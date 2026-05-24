@@ -19,44 +19,36 @@ interface VoiceChannelProps {
   onClose: () => void;
 }
 
-/**
- * ICE config: STUN for LAN/direct connections.
- * Add TURN entries here for production NAT traversal.
- * Format: { urls: "turn:your.turn.server", username: "...", credential: "..." }
- */
 const ICE_SERVERS: RTCConfiguration = {
   iceServers: [
     { urls: "stun:stun.l.google.com:19302" },
     { urls: "stun:stun1.l.google.com:19302" },
-    // TURN slot — uncomment and fill for production:
+    // TURN slot for production NAT traversal:
     // { urls: "turn:your.turn.server:3478", username: "user", credential: "pass" },
   ],
-  // Prefer UDP (faster), fall back to TCP
   iceCandidatePoolSize: 10,
 };
 
-/** 720p 60 fps screen capture constraints */
 const SCREEN_CONSTRAINTS: DisplayMediaStreamOptions = {
   video: {
     width:     { ideal: 1280 },
     height:    { ideal: 720  },
     frameRate: { ideal: 60, max: 60 },
   },
-  audio: false, // system audio — set true if OS supports it
+  audio: false,
 };
 
 export default function VoiceChannel({ channelId, channelName, onClose }: VoiceChannelProps) {
   const { data: session } = useSession();
 
-  const [isConnected,   setIsConnected]   = useState(false);
-  const [isMuted,       setIsMuted]       = useState(false);
-  const [isDeafened,    setIsDeafened]    = useState(false);
-  const [isSharing,     setIsSharing]     = useState(false);
-  const [users,         setUsers]         = useState<VoiceUser[]>([]);
-  const [speakingUsers, setSpeakingUsers] = useState<Set<string>>(new Set());
-  const [localSpeaking, setLocalSpeaking] = useState(false);
-  const [error,         setError]         = useState<string | null>(null);
-  /** socketId of the peer currently sharing their screen (null = no share) */
+  const [isConnected,    setIsConnected]    = useState(false);
+  const [isMuted,        setIsMuted]        = useState(false);
+  const [isDeafened,     setIsDeafened]     = useState(false);
+  const [isSharing,      setIsSharing]      = useState(false);
+  const [users,          setUsers]          = useState<VoiceUser[]>([]);
+  const [speakingUsers,  setSpeakingUsers]  = useState<Set<string>>(new Set());
+  const [localSpeaking,  setLocalSpeaking]  = useState(false);
+  const [error,          setError]          = useState<string | null>(null);
   const [sharerSocketId, setSharerSocketId] = useState<string | null>(null);
 
   const socketRef           = useRef<Socket | null>(null);
@@ -67,56 +59,67 @@ export default function VoiceChannel({ channelId, channelName, onClose }: VoiceC
   const analyserRef         = useRef<AnalyserNode | null>(null);
   const speakingIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const remoteAudiosRef     = useRef<Map<string, HTMLAudioElement>>(new Map());
-  /** video element for the active remote screen share */
   const screenVideoRef      = useRef<HTMLVideoElement | null>(null);
-  /** transceiver used for our outgoing screen track (one per peer) */
   const screenTransceivers  = useRef<Map<string, RTCRtpTransceiver>>(new Map());
 
-  // ─── Peer cleanup ────────────────────────────────────────────────────────
+  // ── Sound effects ─────────────────────────────────────────────────────────
+  const connectionSfxRef    = useRef<HTMLAudioElement | null>(null);
+  const disconnectionSfxRef = useRef<HTMLAudioElement | null>(null);
+
+  useEffect(() => {
+    connectionSfxRef.current    = new Audio("/sounds/connection.mp3");
+    disconnectionSfxRef.current = new Audio("/sounds/disconnection.mp3");
+    connectionSfxRef.current.preload    = "auto";
+    disconnectionSfxRef.current.preload = "auto";
+    return () => {
+      connectionSfxRef.current    = null;
+      disconnectionSfxRef.current = null;
+    };
+  }, []);
+
+  const playSound = useCallback((ref: React.RefObject<HTMLAudioElement | null>) => {
+    const src = ref.current;
+    if (!src) return;
+    try {
+      const clone = src.cloneNode() as HTMLAudioElement;
+      clone.volume = 0.5;
+      clone.play().catch(() => {});
+    } catch { /* ignore */ }
+  }, []);
+
+  // ── Peer cleanup ──────────────────────────────────────────────────────────
   const cleanupPeer = useCallback((socketId: string) => {
     const peer = peersRef.current.get(socketId);
     if (peer) { peer.close(); peersRef.current.delete(socketId); }
-
     const audio = remoteAudiosRef.current.get(socketId);
     if (audio) { audio.pause(); audio.srcObject = null; remoteAudiosRef.current.delete(socketId); }
-
     screenTransceivers.current.delete(socketId);
   }, []);
 
-  // ─── Peer creation ───────────────────────────────────────────────────────
+  // ── Peer creation ─────────────────────────────────────────────────────────
   const createPeerConnection = useCallback(
     (remoteSocketId: string, isInitiator: boolean) => {
       const pc = new RTCPeerConnection(ICE_SERVERS);
       peersRef.current.set(remoteSocketId, pc);
 
-      // Add local audio tracks
       if (localStreamRef.current) {
         localStreamRef.current.getTracks().forEach((t) =>
           pc.addTrack(t, localStreamRef.current!)
         );
       }
 
-      // Add a recvonly transceiver for remote screen video
-      // and a sendonly one if we are currently sharing
       if (screenStreamRef.current) {
         const screenTrack = screenStreamRef.current.getVideoTracks()[0];
         const transceiver = pc.addTransceiver(screenTrack, {
           direction: "sendonly",
           streams: [screenStreamRef.current],
-          sendEncodings: [
-            {
-              maxFramerate: 60,
-              maxBitrate: 8_000_000, // 8 Mbps for 720p60
-            },
-          ],
+          sendEncodings: [{ maxFramerate: 60, maxBitrate: 8_000_000 }],
         });
         screenTransceivers.current.set(remoteSocketId, transceiver);
       } else {
-        // Reserve slot for incoming screen share
         pc.addTransceiver("video", { direction: "recvonly" });
       }
 
-      // Handle incoming tracks (audio + screen from remote)
       pc.ontrack = (event) => {
         const [remoteStream] = event.streams;
         if (event.track.kind === "audio") {
@@ -128,14 +131,10 @@ export default function VoiceChannel({ channelId, channelName, onClose }: VoiceC
           }
           audio.srcObject = remoteStream;
         } else if (event.track.kind === "video") {
-          // Incoming screen share
-          if (screenVideoRef.current) {
-            screenVideoRef.current.srcObject = remoteStream;
-          }
+          if (screenVideoRef.current) screenVideoRef.current.srcObject = remoteStream;
           setSharerSocketId(remoteSocketId);
-          event.track.onended = () => {
+          event.track.onended = () =>
             setSharerSocketId((prev) => (prev === remoteSocketId ? null : prev));
-          };
         }
       };
 
@@ -154,27 +153,20 @@ export default function VoiceChannel({ channelId, channelName, onClose }: VoiceC
         }
       };
 
-      // Renegotiation needed (e.g. after adding screen track)
       pc.onnegotiationneeded = async () => {
         if (!isInitiator && !screenStreamRef.current) return;
         try {
           const offer = await pc.createOffer();
           await pc.setLocalDescription(offer);
-          socketRef.current?.emit("voice-offer", {
-            to: remoteSocketId,
-            offer: pc.localDescription,
-          });
-        } catch {/* ignore if connection already closed */}
+          socketRef.current?.emit("voice-offer", { to: remoteSocketId, offer: pc.localDescription });
+        } catch { /* connection already closed */ }
       };
 
       if (isInitiator) {
         pc.createOffer()
           .then((offer) => pc.setLocalDescription(offer))
           .then(() => {
-            socketRef.current?.emit("voice-offer", {
-              to: remoteSocketId,
-              offer: pc.localDescription,
-            });
+            socketRef.current?.emit("voice-offer", { to: remoteSocketId, offer: pc.localDescription });
           });
       }
 
@@ -183,7 +175,7 @@ export default function VoiceChannel({ channelId, channelName, onClose }: VoiceC
     [cleanupPeer]
   );
 
-  // ─── Speaking detection ──────────────────────────────────────────────────
+  // ── Speaking detection ────────────────────────────────────────────────────
   const startSpeakingDetection = useCallback(() => {
     if (!localStreamRef.current) return;
     const audioContext = new AudioContext();
@@ -205,13 +197,16 @@ export default function VoiceChannel({ channelId, channelName, onClose }: VoiceC
     }, 100);
   }, [channelId]);
 
-  // ─── Join ────────────────────────────────────────────────────────────────
+  // ── Join ──────────────────────────────────────────────────────────────────
   const joinVoice = useCallback(async () => {
     if (!session?.user) return;
     setError(null);
 
-    if (!navigator.mediaDevices?.getUserMedia) {
-      setError("Голосовой канал требует HTTPS или localhost.");
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+      setError(
+        "Голосовой канал требует защищённого соединения (HTTPS). " +
+        "При локальном тесте используйте http://localhost:3000, а не IP-адрес."
+      );
       return;
     }
 
@@ -221,9 +216,15 @@ export default function VoiceChannel({ channelId, channelName, onClose }: VoiceC
         stream = await navigator.mediaDevices.getUserMedia({
           audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true },
         });
-      } catch {
-        stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      } catch (constraintErr) {
+        const name = constraintErr instanceof DOMException ? constraintErr.name : "";
+        if (name === "OverconstrainedError" || name === "NotReadableError") {
+          stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        } else {
+          throw constraintErr;
+        }
       }
+
       localStreamRef.current = stream;
 
       const socket = io({ path: "/api/socketio", transports: ["websocket", "polling"] });
@@ -236,6 +237,7 @@ export default function VoiceChannel({ channelId, channelName, onClose }: VoiceC
           userName: session.user.name || "Пользователь",
         });
         setIsConnected(true);
+        playSound(connectionSfxRef);
       });
 
       socket.on("voice-users", (existingUsers: VoiceUser[]) => {
@@ -246,6 +248,7 @@ export default function VoiceChannel({ channelId, channelName, onClose }: VoiceC
       socket.on("user-joined", (user: VoiceUser) => {
         setUsers((prev) => [...prev.filter((u) => u.socketId !== user.socketId), user]);
         createPeerConnection(user.socketId, false);
+        playSound(connectionSfxRef);
       });
 
       socket.on("user-left", ({ socketId }: { socketId: string }) => {
@@ -253,6 +256,7 @@ export default function VoiceChannel({ channelId, channelName, onClose }: VoiceC
         cleanupPeer(socketId);
         setSpeakingUsers((prev) => { const n = new Set(prev); n.delete(socketId); return n; });
         setSharerSocketId((prev) => (prev === socketId ? null : prev));
+        playSound(disconnectionSfxRef);
       });
 
       socket.on("voice-offer", async ({ from, offer }: { from: string; offer: RTCSessionDescriptionInit }) => {
@@ -300,36 +304,50 @@ export default function VoiceChannel({ channelId, channelName, onClose }: VoiceC
         localStreamRef.current = null;
         socketRef.current?.disconnect();
         socketRef.current = null;
-        setError("Не удалось подключиться к серверу.");
+        setError("Не удалось подключиться к серверу. Проверьте соединение и попробуйте снова.");
       });
 
       startSpeakingDetection();
     } catch (err) {
       stream?.getTracks().forEach((t) => t.stop());
       localStreamRef.current = null;
+
       if (err instanceof DOMException) {
-        const msgs: Record<string, string> = {
-          NotAllowedError:    "Доступ к микрофону запрещён. Разрешите в настройках браузера.",
-          NotFoundError:      "Микрофон не найден.",
-          NotReadableError:   "Микрофон занят другим приложением.",
-          OverconstrainedError: "Микрофон не поддерживает нужные параметры.",
-        };
-        setError(msgs[err.name] ?? `Ошибка микрофона: ${err.message}`);
+        switch (err.name) {
+          case "NotAllowedError":
+          case "PermissionDeniedError":
+            setError("Доступ к микрофону запрещён. Нажмите на иконку 🔒 в адресной строке и разрешите микрофон.");
+            break;
+          case "NotFoundError":
+          case "DevicesNotFoundError":
+            setError("Микрофон не найден. Подключите микрофон или гарнитуру и попробуйте снова.");
+            break;
+          case "NotReadableError":
+          case "TrackStartError":
+            setError("Микрофон занят другим приложением. Закройте остальные вкладки или приложения, использующие микрофон.");
+            break;
+          case "OverconstrainedError":
+            setError("Ваш микрофон не поддерживает нужные параметры. Попробуйте другой микрофон.");
+            break;
+          case "AbortError":
+            setError("Не удалось получить доступ к микрофону. Попробуйте снова.");
+            break;
+          default:
+            setError(`Ошибка микрофона: ${err.message}`);
+        }
       } else {
-        setError("Не удалось подключиться к голосовому каналу.");
+        setError("Не удалось подключиться к голосовому каналу. Попробуйте обновить страницу.");
       }
     }
-  }, [session, channelId, createPeerConnection, cleanupPeer, startSpeakingDetection]);
+  }, [session, channelId, createPeerConnection, cleanupPeer, startSpeakingDetection, playSound]);
 
-  // ─── Screen share ────────────────────────────────────────────────────────
+  // ── Screen share ──────────────────────────────────────────────────────────
   const startScreenShare = useCallback(async () => {
     if (!isConnected) return;
-
     if (!navigator.mediaDevices?.getDisplayMedia) {
       setError("Ваш браузер не поддерживает демонстрацию экрана.");
       return;
     }
-
     try {
       const screenStream = await navigator.mediaDevices.getDisplayMedia(SCREEN_CONSTRAINTS);
       screenStreamRef.current = screenStream;
@@ -338,26 +356,22 @@ export default function VoiceChannel({ channelId, channelName, onClose }: VoiceC
 
       const screenTrack = screenStream.getVideoTracks()[0];
 
-      // Add screen track to every existing peer connection
       peersRef.current.forEach((pc, remoteSocketId) => {
-        // Find existing recvonly video transceiver and flip it to send our screen
         const transceivers = pc.getTransceivers();
         const videoTc = transceivers.find(
           (tc) => tc.receiver.track.kind === "video" || tc.sender.track?.kind === "video"
         );
-        if (videoTc && videoTc.sender) {
+        if (videoTc?.sender) {
           videoTc.sender.replaceTrack(screenTrack);
           videoTc.direction = "sendonly";
-          // Apply encoding constraints for 720p60
           const params = videoTc.sender.getParameters();
           if (params.encodings?.length) {
-            params.encodings[0].maxBitrate  = 8_000_000;
+            params.encodings[0].maxBitrate   = 8_000_000;
             params.encodings[0].maxFramerate = 60;
           }
           videoTc.sender.setParameters(params).catch(() => {});
           screenTransceivers.current.set(remoteSocketId, videoTc);
         } else {
-          // No video transceiver yet — add one
           const tc = pc.addTransceiver(screenTrack, {
             direction: "sendonly",
             streams: [screenStream],
@@ -365,44 +379,36 @@ export default function VoiceChannel({ channelId, channelName, onClose }: VoiceC
           });
           screenTransceivers.current.set(remoteSocketId, tc);
         }
-
-        // Renegotiate
         pc.createOffer()
           .then((offer) => pc.setLocalDescription(offer))
-          .then(() => {
-            socketRef.current?.emit("voice-offer", { to: remoteSocketId, offer: pc.localDescription });
-          })
+          .then(() => socketRef.current?.emit("voice-offer", { to: remoteSocketId, offer: pc.localDescription }))
           .catch(() => {});
       });
 
-      // When user clicks "Stop sharing" in the browser bar
       screenTrack.onended = () => stopScreenShare();
     } catch (err) {
       if (err instanceof DOMException && err.name !== "NotAllowedError") {
         setError("Не удалось захватить экран.");
       }
-      // NotAllowedError = user cancelled — ignore silently
     }
   }, [isConnected, channelId]);
 
   const stopScreenShare = useCallback(() => {
     screenStreamRef.current?.getTracks().forEach((t) => t.stop());
     screenStreamRef.current = null;
-
-    // Remove / mute the screen track in all peer connections
     screenTransceivers.current.forEach((tc) => {
       tc.sender.replaceTrack(null).catch(() => {});
       tc.direction = "inactive";
     });
     screenTransceivers.current.clear();
-
     setIsSharing(false);
     socketRef.current?.emit("screen-share-stop", { channelId });
   }, [channelId]);
 
-  // ─── Leave ───────────────────────────────────────────────────────────────
+  // ── Leave ─────────────────────────────────────────────────────────────────
   const leaveVoice = useCallback(() => {
     if (isSharing) stopScreenShare();
+    playSound(disconnectionSfxRef);
     socketRef.current?.emit("leave-voice", { channelId });
     socketRef.current?.disconnect();
     socketRef.current = null;
@@ -428,7 +434,7 @@ export default function VoiceChannel({ channelId, channelName, onClose }: VoiceC
     setIsMuted(false);
     setIsDeafened(false);
     setSharerSocketId(null);
-  }, [channelId, cleanupPeer, isSharing, stopScreenShare]);
+  }, [channelId, cleanupPeer, isSharing, stopScreenShare, playSound]);
 
   const toggleMute = useCallback(() => {
     const track = localStreamRef.current?.getAudioTracks()[0];
@@ -448,8 +454,7 @@ export default function VoiceChannel({ channelId, channelName, onClose }: VoiceC
 
   useEffect(() => () => { if (isConnected) leaveVoice(); }, []); // eslint-disable-line
 
-  // ─── UI ──────────────────────────────────────────────────────────────────
-  const activeSharer = sharerSocketId ? users.find((u) => u.socketId === sharerSocketId) : null;
+  const activeSharer   = sharerSocketId ? users.find((u) => u.socketId === sharerSocketId) : null;
   const hasRemoteShare = !!sharerSocketId && !isSharing;
 
   return (
@@ -463,7 +468,7 @@ export default function VoiceChannel({ channelId, channelName, onClose }: VoiceC
         className="bg-white dark:bg-neutral-900 rounded-2xl shadow-2xl border border-neutral-200 dark:border-white/10 w-full max-w-3xl overflow-hidden"
         onClick={(e) => e.stopPropagation()}
       >
-        {/* ── Header ── */}
+        {/* Header */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-neutral-200 dark:border-white/10">
           <div className="flex items-center gap-3">
             <div className={`w-3 h-3 rounded-full ${isConnected ? "bg-green-400 animate-pulse" : "bg-neutral-400"}`} />
@@ -489,66 +494,43 @@ export default function VoiceChannel({ channelId, channelName, onClose }: VoiceC
           </button>
         </div>
 
-        {/* ── Screen share preview (remote) ── */}
+        {/* Screen share panels */}
         <AnimatePresence>
           {hasRemoteShare && (
-            <motion.div
-              initial={{ height: 0, opacity: 0 }}
-              animate={{ height: "auto", opacity: 1 }}
-              exit={{ height: 0, opacity: 0 }}
-              className="relative bg-black overflow-hidden"
-            >
-              <video
-                ref={screenVideoRef}
-                autoPlay
-                playsInline
-                muted
-                className="w-full max-h-[360px] object-contain"
-              />
+            <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: "auto", opacity: 1 }} exit={{ height: 0, opacity: 0 }}
+              className="relative bg-black overflow-hidden">
+              <video ref={screenVideoRef} autoPlay playsInline muted className="w-full max-h-[360px] object-contain" />
               <div className="absolute top-3 left-3 flex items-center gap-2 px-2.5 py-1 rounded-lg bg-black/60 backdrop-blur-sm text-xs text-white">
                 <span className="w-2 h-2 rounded-full bg-blue-400 animate-pulse" />
                 {activeSharer?.userName ?? "Участник"} показывает экран · 720p 60fps
               </div>
             </motion.div>
           )}
-
-          {/* Local screen share preview */}
           {isSharing && (
-            <motion.div
-              initial={{ height: 0, opacity: 0 }}
-              animate={{ height: "auto", opacity: 1 }}
-              exit={{ height: 0, opacity: 0 }}
-              className="relative bg-black overflow-hidden"
-            >
-              <video
-                autoPlay playsInline muted
-                ref={(el) => {
-                  if (el && screenStreamRef.current) el.srcObject = screenStreamRef.current;
-                }}
-                className="w-full max-h-[360px] object-contain opacity-90"
-              />
+            <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: "auto", opacity: 1 }} exit={{ height: 0, opacity: 0 }}
+              className="relative bg-black overflow-hidden">
+              <video autoPlay playsInline muted
+                ref={(el) => { if (el && screenStreamRef.current) el.srcObject = screenStreamRef.current; }}
+                className="w-full max-h-[360px] object-contain opacity-90" />
               <div className="absolute top-3 left-3 flex items-center gap-2 px-2.5 py-1 rounded-lg bg-black/60 backdrop-blur-sm text-xs text-white">
                 <span className="w-2 h-2 rounded-full bg-blue-400 animate-pulse" />
                 Ваш экран · 720p 60fps
               </div>
-              <button
-                onClick={stopScreenShare}
-                className="absolute top-3 right-3 px-3 py-1 rounded-lg bg-red-500/80 hover:bg-red-500 text-white text-xs font-medium backdrop-blur-sm transition-colors"
-              >
+              <button onClick={stopScreenShare}
+                className="absolute top-3 right-3 px-3 py-1 rounded-lg bg-red-500/80 hover:bg-red-500 text-white text-xs font-medium transition-colors">
                 Остановить
               </button>
             </motion.div>
           )}
         </AnimatePresence>
 
-        {/* ── Participants ── */}
+        {/* Participants */}
         <div className="p-6 min-h-[200px]">
           {error && (
             <div className="mb-4 p-3 bg-red-50 dark:bg-red-500/10 text-red-600 dark:text-red-400 text-sm rounded-xl">
               {error}
             </div>
           )}
-
           {isConnected ? (
             <div className="grid grid-cols-3 sm:grid-cols-5 gap-4">
               <VoiceUserCard name={session?.user?.name || "Вы"} muted={isMuted} speaking={localSpeaking && !isMuted} isLocal sharing={isSharing} />
@@ -573,7 +555,7 @@ export default function VoiceChannel({ channelId, channelName, onClose }: VoiceC
           )}
         </div>
 
-        {/* ── Controls ── */}
+        {/* Controls */}
         <div className="flex items-center justify-center gap-3 px-6 py-4 border-t border-neutral-200 dark:border-white/10 bg-neutral-50 dark:bg-white/5 flex-wrap">
           {!isConnected ? (
             <button onClick={joinVoice}
@@ -582,7 +564,6 @@ export default function VoiceChannel({ channelId, channelName, onClose }: VoiceC
             </button>
           ) : (
             <>
-              {/* Mute */}
               <ControlBtn active={isMuted} activeColor="red" onClick={toggleMute} title={isMuted ? "Включить микрофон" : "Отключить микрофон"}>
                 {isMuted ? (
                   <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -596,7 +577,6 @@ export default function VoiceChannel({ channelId, channelName, onClose }: VoiceC
                 )}
               </ControlBtn>
 
-              {/* Deafen */}
               <ControlBtn active={isDeafened} activeColor="red" onClick={toggleDeafen} title={isDeafened ? "Включить звук" : "Отключить звук"}>
                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   {isDeafened
@@ -606,7 +586,6 @@ export default function VoiceChannel({ channelId, channelName, onClose }: VoiceC
                 </svg>
               </ControlBtn>
 
-              {/* Screen share */}
               <ControlBtn active={isSharing} activeColor="blue" onClick={isSharing ? stopScreenShare : startScreenShare}
                 title={isSharing ? "Остановить демонстрацию" : "Показать экран (720p 60fps)"}>
                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -615,10 +594,7 @@ export default function VoiceChannel({ channelId, channelName, onClose }: VoiceC
                 </svg>
               </ControlBtn>
 
-              {/* Disconnect */}
-              <button onClick={leaveVoice}
-                className="p-3 bg-red-500 text-white rounded-xl hover:bg-red-600 transition-all"
-                title="Отключиться">
+              <button onClick={leaveVoice} className="p-3 bg-red-500 text-white rounded-xl hover:bg-red-600 transition-all" title="Отключиться">
                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
                     d="M16 8l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2M5 3a2 2 0 00-2 2v1c0 8.284 6.716 15 15 15h1a2 2 0 002-2v-3.28a1 1 0 00-.684-.948l-4.493-1.498a1 1 0 00-1.21.502l-1.13 2.257a11.042 11.042 0 01-5.516-5.517l2.257-1.128a1 1 0 00.502-1.21L9.228 3.683A1 1 0 008.279 3H5z" />
@@ -632,44 +608,28 @@ export default function VoiceChannel({ channelId, channelName, onClose }: VoiceC
   );
 }
 
-// ─── Control button ──────────────────────────────────────────────────────────
-
 function ControlBtn({ active, activeColor, onClick, title, children }: {
-  active: boolean;
-  activeColor: "red" | "blue";
-  onClick: () => void;
-  title: string;
-  children: React.ReactNode;
+  active: boolean; activeColor: "red" | "blue"; onClick: () => void; title: string; children: React.ReactNode;
 }) {
-  const colors = {
-    red:  "bg-red-100 dark:bg-red-500/20 text-red-500",
-    blue: "bg-blue-100 dark:bg-blue-500/20 text-blue-400",
-  };
+  const colors = { red: "bg-red-100 dark:bg-red-500/20 text-red-500", blue: "bg-blue-100 dark:bg-blue-500/20 text-blue-400" };
   return (
     <button onClick={onClick} title={title}
-      className={`p-3 rounded-xl transition-all ${
-        active ? colors[activeColor] : "bg-neutral-200 dark:bg-white/10 text-neutral-700 dark:text-neutral-300 hover:bg-neutral-300 dark:hover:bg-white/20"
-      }`}>
+      className={`p-3 rounded-xl transition-all ${active ? colors[activeColor] : "bg-neutral-200 dark:bg-white/10 text-neutral-700 dark:text-neutral-300 hover:bg-neutral-300 dark:hover:bg-white/20"}`}>
       {children}
     </button>
   );
 }
 
-// ─── Voice user card ─────────────────────────────────────────────────────────
-
 function VoiceUserCard({ name, muted, speaking, isLocal, sharing }: {
   name: string; muted: boolean; speaking: boolean; isLocal?: boolean; sharing?: boolean;
 }) {
   return (
-    <motion.div
-      initial={{ scale: 0.8, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.8, opacity: 0 }}
-      className="flex flex-col items-center gap-2"
-    >
+    <motion.div initial={{ scale: 0.8, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.8, opacity: 0 }}
+      className="flex flex-col items-center gap-2">
       <div className="relative">
         <div className={`w-14 h-14 rounded-full flex items-center justify-center text-base font-bold transition-all duration-300 ${
-          speaking
-            ? "bg-green-400/20 text-green-400 ring-[3px] ring-green-400 ring-offset-2 ring-offset-white dark:ring-offset-neutral-900"
-            : "bg-gradient-to-br from-violet-400/30 to-indigo-500/30 text-white border-2 border-white/10"
+          speaking ? "bg-green-400/20 text-green-400 ring-[3px] ring-green-400 ring-offset-2 ring-offset-white dark:ring-offset-neutral-900"
+                   : "bg-gradient-to-br from-violet-400/30 to-indigo-500/30 text-white border-2 border-white/10"
         }`}>
           {name.charAt(0).toUpperCase()}
         </div>
@@ -678,23 +638,14 @@ function VoiceUserCard({ name, muted, speaking, isLocal, sharing }: {
             animate={{ scale: [1, 1.3, 1], opacity: [0.6, 0, 0.6] }}
             transition={{ duration: 1.2, repeat: Infinity, ease: "easeOut" }} />
         )}
-        {/* Status dot */}
         <div className={`absolute -bottom-0.5 -right-0.5 w-4 h-4 rounded-full border-2 border-white dark:border-neutral-900 ${
           sharing ? "bg-blue-400" : speaking ? "bg-green-400" : muted ? "bg-red-400" : "bg-green-400"
         }`} />
       </div>
-
-      <span className={`text-xs truncate max-w-[72px] transition-colors ${speaking ? "text-green-500 font-semibold" : "text-neutral-600 dark:text-neutral-400"}`}>
+      <span className={`text-xs truncate max-w-[72px] ${speaking ? "text-green-500 font-semibold" : "text-neutral-600 dark:text-neutral-400"}`}>
         {name}{isLocal ? " (Вы)" : ""}
       </span>
-
-      {/* Screen share badge */}
-      {sharing && (
-        <span className="text-[10px] px-1.5 py-0.5 rounded bg-blue-500/20 text-blue-400 font-medium">
-          экран
-        </span>
-      )}
-
+      {sharing && <span className="text-[10px] px-1.5 py-0.5 rounded bg-blue-500/20 text-blue-400 font-medium">экран</span>}
       {speaking && (
         <div className="flex items-end gap-0.5 h-3">
           {[0, 1, 2, 3, 4].map((i) => (
@@ -704,7 +655,6 @@ function VoiceUserCard({ name, muted, speaking, isLocal, sharing }: {
           ))}
         </div>
       )}
-
       {muted && !speaking && (
         <svg className="w-3.5 h-3.5 text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
