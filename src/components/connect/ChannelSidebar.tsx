@@ -35,6 +35,7 @@ interface ChannelSidebarProps {
   onInvite: () => void;
   onToggleMembers: () => void;
   onProfileSettings: () => void;
+  onOpenSettings?: () => void;
   memberCount: number;
   onBack?: () => void;
 }
@@ -43,7 +44,7 @@ export default function ChannelSidebar({
   groupDetail, selectedChannel, unreadCounts, canManage,
   myProfileUser, userName, userUsername, userRole,
   onChannelClick, onDeleteChannel, onCreateChannel,
-  onInvite, onToggleMembers, onProfileSettings, memberCount, onBack,
+  onInvite, onToggleMembers, onProfileSettings, onOpenSettings, memberCount, onBack,
 }: ChannelSidebarProps) {
   const textChannels = groupDetail.channels.filter((c) => c.type === "TEXT");
   const voiceChannels = groupDetail.channels.filter((c) => c.type === "VOICE");
@@ -58,10 +59,18 @@ export default function ChannelSidebar({
             </svg>
           </button>
         )}
-        <div className="min-w-0">
+        <div className="min-w-0 flex-1">
           <h2 className="font-bold text-neutral-900 dark:text-white text-sm truncate">{groupDetail.name}</h2>
           {groupDetail.description && <p className="text-[11px] text-neutral-400 truncate mt-0.5">{groupDetail.description}</p>}
         </div>
+        {canManage && onOpenSettings && (
+          <button onClick={onOpenSettings} className="p-1.5 rounded-lg hover:bg-neutral-100 dark:hover:bg-white/10 text-neutral-400 hover:text-violet-500 dark:hover:text-cyan-400 transition-colors flex-shrink-0" aria-label="Настройки группы">
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+            </svg>
+          </button>
+        )}
       </div>
 
       <nav className="flex-1 overflow-y-auto p-2 space-y-0.5" aria-label="Channels">
