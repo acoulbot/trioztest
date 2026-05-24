@@ -38,7 +38,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
         orderBy: { joinedAt: "asc" },
       },
       owner: { select: { id: true, name: true, username: true } },
-      invites: membership.role === "OWNER" || membership.role === "ADMIN"
+      invites: membership.role === "OWNER" || membership.role === "MODERATOR"
         ? { orderBy: { createdAt: "desc" } }
         : false,
     },
@@ -62,7 +62,7 @@ export async function PUT(req: Request, { params }: { params: Promise<{ id: stri
     where: { userId_groupId: { userId: session.user.id, groupId: id } },
   });
 
-  if (!membership || (membership.role !== "OWNER" && membership.role !== "ADMIN")) {
+  if (!membership || (membership.role !== "OWNER" && membership.role !== "MODERATOR")) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 

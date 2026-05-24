@@ -40,6 +40,12 @@ interface Channel {
   _count: { members: number; messages: number };
 }
 
+interface GroupMember {
+  id: string;
+  role: string;
+  user: { id: string; name: string; username: string; avatar: string | null; role: string; lastSeen?: string | null; avatarGlowEnabled?: boolean; avatarGlowColors?: string | null };
+}
+
 interface GroupDetail extends Group {
   myRole: string;
   rules: string;
@@ -47,7 +53,7 @@ interface GroupDetail extends Group {
   createdAt: string;
   owner: { id: string; name: string; username: string };
   channels: Channel[];
-  members: { user: { id: string; name: string; username: string; avatar: string | null; role: string; lastSeen?: string | null; avatarGlowEnabled?: boolean; avatarGlowColors?: string | null }; role: string }[];
+  members: GroupMember[];
   invites?: { code: string; uses: number; maxUses: number; expiresAt: string | null }[];
 }
 
@@ -416,6 +422,183 @@ function GroupInfoPanel({ group, canManage, onUpdateRules }: { group: GroupDetai
   );
 }
 
+function GroupSettingsModal({ group, onClose, onUpdated, onDelete }: { group: GroupDetail; onClose: () => void; onUpdated: () => void; onDelete: () => void }) {
+  const [tab, setTab] = useState<"general" | "rules" | "members">("general");
+  const [name, setName] = useState(group.name);
+  const [description, setDescription] = useState(group.description || "");
+  const [iconFile, setIconFile] = useState<File | null>(null);
+  const [iconPreview, setIconPreview] = useState<string | null>(group.icon && group.icon.startsWith("/") ? group.icon : null);
+  const [rules, setRules] = useState(group.rules || "");
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+
+  const isOwner = group.myRole === "OWNER";
+
+  const handleIconChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (file.size > 2 * 1024 * 1024) { setError("Файл макс 2MB"); return; }
+    setIconFile(file);
+    setIconPreview(URL.createObjectURL(file));
+  };
+
+  const handleSaveGeneral = async () => {
+    setSaving(true);
+    setError("");
+    try {
+      let iconUrl = group.icon;
+      if (iconFile) {
+        const formData = new FormData();
+        formData.append("icon", iconFile);
+        const uploadRes = await fetch("/api/groups/icon", { method: "POST", body: formData });
+        if (!uploadRes.ok) { setError("Ошибка загрузки иконки"); setSaving(false); return; }
+        iconUrl = (await uploadRes.json()).icon;
+      }
+      await fetch(`/api/groups/${group.id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: name.trim(), description: description.trim(), icon: iconUrl }),
+      });
+      onUpdated();
+      onClose();
+    } catch { setError("Ошибка сети"); }
+    setSaving(false);
+  };
+
+  const handleSaveRules = async () => {
+    setSaving(true);
+    await fetch(`/api/groups/${group.id}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ rules }),
+    });
+    onUpdated();
+    setSaving(false);
+    onClose();
+  };
+
+  const handleRoleChange = async (memberId: string, role: string) => {
+    await fetch(`/api/groups/${group.id}/members/${memberId}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ role }),
+    });
+    onUpdated();
+  };
+
+  const handleKick = async (memberId: string) => {
+    if (!confirm("Исключить участника?")) return;
+    await fetch(`/api/groups/${group.id}/members/${memberId}`, { method: "DELETE" });
+    onUpdated();
+  };
+
+  const tabs = [
+    { key: "general" as const, label: "Основное" },
+    { key: "rules" as const, label: "Правила" },
+    { key: "members" as const, label: "Участники" },
+  ];
+
+  const roleLabel = (r: string) => r === "OWNER" ? "Создатель" : r === "MODERATOR" ? "Модератор" : "Участник";
+
+  return (
+    <ModalBackdrop onClose={onClose}>
+      <div className="w-full max-w-lg">
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="text-lg font-semibold text-neutral-900 dark:text-white">Настройки группы</h3>
+          <button onClick={onClose} className="text-neutral-400 hover:text-neutral-600 dark:hover:text-white">
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+          </button>
+        </div>
+
+        <div className="flex gap-1 mb-4 bg-neutral-100 dark:bg-neutral-800 rounded-xl p-1">
+          {tabs.map(t => (
+            <button key={t.key} onClick={() => setTab(t.key)} className={`flex-1 px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${tab === t.key ? "bg-white dark:bg-neutral-700 text-neutral-900 dark:text-white shadow-sm" : "text-neutral-500 dark:text-gray-400 hover:text-neutral-700 dark:hover:text-gray-300"}`}>
+              {t.label}
+            </button>
+          ))}
+        </div>
+
+        {error && <p className="text-xs text-red-500 mb-3">{error}</p>}
+
+        {tab === "general" && (
+          <div className="space-y-3">
+            <div className="flex items-center gap-3">
+              <label className="relative cursor-pointer group flex-shrink-0">
+                <div className="w-14 h-14 rounded-xl bg-neutral-200 dark:bg-neutral-700 flex items-center justify-center overflow-hidden border-2 border-dashed border-neutral-300 dark:border-white/20 group-hover:border-violet-400 dark:group-hover:border-cyan-400 transition-colors">
+                  {iconPreview ? (
+                    <img src={iconPreview} alt="Icon" className="w-full h-full object-cover" />
+                  ) : (
+                    <svg className="w-6 h-6 text-neutral-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                    </svg>
+                  )}
+                </div>
+                <input type="file" accept="image/png,image/jpeg,image/webp,image/gif" onChange={handleIconChange} className="hidden" />
+              </label>
+              <div className="flex-1 min-w-0">
+                <input type="text" value={name} onChange={e => setName(e.target.value)} placeholder="Название..."
+                  className="w-full bg-neutral-50 dark:bg-neutral-700 border border-neutral-200 dark:border-white/10 rounded-xl px-3 py-2 text-sm text-neutral-900 dark:text-white" />
+              </div>
+            </div>
+            <textarea value={description} onChange={e => setDescription(e.target.value)} placeholder="Описание группы..."
+              className="w-full bg-neutral-50 dark:bg-neutral-700 border border-neutral-200 dark:border-white/10 rounded-xl px-3 py-2 text-sm text-neutral-900 dark:text-white placeholder:text-neutral-400 resize-none h-20" />
+            <div className="flex gap-2">
+              <button onClick={handleSaveGeneral} disabled={saving || !name.trim()} className="flex-1 px-4 py-2 bg-gradient-to-r from-violet-600 to-indigo-600 dark:from-cyan-500 dark:to-cyan-400 text-white dark:text-neutral-900 rounded-xl text-sm font-medium disabled:opacity-50">
+                {saving ? "..." : "Сохранить"}
+              </button>
+              {isOwner && (
+                <button onClick={onDelete} className="px-4 py-2 bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 border border-red-200 dark:border-red-500/30 rounded-xl text-sm font-medium hover:bg-red-100 dark:hover:bg-red-900/40 transition-colors">
+                  Удалить
+                </button>
+              )}
+            </div>
+          </div>
+        )}
+
+        {tab === "rules" && (
+          <div className="space-y-3">
+            <p className="text-xs text-neutral-400">Новые участники увидят эти правила и должны будут их принять при первом входе.</p>
+            <textarea value={rules} onChange={e => setRules(e.target.value)} placeholder="Напишите правила сообщества..."
+              className="w-full bg-neutral-50 dark:bg-neutral-700 border border-neutral-200 dark:border-white/10 rounded-xl px-3 py-2 text-sm text-neutral-900 dark:text-white placeholder:text-neutral-400 resize-none h-40" />
+            <button onClick={handleSaveRules} disabled={saving} className="w-full px-4 py-2 bg-gradient-to-r from-violet-600 to-indigo-600 dark:from-cyan-500 dark:to-cyan-400 text-white dark:text-neutral-900 rounded-xl text-sm font-medium disabled:opacity-50">
+              {saving ? "..." : "Сохранить правила"}
+            </button>
+          </div>
+        )}
+
+        {tab === "members" && (
+          <div className="space-y-1 max-h-72 overflow-y-auto">
+            {group.members.map(m => (
+              <div key={m.id} className="flex items-center gap-2 px-2 py-2 rounded-lg hover:bg-neutral-50 dark:hover:bg-white/5">
+                <GlowAvatar user={m.user} size={28} />
+                <div className="min-w-0 flex-1">
+                  <div className="text-sm text-neutral-900 dark:text-white truncate">{m.user.name}</div>
+                  <div className="text-[10px] text-neutral-400">@{m.user.username} — {roleLabel(m.role)}</div>
+                </div>
+                {isOwner && m.role !== "OWNER" && (
+                  <div className="flex items-center gap-1 flex-shrink-0">
+                    <select
+                      value={m.role}
+                      onChange={e => handleRoleChange(m.id, e.target.value)}
+                      className="text-[11px] bg-neutral-100 dark:bg-neutral-700 border border-neutral-200 dark:border-white/10 rounded-lg px-1.5 py-1 text-neutral-700 dark:text-gray-300"
+                    >
+                      <option value="MEMBER">Участник</option>
+                      <option value="MODERATOR">Модератор</option>
+                    </select>
+                    <button onClick={() => handleKick(m.id)} className="p-1 text-neutral-400 hover:text-red-500 transition-colors" title="Исключить">
+                      <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+                    </button>
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </ModalBackdrop>
+  );
+}
+
 function MembersPanel({ group, onClose }: { group: GroupDetail; onClose: () => void }) {
   return (
     <aside className="w-60 max-md:absolute max-md:right-0 max-md:top-0 max-md:h-full max-md:z-40 bg-white dark:bg-neutral-900 border-l border-neutral-200 dark:border-white/5 flex flex-col h-full">
@@ -438,8 +621,8 @@ function MembersPanel({ group, onClose }: { group: GroupDetail; onClose: () => v
                 {!isOnline(m.user.lastSeen) && m.user.lastSeen && <span className="text-neutral-400/70"> &middot; {timeAgo(m.user.lastSeen)}</span>}
               </div>
             </div>
-            {m.role === "OWNER" && <span className="text-[10px] text-amber-500 ml-auto flex-shrink-0" aria-label="Owner">{"👑"}</span>}
-            {m.role === "ADMIN" && <span className="text-[10px] text-violet-500 ml-auto flex-shrink-0" aria-label="Admin">{"⚡"}</span>}
+            {m.role === "OWNER" && <span className="text-[10px] text-amber-500 ml-auto flex-shrink-0" aria-label="Owner">{"\ud83d\udc51"}</span>}
+            {m.role === "MODERATOR" && <span className="text-[10px] text-violet-500 ml-auto flex-shrink-0" aria-label="Moderator">{"\u2699\ufe0f"}</span>}
           </div>
         ))}
       </div>
@@ -466,12 +649,13 @@ export default function ConnectPage() {
   const [showMembers, setShowMembers] = useState(false);
   const [showFriends, setShowFriends] = useState(false);
   const [showProfileSettings, setShowProfileSettings] = useState(false);
+  const [showGroupSettings, setShowGroupSettings] = useState(false);
   const [myGlowSettings, setMyGlowSettings] = useState<{ avatarGlowEnabled: boolean; avatarGlowColors: string | null; avatar: string | null } | null>(null);
   const [unreadCounts, setUnreadCounts] = useState<Record<string, number>>({});
   const [mobileView, setMobileView] = useState<MobileView>("groups");
 
   const isBanned = session?.user?.banned && (!session.user.bannedUntil || new Date(session.user.bannedUntil) > new Date());
-  const canManage = groupDetail?.myRole === "OWNER" || groupDetail?.myRole === "ADMIN";
+  const canManage = groupDetail?.myRole === "OWNER" || groupDetail?.myRole === "MODERATOR";
 
   const fetchGroups = useCallback(() => {
     fetch("/api/groups").then((r) => r.json()).then((data) => {
@@ -545,6 +729,17 @@ export default function ConnectPage() {
     if (selectedGroup) fetchGroupDetail(selectedGroup);
   };
 
+  const deleteGroup = async () => {
+    if (!selectedGroup || !confirm("Удалить группу? Это действие нельзя отменить.")) return;
+    const res = await fetch(`/api/groups/${selectedGroup}`, { method: "DELETE" });
+    if (res.ok) {
+      setSelectedGroup(null);
+      setGroupDetail(null);
+      setShowGroupSettings(false);
+      fetchGroups();
+    }
+  };
+
   if (status === "loading") {
     return (
       <div className="min-h-screen flex items-center justify-center bg-white dark:bg-neutral-950">
@@ -610,6 +805,7 @@ export default function ConnectPage() {
             onInvite={() => setShowInvite(true)}
             onToggleMembers={() => setShowMembers(!showMembers)}
             onProfileSettings={() => setShowProfileSettings(true)}
+            onOpenSettings={() => setShowGroupSettings(true)}
             memberCount={groupDetail.members.length}
             onBack={() => { setSelectedGroup(null); setMobileView("groups"); }}
           />
@@ -645,6 +841,7 @@ export default function ConnectPage() {
             onInvite={() => setShowInvite(true)}
             onToggleMembers={() => setShowMembers(!showMembers)}
             onProfileSettings={() => setShowProfileSettings(true)}
+            onOpenSettings={() => setShowGroupSettings(true)}
             memberCount={groupDetail.members.length}
           />
         )}
@@ -666,7 +863,7 @@ export default function ConnectPage() {
                 setGroupDetail({ ...groupDetail, rulesAccepted: true });
               }} />
             ) : (
-              <GroupInfoPanel group={groupDetail} canManage={groupDetail.myRole === "OWNER" || groupDetail.myRole === "ADMIN"} onUpdateRules={async (rules: string) => {
+              <GroupInfoPanel group={groupDetail} canManage={groupDetail.myRole === "OWNER" || groupDetail.myRole === "MODERATOR"} onUpdateRules={async (rules: string) => {
                 await fetch(`/api/groups/${groupDetail.id}`, {
                   method: "PUT",
                   headers: { "Content-Type": "application/json" },
@@ -712,6 +909,14 @@ export default function ConnectPage() {
         {showJoinGroup && <JoinGroupModal onClose={() => setShowJoinGroup(false)} onJoined={fetchGroups} />}
         {showCreateChannel && selectedGroup && <CreateChannelModal groupId={selectedGroup} onClose={() => setShowCreateChannel(false)} onCreated={() => { if (selectedGroup) fetchGroupDetail(selectedGroup); }} />}
         {showInvite && selectedGroup && <InviteModal groupId={selectedGroup} onClose={() => setShowInvite(false)} />}
+        {showGroupSettings && groupDetail && (
+          <GroupSettingsModal
+            group={groupDetail}
+            onClose={() => setShowGroupSettings(false)}
+            onUpdated={() => { if (selectedGroup) fetchGroupDetail(selectedGroup); fetchGroups(); }}
+            onDelete={deleteGroup}
+          />
+        )}
         {showProfileSettings && session?.user && (
           <ProfileSettingsModal
             user={myProfileUser}
