@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
 import Link from "next/link";
+import ImageInput from "@/components/admin/ImageInput";
 
 interface EcosystemItem {
   id: string;
@@ -145,13 +146,12 @@ export default function AdminEcosystemPage() {
               </div>
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div>
-                  <label className="block text-sm text-gray-400 mb-1">URL изображения</label>
-                  <input
-                    type="text"
+                  <ImageInput
+                    label="Изображение"
                     value={form.imageUrl}
-                    onChange={(e) => setForm({ ...form, imageUrl: e.target.value })}
-                    className="input-field"
-                    placeholder="https://..."
+                    onChange={(url) => setForm({ ...form, imageUrl: url })}
+                    uploadDir="ecosystem"
+                    placeholder="https://... или загрузите файл"
                   />
                 </div>
                 <div>
