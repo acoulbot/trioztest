@@ -48,7 +48,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
     return NextResponse.json({ error: "Group not found" }, { status: 404 });
   }
 
-  return NextResponse.json({ ...group, myRole: membership.role });
+  return NextResponse.json({ ...group, myRole: membership.role, rulesAccepted: membership.rulesAccepted });
 }
 
 export async function PUT(req: Request, { params }: { params: Promise<{ id: string }> }) {
@@ -66,7 +66,7 @@ export async function PUT(req: Request, { params }: { params: Promise<{ id: stri
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
-  const { name, icon, description } = await req.json();
+  const { name, icon, description, rules } = await req.json();
 
   const group = await prisma.group.update({
     where: { id },
@@ -74,6 +74,7 @@ export async function PUT(req: Request, { params }: { params: Promise<{ id: stri
       ...(name !== undefined && { name }),
       ...(icon !== undefined && { icon }),
       ...(description !== undefined && { description }),
+      ...(rules !== undefined && { rules }),
     },
   });
 

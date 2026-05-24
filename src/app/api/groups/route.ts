@@ -55,7 +55,7 @@ export async function POST(req: NextRequest) {
       description: description || "",
       ownerId: session.user.id,
       members: {
-        create: { userId: session.user.id, role: "OWNER" },
+        create: { userId: session.user.id, role: "OWNER", rulesAccepted: true },
       },
       channels: {
         create: [
