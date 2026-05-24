@@ -21,19 +21,18 @@ function renderMarkdown(content: string) {
   const raw = content
     .split("\n")
     .map((line) => {
-      if (line.startsWith("# ")) return `<h1 class="text-3xl font-bold text-white mb-4 mt-8">${line.slice(2)}</h1>`;
-      if (line.startsWith("## ")) return `<h2 class="text-2xl font-bold text-white mb-3 mt-6">${line.slice(3)}</h2>`;
-      if (line.startsWith("### ")) return `<h3 class="text-xl font-bold text-white mb-2 mt-4">${line.slice(4)}</h3>`;
-      if (line.startsWith("- ")) return `<li class="text-gray-300 ml-4 list-disc">${line.slice(2)}</li>`;
-      if (line.startsWith("*") && line.endsWith("*")) return `<p class="text-gray-400 italic">${line.slice(1, -1)}</p>`;
+      if (line.startsWith("# "))  return `<h1 class="text-3xl font-bold text-neutral-900 dark:text-white mb-4 mt-8">${line.slice(2)}</h1>`;
+      if (line.startsWith("## ")) return `<h2 class="text-2xl font-bold text-neutral-800 dark:text-white mb-3 mt-6">${line.slice(3)}</h2>`;
+      if (line.startsWith("### "))return `<h3 class="text-xl font-bold text-neutral-800 dark:text-white mb-2 mt-4">${line.slice(4)}</h3>`;
+      if (line.startsWith("- ")) return `<li class="text-neutral-600 dark:text-gray-300 ml-4 list-disc">${line.slice(2)}</li>`;
+      if (line.startsWith("*") && line.endsWith("*")) return `<p class="text-neutral-500 dark:text-neutral-500 dark:text-gray-400 italic">${line.slice(1, -1)}</p>`;
       if (line.trim() === "") return `<br/>`;
       const formatted = line
-        .replace(/\*\*(.+?)\*\*/g, '<strong class="text-white">$1</strong>')
-        .replace(/\*(.+?)\*/g, '<em class="text-gray-400">$1</em>');
-      return `<p class="text-gray-300 leading-relaxed">${formatted}</p>`;
+        .replace(/\*\*(.+?)\*\*/g, '<strong class="text-neutral-900 dark:text-white font-semibold">$1</strong>')
+        .replace(/\*(.+?)\*/g,   '<em class="text-neutral-500 dark:text-neutral-500 dark:text-gray-400">$1</em>');
+      return `<p class="text-neutral-700 dark:text-gray-300 leading-relaxed">${formatted}</p>`;
     })
     .join("\n");
-  // Sanitize the generated HTML to prevent XSS
   return DOMPurify.sanitize(raw, {
     ALLOWED_TAGS: ["h1","h2","h3","p","br","li","ul","ol","strong","em"],
     ALLOWED_ATTR: ["class"],
@@ -55,14 +54,14 @@ export default function ArticlePage() {
 
   if (!article) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-dark-900">
+      <div className="min-h-screen flex items-center justify-center bg-[var(--background)]">
         <div className="animate-spin w-8 h-8 border-2 border-cyan-400 border-t-transparent rounded-full" />
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-dark-900 py-12 px-4">
+    <div className="min-h-screen bg-[var(--background)] py-12 px-4">
       <div className="max-w-3xl mx-auto">
         <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}>
           <Link href="/library" className="inline-flex items-center gap-2 text-cyan-400 hover:text-cyan-300 mb-8 text-sm transition-colors">
@@ -76,7 +75,7 @@ export default function ArticlePage() {
             <span className="px-3 py-1 bg-fantasy-emerald/20 text-fantasy-emerald text-sm rounded-lg">
               {article.category}
             </span>
-            <span className="text-sm text-gray-500">
+            <span className="text-sm text-neutral-500 dark:text-gray-500">
               {new Date(article.createdAt).toLocaleDateString("ru-RU", { year: "numeric", month: "long", day: "numeric" })}
             </span>
           </div>
@@ -89,7 +88,7 @@ export default function ArticlePage() {
           {article.tags && (
             <div className="flex gap-2 mt-6">
               {article.tags.split(",").map((tag) => (
-                <span key={tag} className="text-sm text-gray-400 bg-dark-700 px-3 py-1 rounded-lg">
+                <span key={tag} className="text-sm text-neutral-500 dark:text-gray-400 bg-neutral-100 dark:bg-white/10 px-3 py-1 rounded-lg">
                   #{tag.trim()}
                 </span>
               ))}

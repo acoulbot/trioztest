@@ -21,12 +21,10 @@ function ThemeProvider({ children }: { children: ReactNode }) {
   const [theme, setTheme] = useState<Theme>("dark");
 
   useEffect(() => {
-    const saved = localStorage.getItem("trioz-theme") as Theme | null;
-    if (saved) {
-      setTheme(saved);
-      document.documentElement.classList.toggle("dark", saved === "dark");
-      document.documentElement.classList.toggle("light", saved === "light");
-    }
+    const saved = (localStorage.getItem("trioz-theme") as Theme | null) ?? "dark";
+    setTheme(saved);
+    document.documentElement.classList.toggle("dark", saved === "dark");
+    document.documentElement.classList.toggle("light", saved === "light");
   }, []);
 
   const toggleTheme = () => {

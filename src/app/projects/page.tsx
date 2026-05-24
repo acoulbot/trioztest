@@ -27,7 +27,7 @@ const projects = [
 
 export default function ProjectsPage() {
   return (
-    <div className="min-h-screen bg-dark-900 py-12 px-4">
+    <div className="min-h-screen bg-[var(--background)] transition-colors duration-300 py-12 px-4">
       <div className="fixed inset-0 pointer-events-none">
         <div className="absolute top-0 left-0 w-[600px] h-[600px] bg-fantasy-red/5 rounded-full blur-[150px]" />
       </div>
@@ -43,7 +43,7 @@ export default function ProjectsPage() {
               Проекты Т.Р.И.О.&quot;Z&quot;
             </span>
           </h1>
-          <EditableText contentKey="projects.subtitle" defaultValue="Игры, карты, онлайн — масштабные проекты во вселенной T.Р.И.О.Z" tag="p" className="text-gray-400 max-w-2xl mx-auto text-lg" />
+          <EditableText contentKey="projects.subtitle" defaultValue="Игры, карты, онлайн — масштабные проекты во вселенной T.Р.И.О.Z" tag="p" className="text-neutral-500 dark:text-gray-400 max-w-2xl mx-auto text-lg" />
         </motion.div>
 
         <div className="space-y-8">
@@ -59,14 +59,14 @@ export default function ProjectsPage() {
                 <div className="flex-1">
                   <div className="flex items-center gap-3 mb-3">
                     <h2 className={`text-2xl font-bold ${project.accent}`}>{project.title}</h2>
-                    <span className="px-2 py-0.5 bg-dark-700 text-gray-400 text-xs rounded-lg">
+                    <span className="px-2 py-0.5 bg-neutral-100 dark:bg-dark-700 text-neutral-500 dark:text-gray-400 text-xs rounded-lg">
                       {project.status}
                     </span>
                   </div>
-                  <EditableText contentKey={`projects.${i}.desc`} defaultValue={project.description} tag="p" className="text-gray-300 leading-relaxed mb-4" multiline />
+                  <EditableText contentKey={`projects.${i}.desc`} defaultValue={project.description} tag="p" className="text-neutral-700 dark:text-gray-300 leading-relaxed mb-4" multiline />
                   <div className="flex flex-wrap gap-2">
                     {project.tags.map((tag) => (
-                      <span key={tag} className="px-3 py-1 bg-dark-700/50 text-gray-400 text-sm rounded-lg">
+                      <span key={tag} className="px-3 py-1 bg-neutral-100 dark:bg-neutral-100/50 dark:bg-dark-700/50 text-neutral-500 dark:text-gray-400 text-sm rounded-lg">
                         {tag}
                       </span>
                     ))}
@@ -84,8 +84,8 @@ export default function ProjectsPage() {
           className="mt-16 text-center"
         >
           <div className="glass-card p-8 inline-block">
-            <EditableText contentKey="projects.cta.title" defaultValue="Хотите присоединиться?" tag="h3" className="text-xl font-bold text-white mb-3" />
-            <EditableText contentKey="projects.cta.text" defaultValue="Следите за развитием проектов в TZ.Connect" tag="p" className="text-gray-400 mb-4" />
+            <EditableText contentKey="projects.cta.title" defaultValue="Хотите присоединиться?" tag="h3" className="text-xl font-bold text-neutral-900 dark:text-white mb-3" />
+            <EditableText contentKey="projects.cta.text" defaultValue="Следите за развитием проектов в TZ.Connect" tag="p" className="text-neutral-500 dark:text-gray-400 mb-4" />
             <Link href="/connect" className="btn-primary inline-block">
               Перейти в TZ.Connect
             </Link>
