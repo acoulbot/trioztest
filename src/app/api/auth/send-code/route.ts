@@ -17,18 +17,14 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Неверный тип" }, { status: 400 });
     }
 
-    if (type === "login") {
-      const user = await prisma.user.findUnique({ where: { email } });
-      if (!user) {
-        return NextResponse.json({ error: "Пользователь не найден" }, { status: 404 });
-      }
+    const existingUser = await prisma.user.findUnique({ where: { email } });
+
+    if (type === "login" && !existingUser) {
+      return NextResponse.json({ ok: true, message: "Если аккаунт существует, код отправлен на " + email });
     }
 
-    if (type === "register") {
-      const existing = await prisma.user.findUnique({ where: { email } });
-      if (existing) {
-        return NextResponse.json({ error: "Email уже зарегистрирован" }, { status: 400 });
-      }
+    if (type === "register" && existingUser) {
+      return NextResponse.json({ ok: true, message: "Если аккаунт существует, код отправлен на " + email });
     }
 
     const recentCode = await prisma.verificationCode.findFirst({

@@ -1,6 +1,8 @@
 import { createServer } from "http";
 import next from "next";
 import { Server as SocketIOServer } from "socket.io";
+import { getToken } from "next-auth/jwt";
+import { IncomingMessage } from "http";
 
 const dev = process.env.NODE_ENV !== "production";
 const hostname = "0.0.0.0";
@@ -16,7 +18,17 @@ interface VoiceUser {
   muted: boolean;
 }
 
+interface AuthenticatedSocket {
+  userId: string;
+  userName: string;
+}
+
 const voiceRooms = new Map<string, Map<string, VoiceUser>>();
+const authenticatedSockets = new Map<string, AuthenticatedSocket>();
+
+const allowedOrigins = process.env.ALLOWED_ORIGINS
+  ? process.env.ALLOWED_ORIGINS.split(",").map((o) => o.trim())
+  : [`http://localhost:${port}`, `http://0.0.0.0:${port}`];
 
 app.prepare().then(() => {
   const httpServer = createServer((req, res) => {
@@ -24,15 +36,51 @@ app.prepare().then(() => {
   });
 
   const io = new SocketIOServer(httpServer, {
-    cors: { origin: "*", methods: ["GET", "POST"] },
+    cors: {
+      origin: allowedOrigins,
+      methods: ["GET", "POST"],
+      credentials: true,
+    },
     path: "/api/socketio",
   });
 
-  io.on("connection", (socket) => {
-    console.log(`[Socket] Connected: ${socket.id}`);
+  io.use(async (socket, next) => {
+    try {
+      const req = socket.request as IncomingMessage & { cookies?: Record<string, string> };
+      const cookieHeader = req.headers.cookie || "";
+      const cookies: Record<string, string> = {};
+      cookieHeader.split(";").forEach((c) => {
+        const [key, ...val] = c.split("=");
+        if (key) cookies[key.trim()] = val.join("=").trim();
+      });
+      req.cookies = cookies;
 
-    socket.on("join-voice", ({ channelId, userId, userName }: { channelId: string; userId: string; userName: string }) => {
-      const user: VoiceUser = { socketId: socket.id, userId, userName, muted: false };
+      const token = await getToken({ req: req as Parameters<typeof getToken>[0]["req"], secret: process.env.NEXTAUTH_SECRET });
+      if (!token || !token.id) {
+        return next(new Error("Authentication required"));
+      }
+
+      authenticatedSockets.set(socket.id, {
+        userId: token.id as string,
+        userName: (token.name || token.username || "Unknown") as string,
+      });
+
+      next();
+    } catch {
+      next(new Error("Authentication failed"));
+    }
+  });
+
+  io.on("connection", (socket) => {
+    const authData = authenticatedSockets.get(socket.id);
+    if (!authData) {
+      socket.disconnect(true);
+      return;
+    }
+    console.log(`[Socket] Connected: ${socket.id} (user: ${authData.userId})`);
+
+    socket.on("join-voice", ({ channelId }: { channelId: string }) => {
+      const user: VoiceUser = { socketId: socket.id, userId: authData.userId, userName: authData.userName, muted: false };
 
       if (!voiceRooms.has(channelId)) {
         voiceRooms.set(channelId, new Map());
@@ -83,6 +131,7 @@ app.prepare().then(() => {
 
     socket.on("disconnect", () => {
       console.log(`[Socket] Disconnected: ${socket.id}`);
+      authenticatedSockets.delete(socket.id);
       voiceRooms.forEach((room, channelId) => {
         if (room.has(socket.id)) {
           leaveVoiceChannel(socket, channelId);

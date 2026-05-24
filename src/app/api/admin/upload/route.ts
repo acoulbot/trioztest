@@ -3,9 +3,9 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { writeFile, mkdir } from "fs/promises";
 import path from "path";
+import { validateImageFile, sanitizeExtension } from "@/lib/fileValidation";
 
 const MAX_SIZE = 5 * 1024 * 1024; // 5 MB
-const ALLOWED_TYPES = ["image/png", "image/jpeg", "image/webp", "image/gif"];
 // Allowed upload destinations (maps to subfolders under public/uploads/)
 const ALLOWED_DIRS = ["ecosystem", "windows", "articles"] as const;
 type UploadDir = (typeof ALLOWED_DIRS)[number];
@@ -23,9 +23,6 @@ export async function POST(req: Request) {
   if (!file) {
     return NextResponse.json({ error: "Файл не передан" }, { status: 400 });
   }
-  if (!ALLOWED_TYPES.includes(file.type)) {
-    return NextResponse.json({ error: "Разрешены только PNG, JPG, WebP, GIF" }, { status: 400 });
-  }
   if (file.size > MAX_SIZE) {
     return NextResponse.json({ error: "Файл слишком большой (макс. 5 МБ)" }, { status: 400 });
   }
@@ -34,10 +31,16 @@ export async function POST(req: Request) {
   }
 
   const buffer = Buffer.from(await file.arrayBuffer());
+
+  const validation = validateImageFile(buffer, file.type);
+  if (!validation.valid) {
+    return NextResponse.json({ error: validation.error }, { status: 400 });
+  }
+
   const uploadDir = path.join(process.cwd(), "public", "uploads", dirParam);
   await mkdir(uploadDir, { recursive: true });
 
-  const ext = (file.name.split(".").pop() ?? "jpg").replace(/[^a-z0-9]/gi, "").toLowerCase();
+  const ext = sanitizeExtension(file.name);
   const filename = `${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
   await writeFile(path.join(uploadDir, filename), buffer);
 

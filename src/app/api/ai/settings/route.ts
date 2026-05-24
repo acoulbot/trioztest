@@ -2,8 +2,10 @@ import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import prisma from "@/lib/prisma";
+import { encrypt, decrypt, isEncrypted } from "@/lib/encryption";
 
 const AI_KEYS = ["ai_api_key", "ai_model", "ai_system_prompt", "ai_provider"];
+const ENCRYPTED_KEYS = ["ai_api_key"];
 
 export async function GET() {
   const session = await getServerSession(authOptions);
@@ -17,9 +19,16 @@ export async function GET() {
 
   const settings: Record<string, string> = {};
   for (const c of configs) {
-    settings[c.key] = c.key === "ai_api_key" && c.value
-      ? c.value.slice(0, 8) + "..." + c.value.slice(-4)
-      : c.value;
+    if (c.key === "ai_api_key" && c.value) {
+      try {
+        const decrypted = isEncrypted(c.value) ? decrypt(c.value) : c.value;
+        settings[c.key] = decrypted.slice(0, 8) + "..." + decrypted.slice(-4);
+      } catch {
+        settings[c.key] = "***encrypted***";
+      }
+    } else {
+      settings[c.key] = c.value;
+    }
   }
 
   return NextResponse.json(settings);
@@ -35,10 +44,14 @@ export async function PUT(req: Request) {
 
   for (const key of AI_KEYS) {
     if (body[key] !== undefined) {
+      const value = ENCRYPTED_KEYS.includes(key) && body[key]
+        ? encrypt(body[key])
+        : body[key];
+
       await prisma.siteConfig.upsert({
         where: { key },
-        create: { key, value: body[key] },
-        update: { value: body[key] },
+        create: { key, value },
+        update: { value },
       });
     }
   }
