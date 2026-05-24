@@ -25,6 +25,7 @@ interface AuthenticatedSocket {
 
 const voiceRooms = new Map<string, Map<string, VoiceUser>>();
 const authenticatedSockets = new Map<string, AuthenticatedSocket>();
+const userSockets = new Map<string, Set<string>>();
 
 const allowedOrigins = process.env.ALLOWED_ORIGINS
   ? process.env.ALLOWED_ORIGINS.split(",").map((o) => o.trim())
@@ -43,6 +44,9 @@ app.prepare().then(() => {
     },
     path: "/api/socketio",
   });
+
+  // Export io globally so API routes can emit events
+  (globalThis as Record<string, unknown>).__socketio = io;
 
   io.use(async (socket, next) => {
     try {
@@ -79,6 +83,37 @@ app.prepare().then(() => {
     }
     console.log(`[Socket] Connected: ${socket.id} (user: ${authData.userId})`);
 
+    // Track user -> sockets mapping for targeted notifications
+    if (!userSockets.has(authData.userId)) {
+      userSockets.set(authData.userId, new Set());
+    }
+    userSockets.get(authData.userId)!.add(socket.id);
+
+    // ── Text channel rooms ──────────────────────────────────────────
+    socket.on("join-channel", ({ channelId }: { channelId: string }) => {
+      socket.join(`channel-${channelId}`);
+    });
+
+    socket.on("leave-channel", ({ channelId }: { channelId: string }) => {
+      socket.leave(`channel-${channelId}`);
+    });
+
+    socket.on("typing", ({ channelId }: { channelId: string }) => {
+      socket.to(`channel-${channelId}`).emit("user-typing", {
+        userId: authData.userId,
+        userName: authData.userName,
+        channelId,
+      });
+    });
+
+    socket.on("stop-typing", ({ channelId }: { channelId: string }) => {
+      socket.to(`channel-${channelId}`).emit("user-stop-typing", {
+        userId: authData.userId,
+        channelId,
+      });
+    });
+
+    // ── Voice channels ──────────────────────────────────────────────
     socket.on("join-voice", ({ channelId }: { channelId: string }) => {
       const user: VoiceUser = { socketId: socket.id, userId: authData.userId, userName: authData.userName, muted: false };
 
@@ -95,7 +130,7 @@ app.prepare().then(() => {
 
       socket.to(`voice-${channelId}`).emit("user-joined", user);
 
-      console.log(`[Voice] ${userName} joined channel ${channelId}. Users: ${room.size}`);
+      console.log(`[Voice] ${authData.userName} joined channel ${channelId}. Users: ${room.size}`);
     });
 
     socket.on("leave-voice", ({ channelId }: { channelId: string }) => {
@@ -129,8 +164,19 @@ app.prepare().then(() => {
       socket.to(`voice-${channelId}`).emit("user-speaking", { socketId: socket.id, speaking });
     });
 
+    // ── Disconnect ──────────────────────────────────────────────────
     socket.on("disconnect", () => {
       console.log(`[Socket] Disconnected: ${socket.id}`);
+
+      // Clean up user socket tracking
+      if (authData) {
+        const sockets = userSockets.get(authData.userId);
+        if (sockets) {
+          sockets.delete(socket.id);
+          if (sockets.size === 0) userSockets.delete(authData.userId);
+        }
+      }
+
       authenticatedSockets.delete(socket.id);
       voiceRooms.forEach((room, channelId) => {
         if (room.has(socket.id)) {

@@ -37,7 +37,7 @@ export async function GET(req: Request) {
 }
 
 export async function POST(req: NextRequest) {
-  const limited = rateLimit(req, "channels", { limit: 20, windowMs: 60 * 60 * 1000 });
+  const limited = await rateLimit(req, "channels", { limit: 20, windowMs: 60 * 60 * 1000 });
   if (limited) return limited;
 
   const session = await getServerSession(authOptions);
