@@ -283,7 +283,7 @@ export default function ConnectPage() {
   const [showMembers, setShowMembers] = useState(false);
   const [showFriends, setShowFriends] = useState(false);
   const [showProfileSettings, setShowProfileSettings] = useState(false);
-  const [myGlowSettings, setMyGlowSettings] = useState<{ avatarGlowEnabled: boolean; avatarGlowColors: string | null } | null>(null);
+  const [myGlowSettings, setMyGlowSettings] = useState<{ avatarGlowEnabled: boolean; avatarGlowColors: string | null; avatar: string | null } | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const pollRef = useRef<NodeJS.Timeout | null>(null);
 
@@ -312,12 +312,12 @@ export default function ConnectPage() {
     }
   }, []);
 
-  // Fetch own glow settings (ADMINs only, lazy)
+  // Fetch own profile (avatar + glow settings) for all authenticated users
   useEffect(() => {
-    if (session?.user && (session.user as { role?: string }).role === "ADMIN") {
+    if (session?.user) {
       fetch("/api/profile/me")
         .then((r) => r.json())
-        .then((d) => setMyGlowSettings({ avatarGlowEnabled: d.avatarGlowEnabled, avatarGlowColors: d.avatarGlowColors }))
+        .then((d) => setMyGlowSettings({ avatarGlowEnabled: d.avatarGlowEnabled ?? false, avatarGlowColors: d.avatarGlowColors ?? null, avatar: d.avatar ?? null }))
         .catch(() => {});
     }
   }, [session]);
@@ -327,7 +327,7 @@ export default function ConnectPage() {
     id: (session?.user as { id?: string } | undefined)?.id ?? "",
     name: session?.user?.name ?? "",
     role: (session?.user as { role?: string } | undefined)?.role ?? "USER",
-    avatar: null,
+    avatar: myGlowSettings?.avatar ?? null,
     avatarGlowEnabled: myGlowSettings?.avatarGlowEnabled ?? false,
     avatarGlowColors: myGlowSettings?.avatarGlowColors ?? null,
   };
@@ -670,7 +670,7 @@ export default function ConnectPage() {
             user={myProfileUser}
             onClose={() => setShowProfileSettings(false)}
             onSaved={(settings) => {
-              setMyGlowSettings(settings);
+              setMyGlowSettings((prev) => ({ avatar: prev?.avatar ?? null, ...settings }));
             }}
           />
         )}
