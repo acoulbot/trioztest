@@ -50,30 +50,93 @@ interface GroupDetail extends Group {
 
 function CreateGroupModal({ onClose, onCreated }: { onClose: () => void; onCreated: () => void }) {
   const [name, setName] = useState("");
-  const [icon, setIcon] = useState("");
+  const [iconFile, setIconFile] = useState<File | null>(null);
+  const [iconPreview, setIconPreview] = useState<string | null>(null);
+  const [error, setError] = useState("");
+  const [loading, setLoading] = useState(false);
+
+  const handleIconChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (file.size > 2 * 1024 * 1024) {
+      setError("Файл слишком большой (макс. 2MB)");
+      return;
+    }
+    setIconFile(file);
+    setIconPreview(URL.createObjectURL(file));
+    setError("");
+  };
 
   const handleCreate = async () => {
     if (!name.trim()) return;
-    await fetch("/api/groups", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ name, icon: icon || null }),
-    });
-    onCreated();
-    onClose();
+    setError("");
+    setLoading(true);
+
+    try {
+      let iconUrl: string | null = null;
+
+      if (iconFile) {
+        const formData = new FormData();
+        formData.append("icon", iconFile);
+        const uploadRes = await fetch("/api/groups/icon", { method: "POST", body: formData });
+        if (!uploadRes.ok) {
+          const data = await uploadRes.json();
+          setError(data.error || "Ошибка загрузки иконки");
+          setLoading(false);
+          return;
+        }
+        const uploadData = await uploadRes.json();
+        iconUrl = uploadData.icon;
+      }
+
+      const res = await fetch("/api/groups", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name, icon: iconUrl }),
+      });
+
+      if (!res.ok) {
+        const data = await res.json();
+        setError(data.error || "Ошибка создания группы");
+        setLoading(false);
+        return;
+      }
+
+      onCreated();
+      onClose();
+    } catch {
+      setError("Ошибка сети. Попробуйте позже.");
+      setLoading(false);
+    }
   };
 
   return (
     <ModalBackdrop onClose={onClose}>
       <h3 className="text-lg font-semibold text-neutral-900 dark:text-white mb-4">Создать группу</h3>
       <div className="space-y-3">
-        <input type="text" value={name} onChange={(e) => setName(e.target.value)}
-          placeholder="Название группы..." className="w-full bg-neutral-50 dark:bg-neutral-700 border border-neutral-200 dark:border-white/10 rounded-xl px-3 py-2.5 text-sm text-neutral-900 dark:text-white placeholder:text-neutral-400" autoFocus />
-        <input type="text" value={icon} onChange={(e) => setIcon(e.target.value)}
-          placeholder="Иконка (emoji)..." className="w-full bg-neutral-50 dark:bg-neutral-700 border border-neutral-200 dark:border-white/10 rounded-xl px-3 py-2.5 text-sm text-neutral-900 dark:text-white placeholder:text-neutral-400" />
+        <div className="flex items-center gap-3">
+          <label className="relative cursor-pointer group flex-shrink-0">
+            <div className="w-14 h-14 rounded-xl bg-neutral-200 dark:bg-neutral-700 flex items-center justify-center overflow-hidden border-2 border-dashed border-neutral-300 dark:border-white/20 group-hover:border-violet-400 dark:group-hover:border-cyan-400 transition-colors">
+              {iconPreview ? (
+                <img src={iconPreview} alt="Icon" className="w-full h-full object-cover" />
+              ) : (
+                <svg className="w-6 h-6 text-neutral-400 group-hover:text-violet-500 dark:group-hover:text-cyan-400 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                </svg>
+              )}
+            </div>
+            <input type="file" accept="image/png,image/jpeg,image/webp,image/gif" onChange={handleIconChange} className="hidden" />
+          </label>
+          <div className="flex-1 min-w-0">
+            <input type="text" value={name} onChange={(e) => setName(e.target.value)}
+              placeholder="Название группы..." className="w-full bg-neutral-50 dark:bg-neutral-700 border border-neutral-200 dark:border-white/10 rounded-xl px-3 py-2.5 text-sm text-neutral-900 dark:text-white placeholder:text-neutral-400" autoFocus />
+            <p className="text-[11px] text-neutral-400 mt-1">Иконка необязательна</p>
+          </div>
+        </div>
+        {error && <p className="text-xs text-red-500 dark:text-red-400">{error}</p>}
         <div className="flex gap-2 pt-1">
-          <button onClick={handleCreate} className="flex-1 px-4 py-2.5 bg-gradient-to-r from-violet-600 to-indigo-600 dark:from-cyan-500 dark:to-cyan-400 text-white dark:text-neutral-900 rounded-xl hover:shadow-lg transition-all text-sm font-medium">
-            Создать
+          <button onClick={handleCreate} disabled={loading || !name.trim()} className="flex-1 px-4 py-2.5 bg-gradient-to-r from-violet-600 to-indigo-600 dark:from-cyan-500 dark:to-cyan-400 text-white dark:text-neutral-900 rounded-xl hover:shadow-lg transition-all text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed">
+            {loading ? "Создание..." : "Создать"}
           </button>
           <button onClick={onClose} className="flex-1 px-4 py-2.5 bg-neutral-100 dark:bg-neutral-700 text-neutral-600 dark:text-gray-400 rounded-xl hover:bg-neutral-200 dark:hover:bg-neutral-600 transition-all text-sm">
             Отмена
