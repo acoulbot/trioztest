@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback } from "react";
 import { useSession } from "next-auth/react";
 import { AnimatePresence } from "framer-motion";
 import Link from "next/link";
+import Image from "next/image";
 import dynamic from "next/dynamic";
 
 import GlowAvatar, { GlowAvatarUser } from "@/components/ui/GlowAvatar";
@@ -41,6 +42,10 @@ interface Channel {
 
 interface GroupDetail extends Group {
   myRole: string;
+  rules: string;
+  rulesAccepted: boolean;
+  createdAt: string;
+  owner: { id: string; name: string; username: string };
   channels: Channel[];
   members: { user: { id: string; name: string; username: string; avatar: string | null; role: string; lastSeen?: string | null; avatarGlowEnabled?: boolean; avatarGlowColors?: string | null }; role: string }[];
   invites?: { code: string; uses: number; maxUses: number; expiresAt: string | null }[];
@@ -262,6 +267,152 @@ function InviteModal({ groupId, onClose }: { groupId: string; onClose: () => voi
         </button>
       </div>
     </ModalBackdrop>
+  );
+}
+
+function GroupRulesGate({ group, onAccept }: { group: GroupDetail; onAccept: () => void }) {
+  const [loading, setLoading] = useState(false);
+
+  return (
+    <div className="max-w-lg w-full mx-4 p-6 bg-white dark:bg-neutral-900 rounded-2xl border border-neutral-200 dark:border-white/10 shadow-lg">
+      <div className="text-center mb-4">
+        {group.icon && group.icon.startsWith("/") ? (
+          <div className="w-16 h-16 rounded-xl overflow-hidden mx-auto mb-3">
+            <Image src={group.icon} alt={group.name} width={64} height={64} className="w-full h-full object-cover" />
+          </div>
+        ) : (
+          <div className="w-16 h-16 rounded-xl bg-violet-100 dark:bg-cyan-400/10 flex items-center justify-center mx-auto mb-3">
+            <svg className="w-8 h-8 text-violet-500 dark:text-cyan-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={1.5}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M18 18.72a9.094 9.094 0 003.741-.479 3 3 0 00-4.682-2.72m.94 3.198l.001.031c0 .225-.012.447-.037.666A11.944 11.944 0 0112 21c-2.17 0-4.207-.576-5.963-1.584A6.062 6.062 0 016 18.719m12 0a5.971 5.971 0 00-.941-3.197m0 0A5.995 5.995 0 0012 12.75a5.995 5.995 0 00-5.058 2.772m0 0a3 3 0 00-4.681 2.72 8.986 8.986 0 003.74.477m.94-3.197a5.971 5.971 0 00-.94 3.197M15 6.75a3 3 0 11-6 0 3 3 0 016 0zm6 3a2.25 2.25 0 11-4.5 0 2.25 2.25 0 014.5 0zm-13.5 0a2.25 2.25 0 11-4.5 0 2.25 2.25 0 014.5 0z" />
+            </svg>
+          </div>
+        )}
+        <h2 className="text-lg font-bold text-neutral-900 dark:text-white">{group.name}</h2>
+        <p className="text-xs text-neutral-400 mt-1">Ознакомьтесь с правилами сообщества</p>
+      </div>
+      <div className="bg-neutral-50 dark:bg-neutral-800 rounded-xl p-4 mb-4 max-h-60 overflow-y-auto">
+        <p className="text-sm text-neutral-700 dark:text-gray-300 whitespace-pre-wrap leading-relaxed">{group.rules}</p>
+      </div>
+      <button
+        onClick={async () => { setLoading(true); await onAccept(); setLoading(false); }}
+        disabled={loading}
+        className="w-full px-4 py-2.5 bg-gradient-to-r from-violet-600 to-indigo-600 dark:from-cyan-500 dark:to-cyan-400 text-white dark:text-neutral-900 rounded-xl hover:shadow-lg transition-all text-sm font-medium disabled:opacity-50"
+      >
+        {loading ? "..." : "Принимаю правила"}
+      </button>
+    </div>
+  );
+}
+
+function GroupInfoPanel({ group, canManage, onUpdateRules }: { group: GroupDetail; canManage: boolean; onUpdateRules: (rules: string) => Promise<void> }) {
+  const [editingRules, setEditingRules] = useState(false);
+  const [rulesText, setRulesText] = useState(group.rules || "");
+  const [saving, setSaving] = useState(false);
+
+  const onlineCount = group.members.filter(m => m.user.lastSeen && (Date.now() - new Date(m.user.lastSeen).getTime()) < 60000).length;
+  const created = new Date(group.createdAt).toLocaleDateString("ru-RU", { day: "numeric", month: "long", year: "numeric" });
+
+  const handleSaveRules = async () => {
+    setSaving(true);
+    await onUpdateRules(rulesText);
+    setEditingRules(false);
+    setSaving(false);
+  };
+
+  return (
+    <div className="max-w-md w-full mx-4 py-8">
+      <div className="text-center mb-6">
+        {group.icon && group.icon.startsWith("/") ? (
+          <div className="w-20 h-20 rounded-2xl overflow-hidden mx-auto mb-4 shadow-lg">
+            <Image src={group.icon} alt={group.name} width={80} height={80} className="w-full h-full object-cover" />
+          </div>
+        ) : (
+          <div className="w-20 h-20 rounded-2xl bg-violet-100 dark:bg-cyan-400/10 flex items-center justify-center mx-auto mb-4">
+            <svg className="w-10 h-10 text-violet-500 dark:text-cyan-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={1.5}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M18 18.72a9.094 9.094 0 003.741-.479 3 3 0 00-4.682-2.72m.94 3.198l.001.031c0 .225-.012.447-.037.666A11.944 11.944 0 0112 21c-2.17 0-4.207-.576-5.963-1.584A6.062 6.062 0 016 18.719m12 0a5.971 5.971 0 00-.941-3.197m0 0A5.995 5.995 0 0012 12.75a5.995 5.995 0 00-5.058 2.772m0 0a3 3 0 00-4.681 2.72 8.986 8.986 0 003.74.477m.94-3.197a5.971 5.971 0 00-.94 3.197M15 6.75a3 3 0 11-6 0 3 3 0 016 0zm6 3a2.25 2.25 0 11-4.5 0 2.25 2.25 0 014.5 0zm-13.5 0a2.25 2.25 0 11-4.5 0 2.25 2.25 0 014.5 0z" />
+            </svg>
+          </div>
+        )}
+        <h2 className="text-xl font-bold text-neutral-900 dark:text-white">{group.name}</h2>
+        {group.description && <p className="text-sm text-neutral-500 dark:text-gray-400 mt-1">{group.description}</p>}
+      </div>
+
+      <div className="space-y-3 mb-6">
+        <div className="flex items-center gap-3 p-3 bg-neutral-50 dark:bg-neutral-800/50 rounded-xl">
+          <svg className="w-4 h-4 text-neutral-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={1.5}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 6a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0zM4.501 20.118a7.5 7.5 0 0114.998 0A17.933 17.933 0 0112 21.75c-2.676 0-5.216-.584-7.499-1.632z" />
+          </svg>
+          <div className="text-sm">
+            <span className="text-neutral-900 dark:text-white font-medium">Владелец:</span>{" "}
+            <span className="text-neutral-500 dark:text-gray-400">@{group.owner.username}</span>
+          </div>
+        </div>
+        <div className="flex items-center gap-3 p-3 bg-neutral-50 dark:bg-neutral-800/50 rounded-xl">
+          <svg className="w-4 h-4 text-neutral-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={1.5}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M18 18.72a9.094 9.094 0 003.741-.479 3 3 0 00-4.682-2.72m.94 3.198l.001.031c0 .225-.012.447-.037.666A11.944 11.944 0 0112 21c-2.17 0-4.207-.576-5.963-1.584A6.062 6.062 0 016 18.719m12 0a5.971 5.971 0 00-.941-3.197m0 0A5.995 5.995 0 0012 12.75a5.995 5.995 0 00-5.058 2.772m0 0a3 3 0 00-4.681 2.72 8.986 8.986 0 003.74.477m.94-3.197a5.971 5.971 0 00-.94 3.197M15 6.75a3 3 0 11-6 0 3 3 0 016 0zm6 3a2.25 2.25 0 11-4.5 0 2.25 2.25 0 014.5 0zm-13.5 0a2.25 2.25 0 11-4.5 0 2.25 2.25 0 014.5 0z" />
+          </svg>
+          <div className="text-sm">
+            <span className="text-neutral-900 dark:text-white font-medium">{group.members.length}</span>{" "}
+            <span className="text-neutral-500 dark:text-gray-400">участников</span>
+            {onlineCount > 0 && (
+              <span className="text-green-500 ml-2">({onlineCount} онлайн)</span>
+            )}
+          </div>
+        </div>
+        <div className="flex items-center gap-3 p-3 bg-neutral-50 dark:bg-neutral-800/50 rounded-xl">
+          <svg className="w-4 h-4 text-neutral-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={1.5}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M6.75 3v2.25M17.25 3v2.25M3 18.75V7.5a2.25 2.25 0 012.25-2.25h13.5A2.25 2.25 0 0121 7.5v11.25m-18 0A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75m-18 0v-7.5A2.25 2.25 0 015.25 9h13.5A2.25 2.25 0 0121 11.25v7.5" />
+          </svg>
+          <div className="text-sm">
+            <span className="text-neutral-500 dark:text-gray-400">Создана {created}</span>
+          </div>
+        </div>
+      </div>
+
+      {/* Rules section */}
+      {canManage ? (
+        <div className="border border-neutral-200 dark:border-white/10 rounded-xl p-4">
+          <div className="flex items-center justify-between mb-2">
+            <h3 className="text-sm font-semibold text-neutral-900 dark:text-white">Правила сообщества</h3>
+            {!editingRules && (
+              <button onClick={() => { setRulesText(group.rules || ""); setEditingRules(true); }} className="text-xs text-violet-500 dark:text-cyan-400 hover:underline">
+                {group.rules ? "Редактировать" : "Добавить"}
+              </button>
+            )}
+          </div>
+          {editingRules ? (
+            <div className="space-y-2">
+              <textarea
+                value={rulesText}
+                onChange={(e) => setRulesText(e.target.value)}
+                placeholder="Напишите правила вашего сообщества..."
+                className="w-full bg-neutral-50 dark:bg-neutral-800 border border-neutral-200 dark:border-white/10 rounded-lg px-3 py-2 text-sm text-neutral-900 dark:text-white placeholder:text-neutral-400 resize-none h-32"
+                autoFocus
+              />
+              <div className="flex gap-2">
+                <button onClick={handleSaveRules} disabled={saving} className="px-3 py-1.5 bg-violet-500 dark:bg-cyan-500 text-white dark:text-neutral-900 rounded-lg text-xs font-medium disabled:opacity-50">
+                  {saving ? "..." : "Сохранить"}
+                </button>
+                <button onClick={() => setEditingRules(false)} className="px-3 py-1.5 bg-neutral-100 dark:bg-neutral-700 text-neutral-600 dark:text-gray-400 rounded-lg text-xs">
+                  Отмена
+                </button>
+              </div>
+            </div>
+          ) : group.rules ? (
+            <p className="text-sm text-neutral-600 dark:text-gray-400 whitespace-pre-wrap leading-relaxed">{group.rules}</p>
+          ) : (
+            <p className="text-xs text-neutral-400 italic">Правила не установлены. Новые участники увидят их при первом входе.</p>
+          )}
+        </div>
+      ) : group.rules ? (
+        <div className="border border-neutral-200 dark:border-white/10 rounded-xl p-4">
+          <h3 className="text-sm font-semibold text-neutral-900 dark:text-white mb-2">Правила сообщества</h3>
+          <p className="text-sm text-neutral-600 dark:text-gray-400 whitespace-pre-wrap leading-relaxed">{group.rules}</p>
+        </div>
+      ) : null}
+
+      <p className="text-center text-neutral-400 text-xs mt-6">Выберите канал для общения</p>
+    </div>
   );
 }
 
@@ -507,13 +658,23 @@ export default function ConnectPage() {
             currentUserRole={userRole}
             isBanned={!!isBanned}
           />
-        ) : selectedGroup ? (
-          <div className="flex-1 flex items-center justify-center">
-            <div className="text-center">
-              <span className="text-5xl block mb-4">{groupDetail?.icon || "\uD83D\uDCAC"}</span>
-              <h2 className="text-xl font-bold text-neutral-900 dark:text-white mb-1">{groupDetail?.name}</h2>
-              <p className="text-neutral-400 text-sm">Выберите канал для общения</p>
-            </div>
+        ) : selectedGroup && groupDetail ? (
+          <div className="flex-1 flex items-center justify-center overflow-y-auto">
+            {groupDetail.rules && !groupDetail.rulesAccepted && groupDetail.myRole === "MEMBER" ? (
+              <GroupRulesGate group={groupDetail} onAccept={async () => {
+                await fetch(`/api/groups/${groupDetail.id}/accept-rules`, { method: "POST" });
+                setGroupDetail({ ...groupDetail, rulesAccepted: true });
+              }} />
+            ) : (
+              <GroupInfoPanel group={groupDetail} canManage={groupDetail.myRole === "OWNER" || groupDetail.myRole === "ADMIN"} onUpdateRules={async (rules: string) => {
+                await fetch(`/api/groups/${groupDetail.id}`, {
+                  method: "PUT",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({ rules }),
+                });
+                setGroupDetail({ ...groupDetail, rules });
+              }} />
+            )}
           </div>
         ) : (
           <div className="flex-1 flex items-center justify-center">
