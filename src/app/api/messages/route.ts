@@ -1,8 +1,10 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import prisma from "@/lib/prisma";
 import { sanitizeText } from "@/lib/sanitize";
+import { checkBan } from "@/lib/banCheck";
+import { rateLimit } from "@/lib/rateLimit";
 
 export async function GET(req: Request) {
   const session = await getServerSession(authOptions);
@@ -50,26 +52,17 @@ export async function GET(req: Request) {
   return NextResponse.json(messages);
 }
 
-export async function POST(req: Request) {
+export async function POST(req: NextRequest) {
+  const limited = rateLimit(req, "messages", { limit: 30, windowMs: 60 * 1000 });
+  if (limited) return limited;
+
   const session = await getServerSession(authOptions);
   if (!session?.user) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  // Check if user is banned
-  const user = await prisma.user.findUnique({ where: { id: session.user.id } });
-  if (user?.banned) {
-    const now = new Date();
-    if (!user.bannedUntil || new Date(user.bannedUntil) > now) {
-      const until = user.bannedUntil
-        ? new Date(user.bannedUntil).toLocaleString("ru-RU")
-        : "бессрочно";
-      return NextResponse.json(
-        { error: `Ваш аккаунт ограничен до ${until}. Причина: ${user.banReason || "не указана"}` },
-        { status: 403 }
-      );
-    }
-  }
+  const banned = await checkBan(session.user.id);
+  if (banned) return banned;
 
   const { content, channelId } = await req.json();
   if (!content || !channelId) {

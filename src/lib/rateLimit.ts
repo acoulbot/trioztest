@@ -13,6 +13,9 @@ const counters = new LRUCache<string, number[]>({ max: 10_000 });
 /**
  * Simple in-memory rate limiter based on IP + route key.
  * Returns a 429 NextResponse if the limit is exceeded, otherwise null.
+ *
+ * WARNING: This rate limiter is per-process. When running multiple instances
+ * (e.g. behind a load balancer), replace with Redis-based rate limiting.
  */
 export function rateLimit(
   req: NextRequest,

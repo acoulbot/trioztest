@@ -3,6 +3,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import prisma from "@/lib/prisma";
 import { rateLimit } from "@/lib/rateLimit";
+import { decrypt, isEncrypted } from "@/lib/encryption";
 
 // Roles that bypass the daily request limit
 const UNLIMITED_ROLES = ["ADMIN", "EDITOR", "CONSULTANT"];
@@ -101,6 +102,15 @@ export async function POST(req: NextRequest) {
     // No API configured — save a one-time info message (not counted as AI response)
     aiResponseContent = "ИИ-ассистент пока не подключён. Администратор может настроить API в панели управления.";
   } else {
+    let apiKey = apiKeyConfig.value;
+    try {
+      if (isEncrypted(apiKey)) apiKey = decrypt(apiKey);
+    } catch {
+      aiResponseContent = "Ошибка расшифровки API ключа. Обратитесь к администратору.";
+    }
+    if (aiResponseContent) {
+      // skip AI call
+    } else
     try {
       const allMessages = await prisma.aiMessage.findMany({
         where: { chatId: chat.id },
@@ -123,7 +133,7 @@ export async function POST(req: NextRequest) {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
-            "x-api-key": apiKeyConfig.value,
+            "x-api-key": apiKey,
             "anthropic-version": "2023-06-01",
           },
           body: JSON.stringify({
@@ -144,7 +154,7 @@ export async function POST(req: NextRequest) {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
-            Authorization: `Bearer ${apiKeyConfig.value}`,
+            Authorization: `Bearer ${apiKey}`,
           },
           body: JSON.stringify({
             model: modelConfig?.value || "gpt-4o-mini",
