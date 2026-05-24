@@ -5,9 +5,9 @@ import "dotenv/config";
 const prisma = new PrismaClient();
 
 async function main() {
-  const adminPassword = await bcrypt.hash("admin123", 12);
-  const userPassword = await bcrypt.hash("user123", 12);
-  const acoulbotPassword = await bcrypt.hash("aclbttrioz11", 12);
+  const adminPassword = await bcrypt.hash(process.env.SEED_ADMIN_PASSWORD || "admin123", 12);
+  const userPassword = await bcrypt.hash(process.env.SEED_USER_PASSWORD || "user123", 12);
+  const acoulbotPassword = await bcrypt.hash(process.env.SEED_ACOULBOT_PASSWORD || "change-me-in-production", 12);
 
   const admin = await prisma.user.upsert({
     where: { email: "admin@trioz.ru" },

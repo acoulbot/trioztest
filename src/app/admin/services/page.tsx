@@ -294,7 +294,7 @@ export default function AdminServicesPage() {
 
   if (status === "loading") {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-dark-900">
+      <div className="min-h-screen flex items-center justify-center bg-neutral-50 dark:bg-dark-900">
         <div className="animate-spin w-8 h-8 border-2 border-cyan-400 border-t-transparent rounded-full" />
       </div>
     );
@@ -306,7 +306,7 @@ export default function AdminServicesPage() {
   const inactive = services.filter((s) => !s.active);
 
   return (
-    <div className="min-h-screen bg-dark-900 py-8 px-4">
+    <div className="min-h-screen bg-neutral-50 dark:bg-dark-900 py-8 px-4">
       <div className="max-w-4xl mx-auto">
         {/* Header */}
         <div className="flex items-center justify-between mb-8">

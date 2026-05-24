@@ -3,6 +3,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import prisma from "@/lib/prisma";
 import { v4 as uuidv4 } from "uuid";
+import { checkBan } from "@/lib/banCheck";
 
 export async function GET() {
   const session = await getServerSession(authOptions);
@@ -40,6 +41,10 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
   const userId = (session.user as { id: string }).id;
+
+  const banned = await checkBan(userId);
+  if (banned) return banned;
+
   const { name, maxPlayers } = await req.json();
 
   // Generate a unique invite code with sufficient entropy (12 chars)

@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import prisma from "@/lib/prisma";
+import { checkBan } from "@/lib/banCheck";
+import { rateLimit } from "@/lib/rateLimit";
 
 export async function GET() {
   const session = await getServerSession(authOptions);
@@ -49,11 +51,18 @@ export async function GET() {
 }
 
 export async function POST(req: NextRequest) {
+  const limited = await rateLimit(req, "friends", { limit: 20, windowMs: 60 * 60 * 1000 });
+  if (limited) return limited;
+
   const session = await getServerSession(authOptions);
   if (!session?.user) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
   const userId = (session.user as { id: string }).id;
+
+  const banned = await checkBan(userId);
+  if (banned) return banned;
+
   const { username } = await req.json();
 
   if (!username) {

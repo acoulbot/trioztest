@@ -33,6 +33,16 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
 
+  const userId = (session.user as { id: string }).id;
+  const isPlayer = room.players.some((p) => p.user.id === userId);
+  const isHost = room.host.id === userId;
+  const isInvited = room.invites.some((inv) => inv.invitee.id === userId);
+  const isAdmin = (session.user as { role: string }).role === "ADMIN";
+
+  if (!isPlayer && !isHost && !isInvited && !isAdmin) {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
+
   return NextResponse.json(room);
 }
 
