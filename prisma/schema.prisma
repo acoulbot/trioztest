@@ -3,7 +3,7 @@ generator client {
 }
 
 datasource db {
-  provider = "sqlite"
+  provider = "postgresql"
   url      = env("DATABASE_URL")
 }
 
@@ -36,6 +36,9 @@ model User {
   lastSeen          DateTime?
   createdAt         DateTime        @default(now())
   updatedAt         DateTime        @updatedAt
+
+  @@index([email])
+  @@index([username])
 }
 
 model VerificationCode {
@@ -100,6 +103,8 @@ model Channel {
   messages  Message[]
   createdAt DateTime        @default(now())
   updatedAt DateTime        @updatedAt
+
+  @@index([groupId])
 }
 
 model ChannelMember {
@@ -110,25 +115,32 @@ model ChannelMember {
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   channel   Channel  @relation(fields: [channelId], references: [id], onDelete: Cascade)
   joinedAt  DateTime @default(now())
+  lastRead  DateTime @default(now())
 
   @@unique([userId, channelId])
 }
 
 model Message {
-  id        String   @id @default(cuid())
-  content   String
-  userId    String
-  channelId String
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  channel   Channel  @relation(fields: [channelId], references: [id], onDelete: Cascade)
-  createdAt DateTime @default(now())
+  id           String    @id @default(cuid())
+  content      String
+  userId       String
+  channelId    String
+  edited       Boolean   @default(false)
+  editedAt     DateTime?
+  deleted      Boolean   @default(false)
+  attachments  String?
+  user         User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  channel      Channel   @relation(fields: [channelId], references: [id], onDelete: Cascade)
+  createdAt    DateTime  @default(now())
+
+  @@index([channelId, createdAt])
 }
 
 model Article {
   id        String   @id @default(cuid())
   title     String
   slug      String   @unique
-  content   String
+  content   String   @db.Text
   category  String
   tags      String   @default("")
   published Boolean  @default(false)
@@ -139,7 +151,7 @@ model Article {
 model Service {
   id          String  @id @default(cuid())
   title       String
-  description String
+  description String  @db.Text
   icon        String?
   order       Int     @default(0)
   active      Boolean @default(true)
@@ -148,7 +160,7 @@ model Service {
 model EcosystemItem {
   id          String  @id @default(cuid())
   title       String
-  description String
+  description String  @db.Text
   imageUrl    String?
   linkUrl     String?
   section     String
@@ -175,7 +187,7 @@ model WindowConfig {
 model SiteConfig {
   id    String @id @default(cuid())
   key   String @unique
-  value String
+  value String @db.Text
 }
 
 model AiChat {
@@ -186,6 +198,8 @@ model AiChat {
   messages  AiMessage[]
   createdAt DateTime    @default(now())
   updatedAt DateTime    @updatedAt
+
+  @@index([userId])
 }
 
 model Friendship {
@@ -199,6 +213,7 @@ model Friendship {
   updatedAt  DateTime @updatedAt
 
   @@unique([senderId, receiverId])
+  @@index([receiverId])
 }
 
 model GameRoom {
@@ -250,7 +265,9 @@ model AiMessage {
   id        String   @id @default(cuid())
   chatId    String
   role      String
-  content   String
+  content   String   @db.Text
   chat      AiChat   @relation(fields: [chatId], references: [id], onDelete: Cascade)
   createdAt DateTime @default(now())
+
+  @@index([chatId])
 }

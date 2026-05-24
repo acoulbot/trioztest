@@ -25,7 +25,7 @@ export async function GET() {
 }
 
 export async function POST(req: NextRequest) {
-  const limited = rateLimit(req, "ai-chat", { limit: 30, windowMs: 60 * 60 * 1000 });
+  const limited = await rateLimit(req, "ai-chat", { limit: 30, windowMs: 60 * 60 * 1000 });
   if (limited) return limited;
 
   const session = await getServerSession(authOptions);

@@ -19,15 +19,27 @@ interface VoiceChannelProps {
   onClose: () => void;
 }
 
-const ICE_SERVERS: RTCConfiguration = {
-  iceServers: [
-    { urls: "stun:stun.l.google.com:19302" },
-    { urls: "stun:stun1.l.google.com:19302" },
-    // TURN slot for production NAT traversal:
-    // { urls: "turn:your.turn.server:3478", username: "user", credential: "pass" },
-  ],
-  iceCandidatePoolSize: 10,
-};
+let cachedIceConfig: RTCConfiguration | null = null;
+
+async function getIceConfig(): Promise<RTCConfiguration> {
+  if (cachedIceConfig) return cachedIceConfig;
+  try {
+    const res = await fetch("/api/voice/turn");
+    if (res.ok) {
+      const data = await res.json();
+      cachedIceConfig = { iceServers: data.iceServers, iceCandidatePoolSize: 10 };
+      return cachedIceConfig;
+    }
+  } catch {}
+  cachedIceConfig = {
+    iceServers: [
+      { urls: "stun:stun.l.google.com:19302" },
+      { urls: "stun:stun1.l.google.com:19302" },
+    ],
+    iceCandidatePoolSize: 10,
+  };
+  return cachedIceConfig;
+}
 
 const SCREEN_CONSTRAINTS: DisplayMediaStreamOptions = {
   video: {
@@ -98,8 +110,9 @@ export default function VoiceChannel({ channelId, channelName, onClose }: VoiceC
 
   // ── Peer creation ─────────────────────────────────────────────────────────
   const createPeerConnection = useCallback(
-    (remoteSocketId: string, isInitiator: boolean) => {
-      const pc = new RTCPeerConnection(ICE_SERVERS);
+    async (remoteSocketId: string, isInitiator: boolean) => {
+      const iceConfig = await getIceConfig();
+      const pc = new RTCPeerConnection(iceConfig);
       peersRef.current.set(remoteSocketId, pc);
 
       if (localStreamRef.current) {
@@ -240,14 +253,14 @@ export default function VoiceChannel({ channelId, channelName, onClose }: VoiceC
         playSound(connectionSfxRef);
       });
 
-      socket.on("voice-users", (existingUsers: VoiceUser[]) => {
+      socket.on("voice-users", async (existingUsers: VoiceUser[]) => {
         setUsers(existingUsers);
-        existingUsers.forEach((u) => createPeerConnection(u.socketId, true));
+        for (const u of existingUsers) await createPeerConnection(u.socketId, true);
       });
 
-      socket.on("user-joined", (user: VoiceUser) => {
+      socket.on("user-joined", async (user: VoiceUser) => {
         setUsers((prev) => [...prev.filter((u) => u.socketId !== user.socketId), user]);
-        createPeerConnection(user.socketId, false);
+        await createPeerConnection(user.socketId, false);
         playSound(connectionSfxRef);
       });
 
@@ -261,7 +274,7 @@ export default function VoiceChannel({ channelId, channelName, onClose }: VoiceC
 
       socket.on("voice-offer", async ({ from, offer }: { from: string; offer: RTCSessionDescriptionInit }) => {
         let pc = peersRef.current.get(from);
-        if (!pc) pc = createPeerConnection(from, false);
+        if (!pc) pc = await createPeerConnection(from, false);
         await pc.setRemoteDescription(new RTCSessionDescription(offer));
         const answer = await pc.createAnswer();
         await pc.setLocalDescription(answer);
