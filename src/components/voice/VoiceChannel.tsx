@@ -43,6 +43,35 @@ export default function VoiceChannel({ channelId, channelName, onClose }: VoiceC
   const speakingIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const remoteAudiosRef = useRef<Map<string, HTMLAudioElement>>(new Map());
 
+  // ── Sound effects ──────────────────────────────────────────────────────────
+  const connectionSfxRef    = useRef<HTMLAudioElement | null>(null);
+  const disconnectionSfxRef = useRef<HTMLAudioElement | null>(null);
+
+  useEffect(() => {
+    connectionSfxRef.current    = new Audio("/sounds/connection.mp3");
+    disconnectionSfxRef.current = new Audio("/sounds/disconnection.mp3");
+    // Preload so first playback is instant
+    connectionSfxRef.current.preload    = "auto";
+    disconnectionSfxRef.current.preload = "auto";
+    return () => {
+      connectionSfxRef.current    = null;
+      disconnectionSfxRef.current = null;
+    };
+  }, []);
+
+  /** Play a notification sound. Each call clones the element so overlapping
+   *  sounds (multiple users joining quickly) don't cut each other off. */
+  const playSound = useCallback((ref: React.RefObject<HTMLAudioElement | null>) => {
+    const src = ref.current;
+    if (!src) return;
+    try {
+      const clone = src.cloneNode() as HTMLAudioElement;
+      clone.volume = 0.5;
+      clone.play().catch(() => {/* autoplay blocked — silently ignore */});
+    } catch { /* ignore */ }
+  }, []);
+  // ──────────────────────────────────────────────────────────────────────────
+
   const cleanupPeer = useCallback((socketId: string) => {
     const peer = peersRef.current.get(socketId);
     if (peer) {
@@ -188,6 +217,7 @@ export default function VoiceChannel({ channelId, channelName, onClose }: VoiceC
           userName: session.user.name || "Пользователь",
         });
         setIsConnected(true);
+        playSound(connectionSfxRef);  // ← you joined
       });
 
       socket.on("voice-users", (existingUsers: VoiceUser[]) => {
@@ -200,6 +230,7 @@ export default function VoiceChannel({ channelId, channelName, onClose }: VoiceC
       socket.on("user-joined", (user: VoiceUser) => {
         setUsers((prev) => [...prev.filter((u) => u.socketId !== user.socketId), user]);
         createPeerConnection(user.socketId, false);
+        playSound(connectionSfxRef);  // ← someone joined
       });
 
       socket.on("user-left", ({ socketId }: { socketId: string }) => {
@@ -210,6 +241,7 @@ export default function VoiceChannel({ channelId, channelName, onClose }: VoiceC
           next.delete(socketId);
           return next;
         });
+        playSound(disconnectionSfxRef);  // ← someone left
       });
 
       socket.on("voice-offer", async ({ from, offer }: { from: string; offer: RTCSessionDescriptionInit }) => {
@@ -292,9 +324,10 @@ export default function VoiceChannel({ channelId, channelName, onClose }: VoiceC
         setError("Не удалось подключиться к голосовому каналу. Попробуйте обновить страницу.");
       }
     }
-  }, [session, channelId, createPeerConnection, cleanupPeer, startSpeakingDetection]);
+  }, [session, channelId, createPeerConnection, cleanupPeer, startSpeakingDetection, playSound]);
 
   const leaveVoice = useCallback(() => {
+    playSound(disconnectionSfxRef);  // ← you left
     socketRef.current?.emit("leave-voice", { channelId });
     socketRef.current?.disconnect();
     socketRef.current = null;
@@ -320,7 +353,7 @@ export default function VoiceChannel({ channelId, channelName, onClose }: VoiceC
     setLocalSpeaking(false);
     setIsMuted(false);
     setIsDeafened(false);
-  }, [channelId, cleanupPeer]);
+  }, [channelId, cleanupPeer, playSound]);
 
   const toggleMute = useCallback(() => {
     if (localStreamRef.current) {
