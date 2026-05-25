@@ -6,6 +6,8 @@ import { io, Socket } from "socket.io-client";
 import Image from "next/image";
 import GlowAvatar from "@/components/ui/GlowAvatar";
 import TypingIndicator from "@/components/ui/TypingIndicator";
+import VoiceRecorder from "@/components/ui/VoiceRecorder";
+import VoicePlayer from "@/components/ui/VoicePlayer";
 
 interface MessageUser {
   id: string;
@@ -23,6 +25,8 @@ interface Attachment {
   size: number;
   type: string;
   isImage: boolean;
+  isVoice?: boolean;
+  duration?: number;
 }
 
 interface Reaction {
@@ -77,6 +81,7 @@ export default function MessageArea({
   const [nextCursor, setNextCursor] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
   const [sending, setSending] = useState(false);
+  const [recordingVoice, setRecordingVoice] = useState(false);
   const [showScrollBtn, setShowScrollBtn] = useState(false);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -275,6 +280,26 @@ export default function MessageArea({
     }
   };
 
+  const handleVoiceRecorded = async (blob: Blob, duration: number) => {
+    setRecordingVoice(false);
+    setUploading(true);
+    try {
+      const fd = new FormData();
+      fd.append("file", blob, "voice.webm");
+      fd.append("duration", String(duration));
+      const uploadRes = await fetch("/api/messages/upload", { method: "POST", body: fd });
+      if (!uploadRes.ok) return;
+      const attachment = await uploadRes.json();
+      await fetch("/api/messages", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ content: "", channelId, attachments: [attachment] }),
+      });
+    } finally {
+      setUploading(false);
+    }
+  };
+
   const startEdit = (msg: Message) => {
     setEditingId(msg.id);
     setEditContent(msg.content);
@@ -417,7 +442,11 @@ export default function MessageArea({
                   <>
                     {msg.content && <p className="text-neutral-700 dark:text-gray-300 text-sm mt-0.5 break-words">{msg.content}</p>}
                     {parseAttachments(msg.attachments).map((att, i) => (
-                      att.isImage ? (
+                      att.isVoice ? (
+                        <div key={i} className="mt-1.5">
+                          <VoicePlayer url={att.url} duration={att.duration} />
+                        </div>
+                      ) : att.isImage ? (
                         <div key={i} className="mt-2 max-w-xs">
                           <Image src={att.url} alt={att.name} width={320} height={240} className="rounded-lg" unoptimized />
                         </div>
@@ -540,39 +569,47 @@ export default function MessageArea({
 
       {/* Input */}
       {!isBanned ? (
-        <form onSubmit={sendMessage} className="p-3 border-t border-neutral-200 dark:border-white/5">
-          <div className="flex gap-2">
-            <button
-              type="button"
-              onClick={() => fileInputRef.current?.click()}
-              disabled={uploading}
-              className="p-2.5 text-neutral-400 hover:text-violet-500 dark:hover:text-cyan-400 transition-colors disabled:opacity-50"
-              aria-label="Attach file"
-            >
-              {uploading ? (
-                <div className="w-5 h-5 border-2 border-current border-t-transparent rounded-full animate-spin" />
+        <div className="p-3 border-t border-neutral-200 dark:border-white/5">
+          {recordingVoice ? (
+            <VoiceRecorder onRecorded={handleVoiceRecorded} />
+          ) : (
+            <form onSubmit={sendMessage} className="flex gap-2">
+              <button
+                type="button"
+                onClick={() => fileInputRef.current?.click()}
+                disabled={uploading}
+                className="p-2.5 text-neutral-400 hover:text-violet-500 dark:hover:text-cyan-400 transition-colors disabled:opacity-50"
+                aria-label="Attach file"
+              >
+                {uploading ? (
+                  <div className="w-5 h-5 border-2 border-current border-t-transparent rounded-full animate-spin" />
+                ) : (
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" />
+                  </svg>
+                )}
+              </button>
+              <input ref={fileInputRef} type="file" className="hidden" onChange={handleFileUpload} accept="image/*,.pdf,.doc,.docx,.txt" />
+              <input
+                type="text"
+                value={newMessage}
+                onChange={(e) => { setNewMessage(e.target.value); emitTyping(); }}
+                placeholder={`Написать в #${channelName}...`}
+                className="input-field flex-1 !py-2.5"
+                aria-label={`Message ${channelName}`}
+              />
+              {newMessage.trim() ? (
+                <button type="submit" className="btn-primary !px-4 !py-2.5" aria-label="Send message">
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
+                  </svg>
+                </button>
               ) : (
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" />
-                </svg>
+                <VoiceRecorder onRecorded={handleVoiceRecorded} disabled={uploading} />
               )}
-            </button>
-            <input ref={fileInputRef} type="file" className="hidden" onChange={handleFileUpload} accept="image/*,.pdf,.doc,.docx,.txt" />
-            <input
-              type="text"
-              value={newMessage}
-              onChange={(e) => { setNewMessage(e.target.value); emitTyping(); }}
-              placeholder={`Написать в #${channelName}...`}
-              className="input-field flex-1 !py-2.5"
-              aria-label={`Message ${channelName}`}
-            />
-            <button type="submit" className="btn-primary !px-4 !py-2.5" aria-label="Send message">
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
-              </svg>
-            </button>
-          </div>
-        </form>
+            </form>
+          )}
+        </div>
       ) : (
         <div className="p-3 border-t border-neutral-200 dark:border-white/5 text-center text-red-400/60 text-sm">
           Отправка сообщений ограничена
