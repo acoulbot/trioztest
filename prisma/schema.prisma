@@ -28,6 +28,7 @@ model User {
   privacyEmail   Boolean         @default(false)
   notifySound    Boolean         @default(true)
   notifyPush     Boolean         @default(true)
+  e2eePublicKey  String?         @db.VarChar(64)
   mutedGroups    String?         @db.Text
   mutedChannels  String?         @db.Text
   messages       Message[]
@@ -195,12 +196,15 @@ model DirectConversation {
 
 model DirectMessage {
   id             String             @id @default(cuid())
-  content        String
+  content        String             @db.Text
   userId         String
   conversationId String
   edited         Boolean            @default(false)
   editedAt       DateTime?
   deleted        Boolean            @default(false)
+  encrypted      Boolean            @default(false)
+  nonce          String?
+  senderPublicKey String?
   attachments    String?
   user           User               @relation(fields: [userId], references: [id], onDelete: Cascade)
   conversation   DirectConversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
