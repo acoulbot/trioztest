@@ -1,4 +1,16 @@
 /** @type {import('next').NextConfig} */
+// Ensure WASM files are served correctly
+import fs from "fs";
+import path from "path";
+
+// Copy @jitsi/rnnoise-wasm assets to public/ at build time
+const rnnoiseWasm = path.resolve("node_modules/@jitsi/rnnoise-wasm/dist/rnnoise.wasm");
+const rnnoiseSync = path.resolve("node_modules/@jitsi/rnnoise-wasm/dist/rnnoise-sync.js");
+if (fs.existsSync(rnnoiseWasm))
+  fs.copyFileSync(rnnoiseWasm, path.resolve("public/rnnoise.wasm"));
+if (fs.existsSync(rnnoiseSync))
+  fs.copyFileSync(rnnoiseSync, path.resolve("public/worklets/rnnoise-sync.js"));
+
 const securityHeaders = [
   {
     key: "X-Frame-Options",
