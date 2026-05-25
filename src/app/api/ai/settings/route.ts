@@ -3,6 +3,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import prisma from "@/lib/prisma";
 import { encrypt, decrypt, isEncrypted } from "@/lib/encryption";
+import { logAction } from "@/lib/audit";
 
 const AI_KEYS = ["ai_api_key", "ai_model", "ai_system_prompt", "ai_provider"];
 const ENCRYPTED_KEYS = ["ai_api_key"];
@@ -55,6 +56,15 @@ export async function PUT(req: Request) {
       });
     }
   }
+
+  const changedKeys = AI_KEYS.filter(k => body[k] !== undefined);
+  await logAction({
+    userId: session.user.id,
+    username: session.user.username || session.user.name || "admin",
+    action: "update",
+    target: "AISettings",
+    details: `Изменение настроек AI: ${changedKeys.join(", ")}`,
+  });
 
   return NextResponse.json({ success: true });
 }

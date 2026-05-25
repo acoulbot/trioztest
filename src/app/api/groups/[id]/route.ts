@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import prisma from "@/lib/prisma";
+import { logAction } from "@/lib/audit";
 
 export async function GET(_req: Request, { params }: { params: Promise<{ id: string }> }) {
   const session = await getServerSession(authOptions);
@@ -78,6 +79,15 @@ export async function PUT(req: Request, { params }: { params: Promise<{ id: stri
     },
   });
 
+  await logAction({
+    userId: session.user.id,
+    username: session.user.username || session.user.name || "user",
+    action: "update",
+    target: "Group",
+    targetId: id,
+    details: `Редактирование группы "${group.name}"`,
+  });
+
   return NextResponse.json(group);
 }
 
@@ -94,6 +104,15 @@ export async function DELETE(_req: Request, { params }: { params: Promise<{ id: 
   }
 
   await prisma.group.delete({ where: { id } });
+
+  await logAction({
+    userId: session.user.id,
+    username: session.user.username || session.user.name || "user",
+    action: "delete",
+    target: "Group",
+    targetId: id,
+    details: `Удаление группы "${group.name}"`,
+  });
 
   return NextResponse.json({ ok: true });
 }
