@@ -4,6 +4,7 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import { io, Socket } from "socket.io-client";
 import GlowAvatar from "@/components/ui/GlowAvatar";
 import { isOnline, timeAgo } from "@/lib/timeAgo";
+import TypingIndicator from "@/components/ui/TypingIndicator";
 
 interface DMUser {
   id: string;
@@ -94,6 +95,9 @@ export default function DMPanel({ currentUserId, onClose }: DMPanelProps) {
     }
   }, [messages.length, messagesLoading]);
 
+  const [dmTypingName, setDmTypingName] = useState<string | null>(null);
+  const dmTypingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
   // Socket.IO for real-time DM messages
   useEffect(() => {
     const socket = io({ path: "/api/socketio", withCredentials: true });
@@ -101,6 +105,17 @@ export default function DMPanel({ currentUserId, onClose }: DMPanelProps) {
 
     socket.on("connect", () => {
       socket.emit("join-dm", { userId: currentUserId });
+    });
+
+    socket.on("dm-typing", ({ userName }: { userId: string; userName: string }) => {
+      setDmTypingName(userName);
+      if (dmTypingTimeoutRef.current) clearTimeout(dmTypingTimeoutRef.current);
+      dmTypingTimeoutRef.current = setTimeout(() => setDmTypingName(null), 3000);
+    });
+
+    socket.on("dm-stop-typing", () => {
+      setDmTypingName(null);
+      if (dmTypingTimeoutRef.current) clearTimeout(dmTypingTimeoutRef.current);
     });
 
     socket.on("dm-message", (msg: Message & { conversationId: string }) => {
@@ -313,11 +328,15 @@ export default function DMPanel({ currentUserId, onClose }: DMPanelProps) {
               <div ref={messagesEndRef} />
             </div>
 
+            <TypingIndicator names={dmTypingName ? [dmTypingName] : []} />
             <form onSubmit={sendMessage} className="p-3 border-t border-neutral-200 dark:border-white/5">
               <div className="flex items-center gap-2">
                 <input
                   value={input}
-                  onChange={(e) => setInput(e.target.value)}
+                  onChange={(e) => {
+                    setInput(e.target.value);
+                    socketRef.current?.emit("dm-typing", { convId: selectedConv });
+                  }}
                   placeholder="Написать сообщение..."
                   className="flex-1 px-3 py-2 bg-neutral-100 dark:bg-white/5 border border-neutral-200 dark:border-white/10 rounded-xl text-sm text-neutral-900 dark:text-white placeholder:text-neutral-400 outline-none focus:border-violet-500 dark:focus:border-cyan-400 transition-colors"
                   maxLength={4000}
