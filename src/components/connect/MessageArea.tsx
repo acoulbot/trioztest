@@ -75,6 +75,7 @@ export default function MessageArea({
   const [hasMore, setHasMore] = useState(false);
   const [nextCursor, setNextCursor] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
+  const [sending, setSending] = useState(false);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
@@ -138,6 +139,28 @@ export default function MessageArea({
       });
     });
 
+    socket.on("reaction-added", ({ messageId, emoji, userId: uid, userName }: { messageId: string; emoji: string; userId: string; userName: string }) => {
+      setMessages((prev) => prev.map((m) => {
+        if (m.id !== messageId) return m;
+        const reactions = [...(m.reactions || [])];
+        if (!reactions.find((r) => r.userId === uid && r.emoji === emoji)) {
+          reactions.push({ id: `${uid}-${emoji}`, emoji, userId: uid, user: { id: uid, name: userName } });
+        }
+        return { ...m, reactions };
+      }));
+    });
+
+    socket.on("reaction-removed", ({ messageId, emoji, userId: uid }: { messageId: string; emoji: string; userId: string }) => {
+      setMessages((prev) => prev.map((m) => {
+        if (m.id !== messageId) return m;
+        return { ...m, reactions: (m.reactions || []).filter((r) => !(r.userId === uid && r.emoji === emoji)) };
+      }));
+    });
+
+    socket.on("message-pinned", ({ messageId, pinned }: { messageId: string; pinned: boolean }) => {
+      setMessages((prev) => prev.map((m) => m.id === messageId ? { ...m, pinned } : m));
+    });
+
     return () => {
       socket.emit("leave-channel", { channelId });
       socket.disconnect();
@@ -171,37 +194,44 @@ export default function MessageArea({
 
   const sendMessage = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newMessage.trim()) return;
+    if (!newMessage.trim() || sending) return;
 
+    setSending(true);
     socketRef.current?.emit("stop-typing", { channelId });
 
-    const body: Record<string, unknown> = { content: newMessage, channelId };
+    const content = newMessage;
+    const body: Record<string, unknown> = { content, channelId };
     if (replyTo) body.replyToId = replyTo.id;
 
-    const res = await fetch("/api/messages", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(body),
-    });
-
-    if (!res.ok) {
-      const data = await res.json();
-      alert(data.error || "Ошибка отправки");
-      return;
-    }
     setNewMessage("");
     setReplyTo(null);
+
+    try {
+      const res = await fetch("/api/messages", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+
+      if (!res.ok) {
+        const data = await res.json();
+        setNewMessage(content);
+        alert(data.error || "Ошибка отправки");
+      }
+    } catch {
+      setNewMessage(content);
+    } finally {
+      setSending(false);
+    }
   };
 
   const toggleReaction = async (messageId: string, emoji: string) => {
+    setShowEmojiPicker(null);
     await fetch("/api/reactions", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ messageId, emoji }),
     });
-    // Re-fetch messages to update reactions
-    fetchMessages();
-    setShowEmojiPicker(null);
   };
 
   const pinMessage = async (messageId: string) => {
@@ -210,7 +240,6 @@ export default function MessageArea({
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ messageId, channelId }),
     });
-    fetchMessages();
   };
 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {

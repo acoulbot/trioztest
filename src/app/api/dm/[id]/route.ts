@@ -4,6 +4,7 @@ import { authOptions } from "@/lib/auth";
 import prisma from "@/lib/prisma";
 import { checkBan } from "@/lib/banCheck";
 import { sanitizeText } from "@/lib/sanitize";
+import { emitToUser } from "@/lib/socketEmit";
 
 export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const session = await getServerSession(authOptions);
@@ -87,6 +88,11 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     data: { lastMessageAt: new Date() },
   });
 
+  const otherId = conversation.user1Id === userId ? conversation.user2Id : conversation.user1Id;
+  const dmPayload = { ...message, conversationId: id };
+  emitToUser(otherId, "dm-message", dmPayload);
+  emitToUser(userId, "dm-message", dmPayload);
+
   return NextResponse.json(message);
 }
 
@@ -111,6 +117,14 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     },
   });
 
+  const conversation = await prisma.directConversation.findUnique({ where: { id } });
+  if (conversation) {
+    const otherId = conversation.user1Id === session.user.id ? conversation.user2Id : conversation.user1Id;
+    const payload = { ...updated, conversationId: id };
+    emitToUser(otherId, "dm-edited", payload);
+    emitToUser(session.user.id, "dm-edited", payload);
+  }
+
   return NextResponse.json(updated);
 }
 
@@ -132,6 +146,14 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
     where: { id: messageId },
     data: { deleted: true, content: "" },
   });
+
+  const conversation = await prisma.directConversation.findUnique({ where: { id } });
+  if (conversation) {
+    const otherId = conversation.user1Id === session.user.id ? conversation.user2Id : conversation.user1Id;
+    const payload = { messageId, conversationId: id };
+    emitToUser(otherId, "dm-deleted", payload);
+    emitToUser(session.user.id, "dm-deleted", payload);
+  }
 
   return NextResponse.json({ ok: true });
 }

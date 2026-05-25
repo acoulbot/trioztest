@@ -160,8 +160,12 @@ export default function VoiceChannel({ channelId, channelName, onClose }: VoiceC
     };
 
     pc.onconnectionstatechange = () => {
-      if (pc.connectionState === "failed" || pc.connectionState === "disconnected")
-        cleanupPeer(remoteSocketId);
+      if (pc.connectionState === "failed") {
+        pc.restartIce();
+        patchedOffer(pc).then(offer =>
+          socketRef.current?.emit("voice-offer", { to: remoteSocketId, offer })
+        ).catch(() => cleanupPeer(remoteSocketId));
+      }
     };
 
     if (isInitiator) {
