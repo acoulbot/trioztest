@@ -53,20 +53,32 @@ export default function DMPanel({ currentUserId, onClose }: DMPanelProps) {
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    fetch("/api/dm").then((r) => r.json()).then(setConversations).finally(() => setLoading(false));
+    fetch("/api/dm")
+      .then((r) => { if (!r.ok) throw new Error(r.statusText); return r.json(); })
+      .then(setConversations)
+      .catch(() => setConversations([]))
+      .finally(() => setLoading(false));
   }, []);
 
   const loadMessages = useCallback(async (convId: string, cursor?: string) => {
     setMessagesLoading(true);
-    const url = `/api/dm/${convId}${cursor ? `?cursor=${cursor}` : ""}`;
-    const data = await fetch(url).then((r) => r.json());
-    if (cursor) {
-      setMessages((prev) => [...data.messages, ...prev]);
-    } else {
-      setMessages(data.messages);
+    try {
+      const url = `/api/dm/${convId}${cursor ? `?cursor=${cursor}` : ""}`;
+      const res = await fetch(url);
+      if (!res.ok) throw new Error(res.statusText);
+      const data = await res.json();
+      if (cursor) {
+        setMessages((prev) => [...data.messages, ...prev]);
+      } else {
+        setMessages(data.messages);
+      }
+      setNextCursor(data.nextCursor);
+    } catch {
+      setMessages([]);
+      setNextCursor(null);
+    } finally {
+      setMessagesLoading(false);
     }
-    setNextCursor(data.nextCursor);
-    setMessagesLoading(false);
   }, []);
 
   useEffect(() => {
