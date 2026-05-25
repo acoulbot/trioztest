@@ -7,9 +7,6 @@ import { motion } from "framer-motion";
 import Link from "next/link";
 import Image from "next/image";
 import { useTheme } from "@/components/Providers";
-import dynamic from "next/dynamic";
-
-const E2EESettings = dynamic(() => import("@/components/ui/E2EESettings"), { ssr: false });
 
 interface ProfileData {
   id: string;
@@ -544,11 +541,6 @@ export default function SettingsPage() {
               Выйти
             </button>
           </div>
-        </Section>
-
-        {/* ── E2EE ── */}
-        <Section title="Шифрование">
-          <E2EESettings />
         </Section>
 
         {/* ── Delete account ── */}

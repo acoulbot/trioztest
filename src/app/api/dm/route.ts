@@ -15,8 +15,8 @@ export async function GET() {
       OR: [{ user1Id: userId }, { user2Id: userId }],
     },
     include: {
-      user1: { select: { id: true, name: true, username: true, avatar: true, role: true, lastSeen: true, customStatus: true, statusEmoji: true, avatarGlowEnabled: true, avatarGlowColors: true, e2eePublicKey: true } },
-      user2: { select: { id: true, name: true, username: true, avatar: true, role: true, lastSeen: true, customStatus: true, statusEmoji: true, avatarGlowEnabled: true, avatarGlowColors: true, e2eePublicKey: true } },
+      user1: { select: { id: true, name: true, username: true, avatar: true, role: true, lastSeen: true, customStatus: true, statusEmoji: true, avatarGlowEnabled: true, avatarGlowColors: true } },
+      user2: { select: { id: true, name: true, username: true, avatar: true, role: true, lastSeen: true, customStatus: true, statusEmoji: true, avatarGlowEnabled: true, avatarGlowColors: true } },
       messages: {
         orderBy: { createdAt: "desc" },
         take: 1,
