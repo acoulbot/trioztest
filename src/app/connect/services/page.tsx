@@ -21,7 +21,7 @@ export default function ServicesPage() {
   }, []);
 
   return (
-    <div className="min-h-screen bg-dark-900 py-12 px-4">
+    <div className="min-h-screen bg-[var(--background)] transition-colors duration-300 py-12 px-4">
       <div className="fixed inset-0 pointer-events-none">
         <div className="absolute top-1/4 right-1/4 w-96 h-96 bg-fantasy-gold/5 rounded-full blur-[120px]" />
         <div className="absolute bottom-1/4 left-1/4 w-96 h-96 bg-cyan-400/5 rounded-full blur-[120px]" />
@@ -40,7 +40,7 @@ export default function ServicesPage() {
             Назад к TZ.Connect
           </Link>
           <h1 className="section-title text-4xl md:text-5xl mb-4">IT-услуги для бизнеса</h1>
-          <p className="text-gray-400 max-w-2xl mx-auto text-lg">
+          <p className="text-neutral-500 dark:text-gray-400 max-w-2xl mx-auto text-lg">
             Комплексные решения от команды TrioZ для автоматизации, интеграции и развития вашего бизнеса
           </p>
         </motion.div>
@@ -58,10 +58,10 @@ export default function ServicesPage() {
               <div className="text-3xl mb-4 group-hover:scale-110 transition-transform duration-300">
                 {service.icon || "🔹"}
               </div>
-              <h3 className="text-lg font-bold text-white mb-2 group-hover:text-cyan-400 transition-colors">
+              <h3 className="text-lg font-bold text-neutral-900 dark:text-white mb-2 group-hover:text-cyan-400 transition-colors">
                 {service.title}
               </h3>
-              <p className="text-gray-400 text-sm leading-relaxed">{service.description}</p>
+              <p className="text-neutral-500 dark:text-gray-400 text-sm leading-relaxed">{service.description}</p>
             </motion.div>
           ))}
         </div>
@@ -80,8 +80,8 @@ export default function ServicesPage() {
               onClick={(e) => e.stopPropagation()}
             >
               <div className="text-4xl mb-4">{selectedService.icon}</div>
-              <h2 className="text-2xl font-bold text-white mb-3">{selectedService.title}</h2>
-              <p className="text-gray-300 leading-relaxed mb-6">{selectedService.description}</p>
+              <h2 className="text-2xl font-bold text-neutral-900 dark:text-white mb-3">{selectedService.title}</h2>
+              <p className="text-neutral-700 dark:text-gray-300 leading-relaxed mb-6">{selectedService.description}</p>
               <div className="flex gap-3">
                 <Link href="/connect" className="btn-primary text-sm">
                   Связаться с нами
@@ -103,10 +103,10 @@ export default function ServicesPage() {
           viewport={{ once: true }}
           className="mt-20 glass-card p-8 md:p-12 text-center"
         >
-          <h2 className="text-2xl md:text-3xl font-bold text-white mb-4">
+          <h2 className="text-2xl md:text-3xl font-bold text-neutral-900 dark:text-white mb-4">
             Нужна консультация?
           </h2>
-          <p className="text-gray-400 mb-6 max-w-xl mx-auto">
+          <p className="text-neutral-500 dark:text-gray-400 mb-6 max-w-xl mx-auto">
             Свяжитесь с нами через TZ.Connect для обсуждения вашего проекта.
             Мы поможем подобрать оптимальное решение для вашего бизнеса.
           </p>

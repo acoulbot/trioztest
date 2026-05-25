@@ -1,5 +1,7 @@
 "use client";
 
+import Image from "next/image";
+
 interface Group {
   id: string;
   name: string;
@@ -36,8 +38,14 @@ export default function MobileGroupList({ groups, onSelectGroup, onCreateGroup, 
               onClick={() => onSelectGroup(g.id)}
               className="w-full text-left p-4 bg-white dark:bg-neutral-900 border border-neutral-200 dark:border-white/10 rounded-xl hover:border-violet-300 dark:hover:border-cyan-400/30 transition-all flex items-center gap-3"
             >
-              <div className="w-12 h-12 rounded-xl bg-violet-100 dark:bg-cyan-400/10 flex items-center justify-center text-xl flex-shrink-0">
-                {g.icon || g.name.charAt(0).toUpperCase()}
+              <div className="w-12 h-12 rounded-xl bg-violet-100 dark:bg-cyan-400/10 flex items-center justify-center text-xl flex-shrink-0 overflow-hidden">
+                {g.icon && g.icon.startsWith("/") ? (
+                  <Image src={g.icon} alt={g.name} width={48} height={48} className="w-full h-full object-cover" />
+                ) : (
+                  <svg className="w-6 h-6 text-violet-500 dark:text-cyan-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={1.5}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M18 18.72a9.094 9.094 0 003.741-.479 3 3 0 00-4.682-2.72m.94 3.198l.001.031c0 .225-.012.447-.037.666A11.944 11.944 0 0112 21c-2.17 0-4.207-.576-5.963-1.584A6.062 6.062 0 016 18.719m12 0a5.971 5.971 0 00-.941-3.197m0 0A5.995 5.995 0 0012 12.75a5.995 5.995 0 00-5.058 2.772m0 0a3 3 0 00-4.681 2.72 8.986 8.986 0 003.74.477m.94-3.197a5.971 5.971 0 00-.94 3.197M15 6.75a3 3 0 11-6 0 3 3 0 016 0zm6 3a2.25 2.25 0 11-4.5 0 2.25 2.25 0 014.5 0zm-13.5 0a2.25 2.25 0 11-4.5 0 2.25 2.25 0 014.5 0z" />
+                  </svg>
+                )}
               </div>
               <div className="min-w-0 flex-1">
                 <div className="font-medium text-neutral-900 dark:text-white text-sm truncate">{g.name}</div>

@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useSession, signOut } from "next-auth/react";
 import { useState, useEffect, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
+import { usePathname } from "next/navigation";
 import { useTheme } from "@/components/Providers";
 import { useInlineEdit } from "@/components/InlineEditContext";
 import SearchDialog from "@/components/ui/SearchDialog";
@@ -14,6 +15,7 @@ export default function Navbar() {
   const [searchOpen, setSearchOpen] = useState(false);
   const { theme, toggleTheme } = useTheme();
   const { editMode, toggleEditMode, isAdmin } = useInlineEdit();
+  const pathname = usePathname();
 
   const handleSearchToggle = useCallback(() => setSearchOpen((o) => !o), []);
 
@@ -37,21 +39,39 @@ export default function Navbar() {
     { href: "/library", label: "TZ.Library" },
   ];
 
+  /** Exact match for "/" only, prefix match for everything else */
+  const isActive = (href: string) =>
+    href === "/" ? pathname === "/" : pathname === href || pathname.startsWith(href + "/");
+
   return (
     <nav className="fixed top-0 left-0 right-0 z-50 bg-white/80 dark:bg-neutral-950/80 backdrop-blur-xl border-b border-neutral-200 dark:border-white/5">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex items-center justify-between h-16">
           {/* Navigation links */}
-          <div className="hidden md:flex items-center gap-1">
-            {navLinks.map((link) => (
-              <Link
-                key={link.href}
-                href={link.href}
-                className="px-3 py-2 text-sm text-neutral-600 dark:text-gray-300 hover:text-violet-600 dark:hover:text-cyan-400 transition-colors duration-300 rounded-lg hover:bg-neutral-100 dark:hover:bg-white/5"
-              >
-                {link.label}
-              </Link>
-            ))}
+          <div className="hidden md:flex items-center gap-0.5">
+            {navLinks.map((link) => {
+              const active = isActive(link.href);
+              return (
+                <Link
+                  key={link.href}
+                  href={link.href}
+                  className={`relative px-3 py-2 text-sm rounded-lg transition-all duration-200 ${
+                    active
+                      ? "text-violet-600 dark:text-cyan-400 font-medium"
+                      : "text-neutral-600 dark:text-gray-400 hover:text-neutral-900 dark:hover:text-white hover:bg-neutral-100 dark:hover:bg-white/5"
+                  }`}
+                >
+                  {link.label}
+                  {active && (
+                    <motion.span
+                      layoutId="nav-indicator"
+                      className="absolute inset-0 rounded-lg bg-violet-50 dark:bg-cyan-400/10 -z-10"
+                      transition={{ type: "spring", bounce: 0.2, duration: 0.4 }}
+                    />
+                  )}
+                </Link>
+              );
+            })}
           </div>
 
           {/* Right side */}
@@ -186,16 +206,23 @@ export default function Navbar() {
             className="md:hidden bg-white/95 dark:bg-neutral-900/95 backdrop-blur-xl border-b border-neutral-200 dark:border-white/5"
           >
             <div className="px-4 py-3 space-y-1">
-              {navLinks.map((link) => (
-                <Link
-                  key={link.href}
-                  href={link.href}
-                  onClick={() => setMenuOpen(false)}
-                  className="block px-3 py-2 text-neutral-700 dark:text-gray-300 hover:text-violet-600 dark:hover:text-cyan-400 hover:bg-neutral-50 dark:hover:bg-white/5 rounded-lg transition-colors"
-                >
-                  {link.label}
-                </Link>
-              ))}
+              {navLinks.map((link) => {
+                const active = isActive(link.href);
+                return (
+                  <Link
+                    key={link.href}
+                    href={link.href}
+                    onClick={() => setMenuOpen(false)}
+                    className={`block px-3 py-2 rounded-lg transition-colors text-sm ${
+                      active
+                        ? "bg-violet-50 dark:bg-cyan-400/10 text-violet-600 dark:text-cyan-400 font-medium"
+                        : "text-neutral-700 dark:text-gray-300 hover:text-violet-600 dark:hover:text-cyan-400 hover:bg-neutral-50 dark:hover:bg-white/5"
+                    }`}
+                  >
+                    {link.label}
+                  </Link>
+                );
+              })}
             </div>
           </motion.div>
         )}

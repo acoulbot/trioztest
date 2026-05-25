@@ -11,6 +11,7 @@
     "postinstall": "prisma generate"
   },
   "dependencies": {
+    "@jitsi/rnnoise-wasm": "^0.2.1",
     "@prisma/client": "^5.22.0",
     "@types/dompurify": "^3.0.5",
     "@types/sharp": "^0.31.1",
@@ -42,7 +43,7 @@
     "@types/react-dom": "^18",
     "@types/sanitize-html": "^2.16.1",
     "@types/uuid": "^10.0.0",
-    "eslint": "^8",
+    "eslint": "^9.39.4",
     "eslint-config-next": "^16.2.6",
     "postcss": "^8",
     "tailwindcss": "^3.4.1",

@@ -3,6 +3,7 @@ import next from "next";
 import { Server as SocketIOServer } from "socket.io";
 import { getToken } from "next-auth/jwt";
 import { IncomingMessage } from "http";
+import { connectRedis } from "./src/lib/redis";
 
 const dev = process.env.NODE_ENV !== "production";
 const hostname = "0.0.0.0";
@@ -202,6 +203,11 @@ app.prepare().then(() => {
         }
       }
     }
+  });
+
+  // Connect Redis for rate limiting (fallback to in-memory if unavailable)
+  connectRedis().then((ok) => {
+    if (ok) console.log("[Redis] Connected successfully");
   });
 
   httpServer.listen(port, () => {

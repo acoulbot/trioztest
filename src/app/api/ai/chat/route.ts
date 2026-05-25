@@ -84,7 +84,7 @@ export async function POST(req: NextRequest) {
     });
   }
 
-  await prisma.aiMessage.create({
+  const userMessage = await prisma.aiMessage.create({
     data: { chatId: chat.id, role: "user", content: message },
   });
 
@@ -178,8 +178,8 @@ export async function POST(req: NextRequest) {
   // On error, return 502 without polluting the chat history.
   if (isError) {
     // Roll back the user message so the request doesn't count against the limit
-    await prisma.aiMessage.deleteMany({
-      where: { chatId: chat.id, role: "user", content: message },
+    await prisma.aiMessage.delete({
+      where: { id: userMessage.id },
     });
     return NextResponse.json(
       { error: "Ошибка при обращении к ИИ API. Проверьте настройки." },
