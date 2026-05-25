@@ -5,6 +5,18 @@ import { io, Socket } from "socket.io-client";
 import GlowAvatar from "@/components/ui/GlowAvatar";
 import { isOnline, timeAgo } from "@/lib/timeAgo";
 import TypingIndicator from "@/components/ui/TypingIndicator";
+import VoiceRecorder from "@/components/ui/VoiceRecorder";
+import VoicePlayer from "@/components/ui/VoicePlayer";
+
+interface Attachment {
+  url: string;
+  name: string;
+  size: number;
+  type: string;
+  isImage: boolean;
+  isVoice?: boolean;
+  duration?: number;
+}
 
 interface DMUser {
   id: string;
@@ -53,6 +65,7 @@ export default function DMPanel({ currentUserId, onClose }: DMPanelProps) {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editContent, setEditContent] = useState("");
   const [sending, setSending] = useState(false);
+  const [voiceUploading, setVoiceUploading] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const socketRef = useRef<Socket | null>(null);
 
@@ -183,6 +196,38 @@ export default function DMPanel({ currentUserId, onClose }: DMPanelProps) {
     }
   };
 
+  const handleVoiceRecorded = async (blob: Blob, duration: number) => {
+    if (!selectedConv) return;
+    setVoiceUploading(true);
+    try {
+      const fd = new FormData();
+      fd.append("file", blob, "voice.webm");
+      fd.append("duration", String(duration));
+      const uploadRes = await fetch("/api/messages/upload", { method: "POST", body: fd });
+      if (!uploadRes.ok) return;
+      const attachment = await uploadRes.json();
+      const res = await fetch(`/api/dm/${selectedConv}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ content: "", attachments: [attachment] }),
+      });
+      if (res.ok) {
+        const msg = await res.json();
+        setMessages((prev) => {
+          if (prev.find((m) => m.id === msg.id)) return prev;
+          return [...prev, msg];
+        });
+      }
+    } finally {
+      setVoiceUploading(false);
+    }
+  };
+
+  const parseAttachments = (raw: string | null | undefined): Attachment[] => {
+    if (!raw) return [];
+    try { return JSON.parse(raw); } catch { return []; }
+  };
+
   const editMessage = async (messageId: string) => {
     if (!editContent.trim() || !selectedConv) return;
     const res = await fetch(`/api/dm/${selectedConv}`, {
@@ -303,7 +348,22 @@ export default function DMPanel({ currentUserId, onClose }: DMPanelProps) {
                       </div>
                     ) : (
                       <>
-                        <p className="text-sm whitespace-pre-wrap break-words">{msg.content}</p>
+                        {msg.content && <p className="text-sm whitespace-pre-wrap break-words">{msg.content}</p>}
+                        {parseAttachments(msg.attachments).map((att, i) => (
+                          att.isVoice ? (
+                            <div key={i} className="mt-1">
+                              <VoicePlayer url={att.url} duration={att.duration} isOwn={msg.userId === currentUserId} />
+                            </div>
+                          ) : att.isImage ? (
+                            <div key={i} className="mt-1">
+                              <img src={att.url} alt={att.name} className="max-w-[200px] rounded-lg" />
+                            </div>
+                          ) : (
+                            <a key={i} href={att.url} target="_blank" rel="noopener noreferrer" className="mt-1 block text-xs underline opacity-80">
+                              {att.name}
+                            </a>
+                          )
+                        ))}
                         <div className="flex items-center gap-1 mt-0.5">
                           <span className={`text-[10px] ${msg.userId === currentUserId ? "text-white/60" : "text-neutral-400"}`}>
                             {new Date(msg.createdAt).toLocaleTimeString("ru-RU", { hour: "2-digit", minute: "2-digit" })}
@@ -329,8 +389,8 @@ export default function DMPanel({ currentUserId, onClose }: DMPanelProps) {
             </div>
 
             <TypingIndicator names={dmTypingName ? [dmTypingName] : []} />
-            <form onSubmit={sendMessage} className="p-3 border-t border-neutral-200 dark:border-white/5">
-              <div className="flex items-center gap-2">
+            <div className="p-3 border-t border-neutral-200 dark:border-white/5">
+              <form onSubmit={sendMessage} className="flex items-center gap-2">
                 <input
                   value={input}
                   onChange={(e) => {
@@ -341,13 +401,17 @@ export default function DMPanel({ currentUserId, onClose }: DMPanelProps) {
                   className="flex-1 px-3 py-2 bg-neutral-100 dark:bg-white/5 border border-neutral-200 dark:border-white/10 rounded-xl text-sm text-neutral-900 dark:text-white placeholder:text-neutral-400 outline-none focus:border-violet-500 dark:focus:border-cyan-400 transition-colors"
                   maxLength={4000}
                 />
-                <button type="submit" disabled={!input.trim()} className="p-2 bg-violet-500 dark:bg-cyan-600 text-white rounded-xl disabled:opacity-50 hover:opacity-90 transition-opacity">
-                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
-                  </svg>
-                </button>
-              </div>
-            </form>
+                {input.trim() ? (
+                  <button type="submit" className="p-2 bg-violet-500 dark:bg-cyan-600 text-white rounded-xl hover:opacity-90 transition-opacity">
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
+                    </svg>
+                  </button>
+                ) : (
+                  <VoiceRecorder onRecorded={handleVoiceRecorded} disabled={voiceUploading} />
+                )}
+              </form>
+            </div>
           </>
         ) : (
           <div className="flex-1 flex items-center justify-center text-neutral-400 text-sm">

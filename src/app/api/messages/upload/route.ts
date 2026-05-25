@@ -13,6 +13,7 @@ const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10 MB
 const COMPRESS_MAX_WIDTH = 1920;
 const COMPRESS_QUALITY = 80;
 const ALLOWED_IMAGE_TYPES = ["image/jpeg", "image/png", "image/webp", "image/gif"];
+const ALLOWED_AUDIO_TYPES = ["audio/webm", "audio/ogg", "audio/mp4", "audio/mpeg", "audio/wav"];
 
 export async function POST(req: NextRequest) {
   const limited = await rateLimit(req, "upload", { limit: 20, windowMs: 60 * 1000 });
@@ -40,12 +41,14 @@ export async function POST(req: NextRequest) {
 
     const buffer = Buffer.from(await file.arrayBuffer());
     const isImage = ALLOWED_IMAGE_TYPES.includes(file.type);
+    const isAudio = ALLOWED_AUDIO_TYPES.includes(file.type) || file.type.startsWith("audio/");
 
     if (isImage && !validateImageMagicBytes(buffer, file.type)) {
       return NextResponse.json({ error: "Invalid file format" }, { status: 400 });
     }
 
-    const uploadsDir = path.join(process.cwd(), "public", "uploads", "messages");
+    const subDir = isAudio ? "voice" : "messages";
+    const uploadsDir = path.join(process.cwd(), "public", "uploads", subDir);
     await mkdir(uploadsDir, { recursive: true });
 
     const fileId = uuid();
@@ -58,6 +61,10 @@ export async function POST(req: NextRequest) {
         .resize(COMPRESS_MAX_WIDTH, COMPRESS_MAX_WIDTH, { fit: "inside", withoutEnlargement: true })
         .webp({ quality: COMPRESS_QUALITY })
         .toBuffer();
+    } else if (isAudio) {
+      const ext = file.type.includes("webm") ? "webm" : file.type.includes("ogg") ? "ogg" : file.type.includes("mp4") ? "m4a" : "webm";
+      fileName = `${fileId}.${ext}`;
+      finalBuffer = buffer;
     } else {
       const ext = (file.name.split(".").pop() || "bin").replace(/[^a-z0-9]/gi, "");
       fileName = `${fileId}.${ext}`;
@@ -67,7 +74,9 @@ export async function POST(req: NextRequest) {
     const filePath = path.join(uploadsDir, fileName);
     await writeFile(filePath, finalBuffer);
 
-    const url = `/uploads/messages/${fileName}`;
+    const url = `/uploads/${subDir}/${fileName}`;
+
+    const duration = formData.get("duration");
 
     return NextResponse.json({
       url,
@@ -75,6 +84,8 @@ export async function POST(req: NextRequest) {
       size: finalBuffer.length,
       type: isImage ? "image/webp" : file.type,
       isImage,
+      isVoice: isAudio,
+      ...(duration ? { duration: Number(duration) } : {}),
     });
   } catch (error) {
     console.error("[Upload] Error:", error);
