@@ -11,6 +11,7 @@
     "postinstall": "prisma generate"
   },
   "dependencies": {
+    "@jitsi/rnnoise-wasm": "^0.2.1",
     "@prisma/client": "^5.22.0",
     "@types/dompurify": "^3.0.5",
     "@types/sharp": "^0.31.1",

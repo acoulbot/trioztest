@@ -1,4 +1,15 @@
 /** @type {import('next').NextConfig} */
+import fs from "fs";
+import path from "path";
+
+// Copy @jitsi/rnnoise-wasm assets to public/ at build time
+const rnnoiseWasm = path.resolve("node_modules/@jitsi/rnnoise-wasm/dist/rnnoise.wasm");
+const rnnoiseSync = path.resolve("node_modules/@jitsi/rnnoise-wasm/dist/rnnoise-sync.js");
+if (fs.existsSync(rnnoiseWasm))
+  fs.copyFileSync(rnnoiseWasm, path.resolve("public/rnnoise.wasm"));
+if (fs.existsSync(rnnoiseSync))
+  fs.copyFileSync(rnnoiseSync, path.resolve("public/worklets/rnnoise-sync.js"));
+
 const securityHeaders = [
   {
     key: "X-Frame-Options",
@@ -24,7 +35,8 @@ const securityHeaders = [
     key: "Content-Security-Policy",
     value: [
       "default-src 'self'",
-      "script-src 'self' 'unsafe-inline'",
+      "script-src 'self' 'unsafe-inline' 'unsafe-eval' blob:",
+      "worker-src 'self' blob:",
       "style-src 'self' 'unsafe-inline'",
       "img-src 'self' data: blob: https:",
       "font-src 'self' https://fonts.gstatic.com",
