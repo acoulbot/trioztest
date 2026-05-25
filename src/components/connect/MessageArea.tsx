@@ -1,10 +1,11 @@
 "use client";
 
 import { useState, useEffect, useRef, useCallback } from "react";
-import { motion } from "framer-motion";
+import { motion, AnimatePresence } from "framer-motion";
 import { io, Socket } from "socket.io-client";
 import Image from "next/image";
 import GlowAvatar from "@/components/ui/GlowAvatar";
+import TypingIndicator from "@/components/ui/TypingIndicator";
 
 interface MessageUser {
   id: string;
@@ -76,6 +77,7 @@ export default function MessageArea({
   const [nextCursor, setNextCursor] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
   const [sending, setSending] = useState(false);
+  const [showScrollBtn, setShowScrollBtn] = useState(false);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
@@ -178,7 +180,9 @@ export default function MessageArea({
   const handleScroll = () => {
     const el = scrollContainerRef.current;
     if (!el) return;
-    isAtBottomRef.current = el.scrollHeight - el.scrollTop - el.clientHeight < 100;
+    const distFromBottom = el.scrollHeight - el.scrollTop - el.clientHeight;
+    isAtBottomRef.current = distFromBottom < 100;
+    setShowScrollBtn(distFromBottom > 300);
     if (el.scrollTop === 0 && hasMore && nextCursor) {
       fetchMessages(nextCursor);
     }
@@ -318,7 +322,7 @@ export default function MessageArea({
   }
 
   return (
-    <div className="flex-1 flex flex-col h-full min-w-0">
+    <div className="flex-1 flex flex-col h-full min-w-0 relative">
       {/* Header */}
       <header className="h-12 bg-white/50 dark:bg-neutral-900/50 border-b border-neutral-200 dark:border-white/5 flex items-center px-4 gap-2 backdrop-blur-sm flex-shrink-0">
         {onBack && (
@@ -357,7 +361,11 @@ export default function MessageArea({
           </div>
         ) : (
           messages.map((msg) => (
-            <motion.div key={msg.id} initial={{ opacity: 0, y: 5 }} animate={{ opacity: 1, y: 0 }} className={`flex gap-3 group ${msg.pinned ? "bg-amber-50/50 dark:bg-amber-400/5 -mx-2 px-2 py-1 rounded-lg" : ""}`}>
+            <motion.div key={msg.id}
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ type: "spring", stiffness: 380, damping: 28 }}
+              className={`flex gap-3 group ${msg.pinned ? "bg-amber-50/50 dark:bg-amber-400/5 -mx-2 px-2 py-1 rounded-lg" : ""}`}>
               <GlowAvatar user={msg.user} size={36} />
               <div className="flex-1 min-w-0">
                 {/* Pin indicator */}
@@ -497,12 +505,27 @@ export default function MessageArea({
         <div ref={messagesEndRef} />
       </div>
 
+      {/* Scroll to bottom button */}
+      <AnimatePresence>
+        {showScrollBtn && (
+          <motion.button
+            key="scroll-btn"
+            initial={{ opacity: 0, scale: 0.8, y: 8 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            exit={{ opacity: 0, scale: 0.8, y: 8 }}
+            onClick={() => messagesEndRef.current?.scrollIntoView({ behavior: "smooth" })}
+            className="absolute bottom-24 right-6 z-10 w-9 h-9 rounded-full bg-violet-500 dark:bg-cyan-500 text-white shadow-lg flex items-center justify-center hover:scale-110 transition-transform"
+            aria-label="Прокрутить вниз"
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M19 9l-7 7-7-7" />
+            </svg>
+          </motion.button>
+        )}
+      </AnimatePresence>
+
       {/* Typing indicator */}
-      {typingText && (
-        <div className="px-4 py-1 text-xs text-neutral-400 dark:text-gray-500 animate-pulse">
-          {typingText}
-        </div>
-      )}
+      <TypingIndicator names={Array.from(typingUsers.values()).filter(Boolean)} />
 
       {/* Reply indicator */}
       {replyTo && (
