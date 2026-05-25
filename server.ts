@@ -90,6 +90,9 @@ app.prepare().then(() => {
     }
     userSockets.get(authData.userId)!.add(socket.id);
 
+    // ── DM room ───────────────────────────────────────────────────────
+    socket.join(`dm-${authData.userId}`);
+
     // ── Text channel rooms ──────────────────────────────────────────
     socket.on("join-channel", ({ channelId }: { channelId: string }) => {
       socket.join(`channel-${channelId}`);
