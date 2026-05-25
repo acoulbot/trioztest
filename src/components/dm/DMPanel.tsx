@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef, useCallback } from "react";
+import { io, Socket } from "socket.io-client";
 import GlowAvatar from "@/components/ui/GlowAvatar";
 import { isOnline, timeAgo } from "@/lib/timeAgo";
 
@@ -50,7 +51,9 @@ export default function DMPanel({ currentUserId, onClose }: DMPanelProps) {
   const [nextCursor, setNextCursor] = useState<string | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editContent, setEditContent] = useState("");
+  const [sending, setSending] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const socketRef = useRef<Socket | null>(null);
 
   useEffect(() => {
     fetch("/api/dm")
@@ -91,33 +94,77 @@ export default function DMPanel({ currentUserId, onClose }: DMPanelProps) {
     }
   }, [messages.length, messagesLoading]);
 
-  // Poll for new messages
+  // Socket.IO for real-time DM messages
   useEffect(() => {
-    if (!selectedConv) return;
-    const interval = setInterval(async () => {
-      const data = await fetch(`/api/dm/${selectedConv}`).then((r) => r.json());
-      setMessages(data.messages);
-    }, 5000);
-    return () => clearInterval(interval);
-  }, [selectedConv]);
+    const socket = io({ path: "/api/socketio", withCredentials: true });
+    socketRef.current = socket;
+
+    socket.on("connect", () => {
+      socket.emit("join-dm", { userId: currentUserId });
+    });
+
+    socket.on("dm-message", (msg: Message & { conversationId: string }) => {
+      if (msg.conversationId === selectedConv) {
+        setMessages((prev) => {
+          if (prev.find((m) => m.id === msg.id)) return prev;
+          return [...prev, msg];
+        });
+      }
+      setConversations((prev) =>
+        prev.map((c) => c.id === msg.conversationId
+          ? { ...c, lastMessage: { id: msg.id, content: msg.content, createdAt: msg.createdAt, userId: msg.userId }, lastMessageAt: msg.createdAt }
+          : c
+        ).sort((a, b) => new Date(b.lastMessageAt || 0).getTime() - new Date(a.lastMessageAt || 0).getTime())
+      );
+    });
+
+    socket.on("dm-edited", (msg: Message & { conversationId: string }) => {
+      if (msg.conversationId === selectedConv) {
+        setMessages((prev) => prev.map((m) => m.id === msg.id ? msg : m));
+      }
+    });
+
+    socket.on("dm-deleted", ({ messageId, conversationId }: { messageId: string; conversationId: string }) => {
+      if (conversationId === selectedConv) {
+        setMessages((prev) => prev.map((m) => m.id === messageId ? { ...m, deleted: true, content: "" } : m));
+      }
+    });
+
+    return () => {
+      socket.disconnect();
+      socketRef.current = null;
+    };
+  }, [currentUserId, selectedConv]);
 
   const sendMessage = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!input.trim() || !selectedConv) return;
+    if (!input.trim() || !selectedConv || sending) return;
+    setSending(true);
     const content = input.trim();
     setInput("");
-    const res = await fetch(`/api/dm/${selectedConv}`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ content }),
-    });
-    if (res.ok) {
-      const msg = await res.json();
-      setMessages((prev) => [...prev, msg]);
-      setConversations((prev) =>
-        prev.map((c) => c.id === selectedConv ? { ...c, lastMessage: msg, lastMessageAt: msg.createdAt } : c)
-          .sort((a, b) => new Date(b.lastMessageAt || 0).getTime() - new Date(a.lastMessageAt || 0).getTime())
-      );
+    try {
+      const res = await fetch(`/api/dm/${selectedConv}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ content }),
+      });
+      if (res.ok) {
+        const msg = await res.json();
+        setMessages((prev) => {
+          if (prev.find((m) => m.id === msg.id)) return prev;
+          return [...prev, msg];
+        });
+        setConversations((prev) =>
+          prev.map((c) => c.id === selectedConv ? { ...c, lastMessage: msg, lastMessageAt: msg.createdAt } : c)
+            .sort((a, b) => new Date(b.lastMessageAt || 0).getTime() - new Date(a.lastMessageAt || 0).getTime())
+        );
+      } else {
+        setInput(content);
+      }
+    } catch {
+      setInput(content);
+    } finally {
+      setSending(false);
     }
   };
 

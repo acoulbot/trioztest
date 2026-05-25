@@ -107,6 +107,15 @@ export default function AdminPage() {
       color: "from-violet-400/20 to-indigo-600/20",
       borderColor: "border-violet-400/20 hover:border-violet-400/40",
     },
+    {
+      title: "Логи редактора",
+      count: "📋",
+      href: "/admin/logs",
+      icon: "📋",
+      description: "Кто что редактировал",
+      color: "from-gray-400/20 to-slate-600/20",
+      borderColor: "border-gray-400/20 hover:border-gray-400/40",
+    },
   ];
 
   return (
@@ -169,6 +178,10 @@ export default function AdminPage() {
             <Link href="/admin/ai" className="flex items-center gap-3 p-3 rounded-xl hover:bg-white/5 transition-colors text-gray-300 hover:text-white">
               <span className="text-xl">🧠</span>
               <span>Настроить ИИ-ассистент</span>
+            </Link>
+            <Link href="/admin/logs" className="flex items-center gap-3 p-3 rounded-xl hover:bg-white/5 transition-colors text-gray-300 hover:text-white">
+              <span className="text-xl">📋</span>
+              <span>Логи редактора сайта</span>
             </Link>
           </div>
         </div>
