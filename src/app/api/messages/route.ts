@@ -14,6 +14,14 @@ const MESSAGE_SELECT = {
       role: true, avatarGlowEnabled: true, avatarGlowColors: true,
     },
   },
+  reactions: {
+    select: { id: true, emoji: true, userId: true, user: { select: { id: true, name: true } } },
+  },
+  replyTo: {
+    select: {
+      id: true, content: true, user: { select: { id: true, name: true } },
+    },
+  },
 };
 
 export async function GET(req: Request) {
@@ -82,7 +90,7 @@ export async function POST(req: NextRequest) {
   const banned = await checkBan(session.user.id);
   if (banned) return banned;
 
-  const { content, channelId, attachments } = await req.json();
+  const { content, channelId, attachments, replyToId, mentions } = await req.json();
   if ((!content || !content.trim()) && !attachments) {
     return NextResponse.json({ error: "Missing fields" }, { status: 400 });
   }
@@ -120,6 +128,8 @@ export async function POST(req: NextRequest) {
       channelId,
       userId: session.user.id,
       attachments: attachments ? JSON.stringify(attachments) : null,
+      replyToId: replyToId || null,
+      mentions: mentions ? JSON.stringify(mentions) : null,
     },
     include: MESSAGE_SELECT,
   });

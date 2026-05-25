@@ -16,6 +16,15 @@ interface ProfileData {
   avatar: string | null;
   role: string;
   emailVerified: boolean;
+  bio: string | null;
+  socialLinks: string | null;
+  customStatus: string | null;
+  statusEmoji: string | null;
+  privacyOnline: string;
+  privacyFriends: string;
+  privacyEmail: boolean;
+  notifySound: boolean;
+  notifyPush: boolean;
   createdAt: string;
   lastSeen: string | null;
   _count: { messages: number; friendsSent: number; friendsReceived: number; gamePlayers: number };
@@ -97,11 +106,23 @@ export default function SettingsPage() {
   const [nameForm, setNameForm] = useState({ name: "", username: "" });
   const [emailForm, setEmailForm] = useState({ email: "" });
   const [passForm, setPassForm] = useState({ currentPassword: "", newPassword: "", confirmPassword: "" });
+  const [bioForm, setBioForm] = useState("");
+  const [statusForm, setStatusForm] = useState({ customStatus: "", statusEmoji: "" });
+  const [linksForm, setLinksForm] = useState({ telegram: "", vk: "", github: "", website: "" });
+  const [privacyForm, setPrivacyForm] = useState({ privacyOnline: "everyone", privacyFriends: "everyone", privacyEmail: false });
+  const [notifyForm, setNotifyForm] = useState({ notifySound: true, notifyPush: true });
+  const [deletePassword, setDeletePassword] = useState("");
 
   // Loading states
   const [savingProfile, setSavingProfile] = useState(false);
   const [savingEmail, setSavingEmail] = useState(false);
   const [savingPass, setSavingPass] = useState(false);
+  const [savingBio, setSavingBio] = useState(false);
+  const [savingStatus, setSavingStatus] = useState(false);
+  const [savingLinks, setSavingLinks] = useState(false);
+  const [savingPrivacy, setSavingPrivacy] = useState(false);
+  const [savingNotify, setSavingNotify] = useState(false);
+  const [deletingAccount, setDeletingAccount] = useState(false);
   const [uploadingAvatar, setUploadingAvatar] = useState(false);
 
   useEffect(() => {
@@ -116,6 +137,12 @@ export default function SettingsPage() {
           setProfile(data);
           setNameForm({ name: data.name, username: data.username });
           setEmailForm({ email: data.email });
+          setBioForm(data.bio || "");
+          setStatusForm({ customStatus: data.customStatus || "", statusEmoji: data.statusEmoji || "" });
+          const links = data.socialLinks ? JSON.parse(data.socialLinks) : {};
+          setLinksForm({ telegram: links.telegram || "", vk: links.vk || "", github: links.github || "", website: links.website || "" });
+          setPrivacyForm({ privacyOnline: data.privacyOnline || "everyone", privacyFriends: data.privacyFriends || "everyone", privacyEmail: data.privacyEmail ?? false });
+          setNotifyForm({ notifySound: data.notifySound ?? true, notifyPush: data.notifyPush ?? true });
         });
     }
   }, [session]);
@@ -399,6 +426,107 @@ export default function SettingsPage() {
           </div>
         </Section>
 
+        {/* ── Bio ── */}
+        <Section title="О себе">
+          <form onSubmit={async (e) => { e.preventDefault(); setSavingBio(true); try { await patchProfile({ bio: bioForm || null }); showToast("Био обновлено!", "success"); } catch (err) { showToast((err as Error).message, "error"); } finally { setSavingBio(false); } }} className="space-y-4">
+            <Field label="Коротко о себе (до 200 символов)">
+              <textarea
+                value={bioForm}
+                onChange={(e) => setBioForm(e.target.value)}
+                maxLength={200}
+                rows={3}
+                placeholder="Расскажите немного о себе..."
+                className="w-full bg-neutral-50 dark:bg-white/5 border border-neutral-200 dark:border-white/10 rounded-xl px-4 py-2.5 text-neutral-900 dark:text-white placeholder-neutral-400 focus:outline-none focus:border-violet-500 dark:focus:border-cyan-500 text-sm transition-colors resize-none"
+              />
+              <p className="text-xs text-neutral-400">{bioForm.length}/200</p>
+            </Field>
+            <SaveButton loading={savingBio} />
+          </form>
+        </Section>
+
+        {/* ── Custom status ── */}
+        <Section title="Статус">
+          <form onSubmit={async (e) => { e.preventDefault(); setSavingStatus(true); try { await fetch("/api/profile/status", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(statusForm) }); showToast("Статус обновлён!", "success"); } catch { showToast("Ошибка", "error"); } finally { setSavingStatus(false); } }} className="space-y-4">
+            <div className="flex gap-3">
+              <div className="w-16">
+                <Field label="Emoji">
+                  <Input value={statusForm.statusEmoji} onChange={(e) => setStatusForm((f) => ({ ...f, statusEmoji: e.target.value }))} placeholder="🎮" maxLength={10} />
+                </Field>
+              </div>
+              <div className="flex-1">
+                <Field label="Текст статуса">
+                  <Input value={statusForm.customStatus} onChange={(e) => setStatusForm((f) => ({ ...f, customStatus: e.target.value }))} placeholder="Чем занимаетесь?" maxLength={100} />
+                </Field>
+              </div>
+            </div>
+            <div className="flex gap-2">
+              <SaveButton loading={savingStatus} />
+              <button type="button" onClick={async () => { setSavingStatus(true); setStatusForm({ customStatus: "", statusEmoji: "" }); await fetch("/api/profile/status", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ customStatus: null, statusEmoji: null }) }); setSavingStatus(false); showToast("Статус очищен", "success"); }} className="px-4 py-2 bg-neutral-100 dark:bg-white/5 text-neutral-600 dark:text-gray-400 rounded-xl text-sm hover:bg-neutral-200 dark:hover:bg-white/10 transition-colors">
+                Очистить
+              </button>
+            </div>
+          </form>
+        </Section>
+
+        {/* ── Social links ── */}
+        <Section title="Ссылки">
+          <form onSubmit={async (e) => { e.preventDefault(); setSavingLinks(true); try { const hasLinks = Object.values(linksForm).some(Boolean); await patchProfile({ socialLinks: hasLinks ? linksForm : null }); showToast("Ссылки обновлены!", "success"); } catch (err) { showToast((err as Error).message, "error"); } finally { setSavingLinks(false); } }} className="space-y-4">
+            <Field label="Telegram">
+              <Input value={linksForm.telegram} onChange={(e) => setLinksForm((f) => ({ ...f, telegram: e.target.value }))} placeholder="https://t.me/username" />
+            </Field>
+            <Field label="VK">
+              <Input value={linksForm.vk} onChange={(e) => setLinksForm((f) => ({ ...f, vk: e.target.value }))} placeholder="https://vk.com/id" />
+            </Field>
+            <Field label="GitHub">
+              <Input value={linksForm.github} onChange={(e) => setLinksForm((f) => ({ ...f, github: e.target.value }))} placeholder="https://github.com/username" />
+            </Field>
+            <Field label="Личный сайт">
+              <Input value={linksForm.website} onChange={(e) => setLinksForm((f) => ({ ...f, website: e.target.value }))} placeholder="https://mysite.ru" />
+            </Field>
+            <SaveButton loading={savingLinks} />
+          </form>
+        </Section>
+
+        {/* ── Notifications ── */}
+        <Section title="Уведомления">
+          <form onSubmit={async (e) => { e.preventDefault(); setSavingNotify(true); try { await fetch("/api/profile/notifications", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(notifyForm) }); showToast("Настройки уведомлений сохранены!", "success"); } catch { showToast("Ошибка", "error"); } finally { setSavingNotify(false); } }} className="space-y-4">
+            <label className="flex items-center gap-3 cursor-pointer">
+              <input type="checkbox" checked={notifyForm.notifySound} onChange={(e) => setNotifyForm((f) => ({ ...f, notifySound: e.target.checked }))} className="w-4 h-4 rounded border-neutral-300 dark:border-white/20 text-violet-500 dark:text-cyan-500 focus:ring-violet-500 dark:focus:ring-cyan-500" />
+              <span className="text-sm text-neutral-900 dark:text-white">Звуковые уведомления</span>
+            </label>
+            <label className="flex items-center gap-3 cursor-pointer">
+              <input type="checkbox" checked={notifyForm.notifyPush} onChange={(e) => setNotifyForm((f) => ({ ...f, notifyPush: e.target.checked }))} className="w-4 h-4 rounded border-neutral-300 dark:border-white/20 text-violet-500 dark:text-cyan-500 focus:ring-violet-500 dark:focus:ring-cyan-500" />
+              <span className="text-sm text-neutral-900 dark:text-white">Push-уведомления</span>
+            </label>
+            <SaveButton loading={savingNotify} />
+          </form>
+        </Section>
+
+        {/* ── Privacy ── */}
+        <Section title="Приватность">
+          <form onSubmit={async (e) => { e.preventDefault(); setSavingPrivacy(true); try { await fetch("/api/profile/privacy", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(privacyForm) }); showToast("Настройки приватности сохранены!", "success"); } catch { showToast("Ошибка", "error"); } finally { setSavingPrivacy(false); } }} className="space-y-4">
+            <Field label="Кто видит мой онлайн-статус">
+              <select value={privacyForm.privacyOnline} onChange={(e) => setPrivacyForm((f) => ({ ...f, privacyOnline: e.target.value }))} className="w-full bg-neutral-50 dark:bg-white/5 border border-neutral-200 dark:border-white/10 rounded-xl px-4 py-2.5 text-neutral-900 dark:text-white text-sm">
+                <option value="everyone">Все</option>
+                <option value="friends">Только друзья</option>
+                <option value="nobody">Никто</option>
+              </select>
+            </Field>
+            <Field label="Кто может добавлять в друзья">
+              <select value={privacyForm.privacyFriends} onChange={(e) => setPrivacyForm((f) => ({ ...f, privacyFriends: e.target.value }))} className="w-full bg-neutral-50 dark:bg-white/5 border border-neutral-200 dark:border-white/10 rounded-xl px-4 py-2.5 text-neutral-900 dark:text-white text-sm">
+                <option value="everyone">Все</option>
+                <option value="friends">Друзья друзей</option>
+                <option value="nobody">Никто</option>
+              </select>
+            </Field>
+            <label className="flex items-center gap-3 cursor-pointer">
+              <input type="checkbox" checked={privacyForm.privacyEmail} onChange={(e) => setPrivacyForm((f) => ({ ...f, privacyEmail: e.target.checked }))} className="w-4 h-4 rounded border-neutral-300 dark:border-white/20 text-violet-500 dark:text-cyan-500 focus:ring-violet-500 dark:focus:ring-cyan-500" />
+              <span className="text-sm text-neutral-900 dark:text-white">Скрыть email из профиля</span>
+            </label>
+            <SaveButton loading={savingPrivacy} />
+          </form>
+        </Section>
+
         {/* ── Danger zone ── */}
         <Section title="Выход">
           <div className="flex items-center justify-between">
@@ -412,6 +540,31 @@ export default function SettingsPage() {
             >
               Выйти
             </button>
+          </div>
+        </Section>
+
+        {/* ── Delete account ── */}
+        <Section title="Удаление аккаунта">
+          <div className="space-y-3">
+            <p className="text-sm text-neutral-500 dark:text-gray-400">
+              Это действие необратимо. Все ваши данные, сообщения и друзья будут удалены.
+            </p>
+            <div className="flex gap-3">
+              <Input type="password" value={deletePassword} onChange={(e) => setDeletePassword(e.target.value)} placeholder="Введите пароль для подтверждения" />
+              <button
+                onClick={async () => {
+                  if (!deletePassword) { showToast("Введите пароль", "error"); return; }
+                  if (!confirm("Вы уверены? Это действие нельзя отменить.")) return;
+                  setDeletingAccount(true);
+                  const res = await fetch("/api/profile/delete", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ password: deletePassword }) });
+                  if (res.ok) { await signOut({ callbackUrl: "/" }); } else { const data = await res.json(); showToast(data.error || "Ошибка", "error"); setDeletingAccount(false); }
+                }}
+                disabled={deletingAccount}
+                className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-xl text-sm font-medium transition-colors disabled:opacity-50 whitespace-nowrap"
+              >
+                {deletingAccount ? "..." : "Удалить аккаунт"}
+              </button>
+            </div>
           </div>
         </Section>
       </div>

@@ -1,0 +1,58 @@
+import { NextRequest, NextResponse } from "next/server";
+import { getServerSession } from "next-auth";
+import { authOptions } from "@/lib/auth";
+import prisma from "@/lib/prisma";
+import { writeFile, mkdir } from "fs/promises";
+import path from "path";
+
+export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  const session = await getServerSession(authOptions);
+  if (!session?.user || session.user.role !== "ADMIN") {
+    return NextResponse.json({ error: "Admin only" }, { status: 403 });
+  }
+
+  const { id } = await params;
+  const formData = await req.formData();
+
+  const data: Record<string, unknown> = {};
+
+  const name = formData.get("name") as string | null;
+  const description = formData.get("description") as string | null;
+  const icon = formData.get("icon") as string | null;
+  const rarity = formData.get("rarity") as string | null;
+  const active = formData.get("active") as string | null;
+  const imageFile = formData.get("image") as File | null;
+
+  if (name) data.name = name;
+  if (description) data.description = description;
+  if (icon !== null) data.icon = icon || null;
+  if (rarity) data.rarity = rarity;
+  if (active !== null) data.active = active === "true";
+
+  if (imageFile && imageFile.size > 0) {
+    if (imageFile.size > 512 * 1024) {
+      return NextResponse.json({ error: "Image must be under 512KB" }, { status: 400 });
+    }
+    const ext = imageFile.name.split(".").pop()?.replace(/[^a-z0-9]/gi, "") || "png";
+    const filename = `badge-${Date.now()}.${ext}`;
+    const dir = path.join(process.cwd(), "public/uploads/badges");
+    await mkdir(dir, { recursive: true });
+    const buffer = Buffer.from(await imageFile.arrayBuffer());
+    await writeFile(path.join(dir, filename), buffer);
+    data.imageUrl = `/uploads/badges/${filename}`;
+  }
+
+  const badge = await prisma.badge.update({ where: { id }, data });
+  return NextResponse.json(badge);
+}
+
+export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  const session = await getServerSession(authOptions);
+  if (!session?.user || session.user.role !== "ADMIN") {
+    return NextResponse.json({ error: "Admin only" }, { status: 403 });
+  }
+
+  const { id } = await params;
+  await prisma.badge.delete({ where: { id } });
+  return NextResponse.json({ ok: true });
+}
