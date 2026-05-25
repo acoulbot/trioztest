@@ -57,24 +57,28 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
-  const { content, attachments } = await req.json();
+  const { content, attachments, encrypted, nonce, senderPublicKey } = await req.json();
   if ((!content || !content.trim()) && !attachments) {
     return NextResponse.json({ error: "Message content required" }, { status: 400 });
   }
-  if (content && content.length > 4000) {
+  if (content && content.length > 10000) {
     return NextResponse.json({ error: "Message too long" }, { status: 400 });
   }
 
-  const sanitized = content ? sanitizeText(content) : "";
-  if (!sanitized && !attachments) {
+  // If encrypted, store ciphertext directly; otherwise sanitize
+  const messageContent = encrypted ? content : (content ? sanitizeText(content) : "");
+  if (!messageContent && !attachments) {
     return NextResponse.json({ error: "Message cannot be empty" }, { status: 400 });
   }
 
   const message = await prisma.directMessage.create({
     data: {
-      content: sanitized,
+      content: messageContent,
       conversationId: id,
       userId,
+      encrypted: !!encrypted,
+      nonce: encrypted ? nonce : null,
+      senderPublicKey: encrypted ? senderPublicKey : null,
       attachments: attachments ? JSON.stringify(attachments) : null,
     },
     include: {

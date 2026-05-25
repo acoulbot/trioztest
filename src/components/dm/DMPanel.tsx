@@ -3,6 +3,14 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import GlowAvatar from "@/components/ui/GlowAvatar";
 import { isOnline, timeAgo } from "@/lib/timeAgo";
+import {
+  getOrCreateKeyPair,
+  encryptMessage,
+  decryptMessage,
+  getKeyFingerprint,
+  cachePublicKey,
+  getCachedPublicKey,
+} from "@/lib/e2ee";
 
 interface DMUser {
   id: string;
@@ -15,6 +23,7 @@ interface DMUser {
   statusEmoji: string | null;
   avatarGlowEnabled: boolean;
   avatarGlowColors: string | null;
+  e2eePublicKey?: string | null;
 }
 
 interface Conversation {
@@ -30,6 +39,9 @@ interface Message {
   userId: string;
   edited: boolean;
   deleted: boolean;
+  encrypted?: boolean;
+  nonce?: string | null;
+  senderPublicKey?: string | null;
   attachments: string | null;
   createdAt: string;
   user: { id: string; name: string; username: string; avatar: string | null; role: string; avatarGlowEnabled: boolean; avatarGlowColors: string | null };
@@ -50,10 +62,32 @@ export default function DMPanel({ currentUserId, onClose }: DMPanelProps) {
   const [nextCursor, setNextCursor] = useState<string | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editContent, setEditContent] = useState("");
+  const [e2eeReady, setE2eeReady] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const keyPairRef = useRef<{ publicKey: string; secretKey: string } | null>(null);
+
+  // Initialize E2EE keys on mount
+  useEffect(() => {
+    const kp = getOrCreateKeyPair();
+    keyPairRef.current = kp;
+    // Register public key on server
+    fetch("/api/e2ee", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ publicKey: kp.publicKey }),
+    }).then(() => setE2eeReady(true));
+  }, []);
 
   useEffect(() => {
-    fetch("/api/dm").then((r) => r.json()).then(setConversations).finally(() => setLoading(false));
+    fetch("/api/dm").then((r) => r.json()).then((data) => {
+      setConversations(data);
+      // Cache other users' public keys
+      for (const conv of data) {
+        if (conv.other?.e2eePublicKey) {
+          cachePublicKey(conv.other.id, conv.other.e2eePublicKey);
+        }
+      }
+    }).finally(() => setLoading(false));
   }, []);
 
   const loadMessages = useCallback(async (convId: string, cursor?: string) => {
@@ -89,15 +123,45 @@ export default function DMPanel({ currentUserId, onClose }: DMPanelProps) {
     return () => clearInterval(interval);
   }, [selectedConv]);
 
+  const decryptMessageContent = useCallback((msg: Message): string => {
+    if (!msg.encrypted || !msg.nonce || !msg.senderPublicKey || !keyPairRef.current) {
+      return msg.content;
+    }
+    const decrypted = decryptMessage(
+      { ciphertext: msg.content, nonce: msg.nonce, senderPublicKey: msg.senderPublicKey },
+      keyPairRef.current.secretKey
+    );
+    return decrypted || "🔒 Не удалось расшифровать";
+  }, []);
+
   const sendMessage = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!input.trim() || !selectedConv) return;
     const content = input.trim();
     setInput("");
+
+    const otherUser = conversations.find((c) => c.id === selectedConv)?.other;
+    const recipientKey = otherUser?.e2eePublicKey || (otherUser ? getCachedPublicKey(otherUser.id) : null);
+
+    let body: Record<string, unknown>;
+    if (recipientKey && keyPairRef.current && e2eeReady) {
+      // Encrypt the message
+      const encrypted = encryptMessage(content, recipientKey, keyPairRef.current.secretKey);
+      body = {
+        content: encrypted.ciphertext,
+        encrypted: true,
+        nonce: encrypted.nonce,
+        senderPublicKey: encrypted.senderPublicKey,
+      };
+    } else {
+      // Fallback to unencrypted if recipient has no key
+      body = { content };
+    }
+
     const res = await fetch(`/api/dm/${selectedConv}`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ content }),
+      body: JSON.stringify(body),
     });
     if (res.ok) {
       const msg = await res.json();
@@ -204,6 +268,14 @@ export default function DMPanel({ currentUserId, onClose }: DMPanelProps) {
                   {isOnline(selectedOther.lastSeen) ? "Онлайн" : `Был(а) ${timeAgo(selectedOther.lastSeen)}`}
                 </p>
               </div>
+              {selectedOther.e2eePublicKey && e2eeReady && (
+                <div className="ml-auto flex items-center gap-1 text-[10px] text-emerald-500" title={`Шифрование: ${getKeyFingerprint(selectedOther.e2eePublicKey)}`}>
+                  <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+                  </svg>
+                  E2EE
+                </div>
+              )}
             </div>
 
             <div className="flex-1 overflow-y-auto p-4 space-y-3">
@@ -229,7 +301,8 @@ export default function DMPanel({ currentUserId, onClose }: DMPanelProps) {
                       </div>
                     ) : (
                       <>
-                        <p className="text-sm whitespace-pre-wrap break-words">{msg.content}</p>
+                        <p className="text-sm whitespace-pre-wrap break-words">{decryptMessageContent(msg)}</p>
+                        {msg.encrypted && <span className={`text-[9px] ${msg.userId === currentUserId ? "text-white/40" : "text-neutral-400"}`}>🔒</span>}
                         <div className="flex items-center gap-1 mt-0.5">
                           <span className={`text-[10px] ${msg.userId === currentUserId ? "text-white/60" : "text-neutral-400"}`}>
                             {new Date(msg.createdAt).toLocaleTimeString("ru-RU", { hour: "2-digit", minute: "2-digit" })}
@@ -241,7 +314,7 @@ export default function DMPanel({ currentUserId, onClose }: DMPanelProps) {
                   </div>
                   {msg.userId === currentUserId && !msg.deleted && !editingId && (
                     <div className="flex gap-0.5 opacity-0 hover:opacity-100 transition-opacity">
-                      <button onClick={() => { setEditingId(msg.id); setEditContent(msg.content); }} className="p-1 text-neutral-400 hover:text-violet-500 dark:hover:text-cyan-400">
+                      <button onClick={() => { setEditingId(msg.id); setEditContent(decryptMessageContent(msg)); }} className="p-1 text-neutral-400 hover:text-violet-500 dark:hover:text-cyan-400">
                         <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>
                       </button>
                       <button onClick={() => deleteMessage(msg.id)} className="p-1 text-neutral-400 hover:text-red-500">
