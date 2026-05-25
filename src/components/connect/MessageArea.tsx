@@ -24,6 +24,19 @@ interface Attachment {
   isImage: boolean;
 }
 
+interface Reaction {
+  id: string;
+  emoji: string;
+  userId: string;
+  user: { id: string; name: string };
+}
+
+interface ReplyTo {
+  id: string;
+  content: string;
+  user: { id: string; name: string };
+}
+
 interface Message {
   id: string;
   content: string;
@@ -31,7 +44,10 @@ interface Message {
   edited?: boolean;
   editedAt?: string | null;
   deleted?: boolean;
+  pinned?: boolean;
   attachments?: string | null;
+  reactions?: Reaction[];
+  replyTo?: ReplyTo | null;
   user: MessageUser;
 }
 
@@ -52,6 +68,8 @@ export default function MessageArea({
   const [newMessage, setNewMessage] = useState("");
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editContent, setEditContent] = useState("");
+  const [replyTo, setReplyTo] = useState<{ id: string; name: string; content: string } | null>(null);
+  const [showEmojiPicker, setShowEmojiPicker] = useState<string | null>(null);
   const [typingUsers, setTypingUsers] = useState<Map<string, string>>(new Map());
   const [loading, setLoading] = useState(true);
   const [hasMore, setHasMore] = useState(false);
@@ -157,10 +175,13 @@ export default function MessageArea({
 
     socketRef.current?.emit("stop-typing", { channelId });
 
+    const body: Record<string, unknown> = { content: newMessage, channelId };
+    if (replyTo) body.replyToId = replyTo.id;
+
     const res = await fetch("/api/messages", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ content: newMessage, channelId }),
+      body: JSON.stringify(body),
     });
 
     if (!res.ok) {
@@ -169,6 +190,27 @@ export default function MessageArea({
       return;
     }
     setNewMessage("");
+    setReplyTo(null);
+  };
+
+  const toggleReaction = async (messageId: string, emoji: string) => {
+    await fetch("/api/reactions", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ messageId, emoji }),
+    });
+    // Re-fetch messages to update reactions
+    fetchMessages();
+    setShowEmojiPicker(null);
+  };
+
+  const pinMessage = async (messageId: string) => {
+    await fetch("/api/messages/pin", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ messageId, channelId }),
+    });
+    fetchMessages();
   };
 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -286,9 +328,25 @@ export default function MessageArea({
           </div>
         ) : (
           messages.map((msg) => (
-            <motion.div key={msg.id} initial={{ opacity: 0, y: 5 }} animate={{ opacity: 1, y: 0 }} className="flex gap-3 group">
+            <motion.div key={msg.id} initial={{ opacity: 0, y: 5 }} animate={{ opacity: 1, y: 0 }} className={`flex gap-3 group ${msg.pinned ? "bg-amber-50/50 dark:bg-amber-400/5 -mx-2 px-2 py-1 rounded-lg" : ""}`}>
               <GlowAvatar user={msg.user} size={36} />
               <div className="flex-1 min-w-0">
+                {/* Pin indicator */}
+                {msg.pinned && (
+                  <div className="flex items-center gap-1 text-[10px] text-amber-500 mb-0.5">
+                    <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20"><path d="M5 5a2 2 0 012-2h6a2 2 0 012 2v2a2 2 0 01-2 2H7a2 2 0 01-2-2V5zm0 8l3.5-1.5L10 14l1.5-2.5L15 13v2H5v-2z" /></svg>
+                    Закреплено
+                  </div>
+                )}
+
+                {/* Reply reference */}
+                {msg.replyTo && (
+                  <div className="flex items-center gap-1 text-[11px] text-neutral-400 mb-0.5 border-l-2 border-violet-400 dark:border-cyan-400 pl-2">
+                    <span className="font-medium">{msg.replyTo.user.name}:</span>
+                    <span className="truncate max-w-[200px]">{msg.replyTo.content}</span>
+                  </div>
+                )}
+
                 <div className="flex items-baseline gap-2 flex-wrap">
                   <span className="font-medium text-neutral-900 dark:text-white text-sm">{msg.user.name}</span>
                   {msg.user.username && <span className="text-[11px] text-neutral-400">@{msg.user.username}</span>}
@@ -338,14 +396,64 @@ export default function MessageArea({
                   </>
                 )}
 
+                {/* Reactions display */}
+                {msg.reactions && msg.reactions.length > 0 && !msg.deleted && (
+                  <div className="flex flex-wrap gap-1 mt-1.5">
+                    {Object.entries(msg.reactions.reduce<Record<string, { count: number; userReacted: boolean }>>((acc, r) => {
+                      if (!acc[r.emoji]) acc[r.emoji] = { count: 0, userReacted: false };
+                      acc[r.emoji].count++;
+                      if (r.userId === currentUserId) acc[r.emoji].userReacted = true;
+                      return acc;
+                    }, {})).map(([emoji, data]) => (
+                      <button
+                        key={emoji}
+                        onClick={() => toggleReaction(msg.id, emoji)}
+                        className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs border transition-colors ${
+                          data.userReacted
+                            ? "bg-violet-50 dark:bg-cyan-400/10 border-violet-200 dark:border-cyan-400/30 text-violet-600 dark:text-cyan-400"
+                            : "bg-neutral-50 dark:bg-white/5 border-neutral-200 dark:border-white/10 text-neutral-500 hover:bg-neutral-100 dark:hover:bg-white/10"
+                        }`}
+                      >
+                        <span>{emoji}</span>
+                        <span>{data.count}</span>
+                      </button>
+                    ))}
+                  </div>
+                )}
+
                 {/* Actions */}
                 {!msg.deleted && !editingId && (
                   <div className="opacity-0 group-hover:opacity-100 flex gap-2 mt-0.5 transition-opacity">
+                    {/* Reply */}
+                    <button onClick={() => setReplyTo({ id: msg.id, name: msg.user.name, content: msg.content.slice(0, 50) })} className="text-[11px] text-neutral-400 hover:text-violet-500 dark:hover:text-cyan-400">
+                      Ответить
+                    </button>
+                    {/* React */}
+                    <div className="relative">
+                      <button onClick={() => setShowEmojiPicker(showEmojiPicker === msg.id ? null : msg.id)} className="text-[11px] text-neutral-400 hover:text-violet-500 dark:hover:text-cyan-400">
+                        Реакция
+                      </button>
+                      {showEmojiPicker === msg.id && (
+                        <div className="absolute bottom-full left-0 mb-1 bg-white dark:bg-neutral-800 border border-neutral-200 dark:border-white/10 rounded-lg p-1.5 flex gap-0.5 shadow-lg z-10">
+                          {["👍", "❤️", "😂", "😮", "😢", "🔥", "👏", "🎉"].map((e) => (
+                            <button key={e} onClick={() => toggleReaction(msg.id, e)} className="w-7 h-7 text-lg hover:bg-neutral-100 dark:hover:bg-white/10 rounded">{e}</button>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                    {/* Pin (admin only) */}
+                    {currentUserRole === "ADMIN" && (
+                      <button onClick={() => pinMessage(msg.id)} className="text-[11px] text-neutral-400 hover:text-amber-500">
+                        {msg.pinned ? "Открепить" : "Закрепить"}
+                      </button>
+                    )}
+                    {/* Edit */}
                     {msg.user.id === currentUserId && (
                       <button onClick={() => startEdit(msg)} className="text-[11px] text-neutral-400 hover:text-violet-500 dark:hover:text-cyan-400" aria-label="Edit message">
                         Ред.
                       </button>
                     )}
+                    {/* Delete */}
                     {(msg.user.id === currentUserId || currentUserRole === "ADMIN") && (
                       <button onClick={() => deleteMessage(msg.id)} className="text-[11px] text-neutral-400 hover:text-red-500" aria-label="Delete message">
                         Удалить
@@ -364,6 +472,17 @@ export default function MessageArea({
       {typingText && (
         <div className="px-4 py-1 text-xs text-neutral-400 dark:text-gray-500 animate-pulse">
           {typingText}
+        </div>
+      )}
+
+      {/* Reply indicator */}
+      {replyTo && (
+        <div className="px-4 py-2 border-t border-neutral-200 dark:border-white/5 flex items-center gap-2 text-xs text-neutral-500 dark:text-gray-400 bg-violet-50/50 dark:bg-cyan-400/5">
+          <div className="w-0.5 h-4 bg-violet-400 dark:bg-cyan-400 rounded-full" />
+          <span>Ответ для <strong className="text-neutral-700 dark:text-gray-300">{replyTo.name}</strong>: {replyTo.content}</span>
+          <button onClick={() => setReplyTo(null)} className="ml-auto text-neutral-400 hover:text-neutral-600 dark:hover:text-white">
+            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+          </button>
         </div>
       )}
 

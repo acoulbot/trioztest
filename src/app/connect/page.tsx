@@ -18,6 +18,7 @@ import ModalBackdrop from "@/components/connect/ModalBackdrop";
 
 const VoiceChannel = dynamic(() => import("@/components/voice/VoiceChannel"), { ssr: false });
 const FriendsPanel = dynamic(() => import("@/components/friends/FriendsPanel"), { ssr: false });
+const DMPanel = dynamic(() => import("@/components/dm/DMPanel"), { ssr: false });
 
 /* ─── Types ─── */
 
@@ -251,6 +252,7 @@ export default function ConnectPage() {
   const [showInvite, setShowInvite] = useState(false);
   const [showMembers, setShowMembers] = useState(false);
   const [showFriends, setShowFriends] = useState(false);
+  const [showDM, setShowDM] = useState(false);
   const [showProfileSettings, setShowProfileSettings] = useState(false);
   const [myGlowSettings, setMyGlowSettings] = useState<{ avatarGlowEnabled: boolean; avatarGlowColors: string | null; avatar: string | null } | null>(null);
   const [unreadCounts, setUnreadCounts] = useState<Record<string, number>>({});
@@ -363,10 +365,12 @@ export default function ConnectPage() {
         groups={groups}
         selectedGroup={selectedGroup}
         showFriends={showFriends}
+        showDM={showDM}
         onSelectGroup={handleSelectGroup}
         onCreateGroup={() => setShowCreateGroup(true)}
         onJoinGroup={() => setShowJoinGroup(true)}
         onToggleFriends={() => setShowFriends(!showFriends)}
+        onToggleDM={() => setShowDM(!showDM)}
       />
 
       {/* Mobile: Show group list */}
@@ -472,6 +476,12 @@ export default function ConnectPage() {
       </div>
 
       {showFriends && <FriendsPanel onClose={() => setShowFriends(false)} />}
+
+      {showDM && (
+        <div className="fixed inset-0 z-50 bg-white dark:bg-neutral-950 md:relative md:flex-1 md:h-full">
+          <DMPanel currentUserId={userId} onClose={() => setShowDM(false)} />
+        </div>
+      )}
 
       {/* Ban notice */}
       {isBanned && (

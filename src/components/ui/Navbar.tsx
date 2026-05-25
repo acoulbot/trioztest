@@ -2,16 +2,31 @@
 
 import Link from "next/link";
 import { useSession, signOut } from "next-auth/react";
-import { useState } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useTheme } from "@/components/Providers";
 import { useInlineEdit } from "@/components/InlineEditContext";
+import SearchDialog from "@/components/ui/SearchDialog";
 
 export default function Navbar() {
   const { data: session } = useSession();
   const [menuOpen, setMenuOpen] = useState(false);
+  const [searchOpen, setSearchOpen] = useState(false);
   const { theme, toggleTheme } = useTheme();
   const { editMode, toggleEditMode, isAdmin } = useInlineEdit();
+
+  const handleSearchToggle = useCallback(() => setSearchOpen((o) => !o), []);
+
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if (e.key === "k" && (e.metaKey || e.ctrlKey)) {
+        e.preventDefault();
+        setSearchOpen(true);
+      }
+    };
+    document.addEventListener("keydown", handler);
+    return () => document.removeEventListener("keydown", handler);
+  }, []);
 
   const navLinks = [
     { href: "/", label: "Главная" },
@@ -41,6 +56,20 @@ export default function Navbar() {
 
           {/* Right side */}
           <div className="flex items-center gap-2 ml-auto">
+            {/* Search */}
+            <button
+              onClick={handleSearchToggle}
+              className="p-2 rounded-lg text-neutral-500 dark:text-gray-400 hover:bg-neutral-100 dark:hover:bg-white/5 transition-colors flex items-center gap-1.5"
+              title="Поиск (Ctrl+K)"
+            >
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+              </svg>
+              <kbd className="hidden lg:block text-[10px] text-neutral-400 bg-neutral-100 dark:bg-neutral-800 px-1 py-0.5 rounded border border-neutral-200 dark:border-white/10">
+                Ctrl+K
+              </kbd>
+            </button>
+
             {/* Theme toggle */}
             <button
               onClick={toggleTheme}
@@ -171,6 +200,8 @@ export default function Navbar() {
           </motion.div>
         )}
       </AnimatePresence>
+
+      <SearchDialog open={searchOpen} onClose={() => setSearchOpen(false)} />
     </nav>
   );
 }

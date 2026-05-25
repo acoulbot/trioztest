@@ -19,6 +19,17 @@ model User {
   banned         Boolean         @default(false)
   banReason      String?
   bannedUntil    DateTime?
+  bio            String?         @db.VarChar(200)
+  socialLinks    String?         @db.Text
+  customStatus   String?         @db.VarChar(100)
+  statusEmoji    String?         @db.VarChar(10)
+  privacyOnline  String          @default("everyone")
+  privacyFriends String          @default("everyone")
+  privacyEmail   Boolean         @default(false)
+  notifySound    Boolean         @default(true)
+  notifyPush     Boolean         @default(true)
+  mutedGroups    String?         @db.Text
+  mutedChannels  String?         @db.Text
   messages       Message[]
   channelMembers ChannelMember[]
   groupMembers   GroupMember[]
@@ -31,6 +42,12 @@ model User {
   gamePlayers       GamePlayer[]
   gameInvitesSent   GameInvite[]   @relation("GameInviteSender")
   gameInvitesRecvd  GameInvite[]   @relation("GameInviteReceiver")
+  reactions         Reaction[]
+  badges            UserBadge[]
+  sessions          UserSession[]
+  dmConversations1  DirectConversation[] @relation("DMUser1")
+  dmConversations2  DirectConversation[] @relation("DMUser2")
+  directMessages    DirectMessage[]
   avatarGlowEnabled Boolean         @default(false)
   avatarGlowColors  String?
   lastSeen          DateTime?
@@ -128,12 +145,107 @@ model Message {
   edited       Boolean   @default(false)
   editedAt     DateTime?
   deleted      Boolean   @default(false)
+  pinned       Boolean   @default(false)
+  pinnedBy     String?
+  pinnedAt     DateTime?
+  replyToId    String?
+  replyTo      Message?  @relation("MessageReplies", fields: [replyToId], references: [id], onDelete: SetNull)
+  replies      Message[] @relation("MessageReplies")
   attachments  String?
+  mentions     String?   @db.Text
+  reactions    Reaction[]
   user         User      @relation(fields: [userId], references: [id], onDelete: Cascade)
   channel      Channel   @relation(fields: [channelId], references: [id], onDelete: Cascade)
   createdAt    DateTime  @default(now())
 
   @@index([channelId, createdAt])
+  @@index([replyToId])
+}
+
+model Reaction {
+  id        String   @id @default(cuid())
+  emoji     String
+  userId    String
+  messageId String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  message   Message  @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+
+  @@unique([userId, messageId, emoji])
+  @@index([messageId])
+}
+
+model DirectConversation {
+  id        String          @id @default(cuid())
+  user1Id   String
+  user2Id   String
+  user1     User            @relation("DMUser1", fields: [user1Id], references: [id], onDelete: Cascade)
+  user2     User            @relation("DMUser2", fields: [user2Id], references: [id], onDelete: Cascade)
+  messages  DirectMessage[]
+  lastMessageAt DateTime?  
+  createdAt DateTime        @default(now())
+  updatedAt DateTime        @updatedAt
+
+  @@unique([user1Id, user2Id])
+  @@index([user1Id])
+  @@index([user2Id])
+}
+
+model DirectMessage {
+  id             String             @id @default(cuid())
+  content        String
+  userId         String
+  conversationId String
+  edited         Boolean            @default(false)
+  editedAt       DateTime?
+  deleted        Boolean            @default(false)
+  attachments    String?
+  user           User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  conversation   DirectConversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  createdAt      DateTime           @default(now())
+
+  @@index([conversationId, createdAt])
+}
+
+model Badge {
+  id          String      @id @default(cuid())
+  name        String
+  description String      @db.Text
+  icon        String?
+  imageUrl    String?
+  rarity      String      @default("common")
+  active      Boolean     @default(true)
+  users       UserBadge[]
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+}
+
+model UserBadge {
+  id        String   @id @default(cuid())
+  userId    String
+  badgeId   String
+  awardedBy String?
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  badge     Badge    @relation(fields: [badgeId], references: [id], onDelete: Cascade)
+  awardedAt DateTime @default(now())
+
+  @@unique([userId, badgeId])
+  @@index([userId])
+}
+
+model UserSession {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userAgent String?
+  ip        String?
+  token     String   @unique
+  active    Boolean  @default(true)
+  lastUsed  DateTime @default(now())
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+  @@index([token])
 }
 
 model Article {

@@ -1,0 +1,64 @@
+import { NextRequest, NextResponse } from "next/server";
+import { getServerSession } from "next-auth";
+import { authOptions } from "@/lib/auth";
+import prisma from "@/lib/prisma";
+import { writeFile, mkdir } from "fs/promises";
+import path from "path";
+
+export async function GET() {
+  const session = await getServerSession(authOptions);
+  if (!session?.user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
+  const badges = await prisma.badge.findMany({
+    include: { _count: { select: { users: true } } },
+    orderBy: { createdAt: "desc" },
+  });
+
+  return NextResponse.json(badges);
+}
+
+export async function POST(req: NextRequest) {
+  const session = await getServerSession(authOptions);
+  if (!session?.user || session.user.role !== "ADMIN") {
+    return NextResponse.json({ error: "Admin only" }, { status: 403 });
+  }
+
+  const formData = await req.formData();
+  const name = formData.get("name") as string;
+  const description = formData.get("description") as string;
+  const icon = formData.get("icon") as string | null;
+  const rarity = (formData.get("rarity") as string) || "common";
+  const imageFile = formData.get("image") as File | null;
+
+  if (!name || !description) {
+    return NextResponse.json({ error: "Name and description required" }, { status: 400 });
+  }
+
+  let imageUrl: string | null = null;
+
+  if (imageFile && imageFile.size > 0) {
+    if (imageFile.size > 512 * 1024) {
+      return NextResponse.json({ error: "Image must be under 512KB" }, { status: 400 });
+    }
+
+    const allowedTypes = ["image/png", "image/jpeg", "image/webp", "image/gif"];
+    if (!allowedTypes.includes(imageFile.type)) {
+      return NextResponse.json({ error: "Invalid image type" }, { status: 400 });
+    }
+
+    const ext = imageFile.name.split(".").pop()?.replace(/[^a-z0-9]/gi, "") || "png";
+    const filename = `badge-${Date.now()}.${ext}`;
+    const dir = path.join(process.cwd(), "public/uploads/badges");
+    await mkdir(dir, { recursive: true });
+
+    const buffer = Buffer.from(await imageFile.arrayBuffer());
+    await writeFile(path.join(dir, filename), buffer);
+    imageUrl = `/uploads/badges/${filename}`;
+  }
+
+  const badge = await prisma.badge.create({
+    data: { name, description, icon: icon || null, imageUrl, rarity },
+  });
+
+  return NextResponse.json(badge, { status: 201 });
+}
