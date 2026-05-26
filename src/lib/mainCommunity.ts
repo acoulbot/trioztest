@@ -37,20 +37,38 @@ export async function ensureMainCommunity() {
 }
 
 /**
- * Auto-join a user to the main community as MEMBER.
+ * Auto-join a user to the main community.
+ * Admins join as OWNER, others as MEMBER.
  * No-op if already a member or no main community exists.
  */
 export async function autoJoinMainCommunity(userId: string) {
   const main = await getMainCommunity();
   if (!main) return;
 
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { role: true },
+  });
+  if (!user) return;
+
+  const memberRole = user.role === "ADMIN" ? "OWNER" : "MEMBER";
+
   const existing = await prisma.groupMember.findUnique({
     where: { userId_groupId: { userId, groupId: main.id } },
   });
-  if (existing) return;
+
+  if (existing) {
+    if (user.role === "ADMIN" && existing.role !== "OWNER") {
+      await prisma.groupMember.update({
+        where: { id: existing.id },
+        data: { role: "OWNER" },
+      });
+    }
+    return;
+  }
 
   await prisma.groupMember.create({
-    data: { userId, groupId: main.id, role: "MEMBER", rulesAccepted: true },
+    data: { userId, groupId: main.id, role: memberRole, rulesAccepted: true },
   });
 }
 
@@ -155,10 +173,10 @@ export async function setupMainCommunity(ownerId: string, name: string) {
     include: { channels: true },
   });
 
-  // Add all existing users as members
+  // Add all existing users as members (admins as OWNER)
   const users = await prisma.user.findMany({
     where: { id: { not: ownerId } },
-    select: { id: true },
+    select: { id: true, role: true },
   });
 
   if (users.length > 0) {
@@ -166,7 +184,7 @@ export async function setupMainCommunity(ownerId: string, name: string) {
       data: users.map((u) => ({
         userId: u.id,
         groupId: group.id,
-        role: "MEMBER",
+        role: u.role === "ADMIN" ? "OWNER" : "MEMBER",
         rulesAccepted: true,
       })),
       skipDuplicates: true,
