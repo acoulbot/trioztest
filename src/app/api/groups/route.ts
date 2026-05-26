@@ -11,18 +11,22 @@ export async function GET() {
     return NextResponse.json([]);
   }
 
-  const groups = await prisma.group.findMany({
-    where: {
-      members: { some: { userId: session.user.id } },
-    },
-    include: {
-      _count: { select: { members: true, channels: true } },
-      owner: { select: { id: true, name: true, username: true } },
-    },
-    orderBy: [{ isMain: "desc" }, { createdAt: "asc" }],
-  });
+  try {
+    const groups = await prisma.group.findMany({
+      where: {
+        members: { some: { userId: session.user.id } },
+      },
+      include: {
+        _count: { select: { members: true, channels: true } },
+        owner: { select: { id: true, name: true, username: true } },
+      },
+      orderBy: [{ isMain: "desc" }, { createdAt: "asc" }],
+    });
 
-  return NextResponse.json(groups);
+    return NextResponse.json(groups);
+  } catch {
+    return NextResponse.json([], { status: 200 });
+  }
 }
 
 export async function POST(req: NextRequest) {

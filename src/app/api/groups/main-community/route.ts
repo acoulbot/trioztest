@@ -10,8 +10,12 @@ export async function GET() {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const main = await getMainCommunity();
-  return NextResponse.json(main || { exists: false });
+  try {
+    const main = await getMainCommunity();
+    return NextResponse.json(main || { exists: false });
+  } catch {
+    return NextResponse.json({ exists: false });
+  }
 }
 
 // POST — set up the main community (admin only)
@@ -21,11 +25,15 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
-  const { name } = await req.json();
-  const communityName = name?.trim() || "TZ Connect";
+  try {
+    const { name } = await req.json();
+    const communityName = name?.trim() || "TZ Connect";
 
-  const group = await setupMainCommunity(session.user.id, communityName);
-  return NextResponse.json(group);
+    const group = await setupMainCommunity(session.user.id, communityName);
+    return NextResponse.json(group);
+  } catch {
+    return NextResponse.json({ error: "Failed to setup main community" }, { status: 500 });
+  }
 }
 
 // PUT — trigger service sync for the main community (admin only)
@@ -35,6 +43,10 @@ export async function PUT() {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
-  await syncServicesToMainCommunity();
-  return NextResponse.json({ success: true });
+  try {
+    await syncServicesToMainCommunity();
+    return NextResponse.json({ success: true });
+  } catch {
+    return NextResponse.json({ error: "Sync failed" }, { status: 500 });
+  }
 }
