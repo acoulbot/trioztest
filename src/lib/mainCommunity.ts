@@ -1,10 +1,39 @@
 import prisma from "@/lib/prisma";
 
+let ensurePromise: Promise<void> | null = null;
+
 /**
  * Find the main community group.
  */
 export async function getMainCommunity() {
   return prisma.group.findFirst({ where: { isMain: true } });
+}
+
+/**
+ * Ensure the main community exists. Auto-creates it on first call
+ * using the first ADMIN user as owner. Safe to call from any context.
+ */
+export async function ensureMainCommunity() {
+  if (ensurePromise) return ensurePromise;
+  ensurePromise = (async () => {
+    try {
+      const existing = await getMainCommunity();
+      if (existing) return;
+
+      const admin = await prisma.user.findFirst({
+        where: { role: "ADMIN" },
+        select: { id: true },
+      });
+      if (!admin) return;
+
+      await setupMainCommunity(admin.id, "TZ Connect");
+    } catch {
+      // Ignore — concurrent creation race or DB issue
+    } finally {
+      ensurePromise = null;
+    }
+  })();
+  return ensurePromise;
 }
 
 /**
