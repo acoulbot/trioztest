@@ -13,18 +13,10 @@ interface Stats {
   services: number;
 }
 
-interface MainCommunityInfo {
-  id?: string;
-  name?: string;
-  exists?: boolean;
-}
-
 export default function AdminPage() {
   const { data: session, status } = useSession();
   const router = useRouter();
   const [stats, setStats] = useState<Stats>({ users: 0, channels: 0, articles: 0, services: 0 });
-  const [mainCommunity, setMainCommunity] = useState<MainCommunityInfo | null>(null);
-  const [settingUp, setSettingUp] = useState(false);
 
   useEffect(() => {
     if (status === "authenticated" && session?.user?.role !== "ADMIN") {
@@ -47,21 +39,8 @@ export default function AdminPage() {
           services: Array.isArray(services) ? services.length : 0,
         });
       }).catch(() => {});
-      fetch("/api/groups/main-community").then((r) => r.ok ? r.json() : { exists: false }).then(setMainCommunity).catch(() => {});
     }
   }, [session]);
-
-  const handleSetupMainCommunity = async () => {
-    setSettingUp(true);
-    const res = await fetch("/api/groups/main-community", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ name: "TZ Connect" }),
-    });
-    const data = await res.json();
-    setMainCommunity(data);
-    setSettingUp(false);
-  };
 
   if (status === "loading") {
     return (
@@ -207,35 +186,6 @@ export default function AdminPage() {
           </div>
         </div>
 
-        {/* Main Community Section */}
-        <div className="glass-card p-6 mt-6">
-          <h3 className="text-lg font-bold text-white mb-4">🏰 Главное сообщество</h3>
-          {mainCommunity?.id ? (
-            <div className="space-y-3">
-              <div className="flex items-center gap-3">
-                <span className="text-sm text-green-400">✔ Настроено</span>
-                <span className="text-sm text-gray-400">{mainCommunity.name}</span>
-              </div>
-              <button
-                onClick={async () => { await fetch("/api/groups/main-community", { method: "PUT" }); alert("Услуги синхронизированы!"); }}
-                className="px-4 py-2 bg-cyan-500/20 text-cyan-400 border border-cyan-500/30 rounded-xl text-sm hover:bg-cyan-500/30 transition-colors"
-              >
-                Синхронизировать услуги
-              </button>
-            </div>
-          ) : (
-            <div className="space-y-3">
-              <p className="text-sm text-gray-400">Главное сообщество ещё не создано. Создайте его, чтобы все новые пользователи автоматически вступали.</p>
-              <button
-                onClick={handleSetupMainCommunity}
-                disabled={settingUp}
-                className="px-4 py-2 bg-gradient-to-r from-cyan-500 to-blue-600 text-white rounded-xl text-sm font-medium hover:shadow-lg transition-all disabled:opacity-50"
-              >
-                {settingUp ? "Создание..." : "Создать главное сообщество"}
-              </button>
-            </div>
-          )}
-        </div>
       </div>
     </div>
   );

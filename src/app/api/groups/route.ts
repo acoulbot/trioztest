@@ -4,6 +4,7 @@ import { authOptions } from "@/lib/auth";
 import prisma from "@/lib/prisma";
 import { checkBan } from "@/lib/banCheck";
 import { rateLimit } from "@/lib/rateLimit";
+import { ensureMainCommunity, autoJoinMainCommunity } from "@/lib/mainCommunity";
 
 export async function GET() {
   const session = await getServerSession(authOptions);
@@ -12,6 +13,11 @@ export async function GET() {
   }
 
   try {
+    // Auto-create main community if it doesn't exist yet
+    await ensureMainCommunity();
+    // Auto-join current user to main community if not already a member
+    await autoJoinMainCommunity(session.user.id);
+
     const memberships = await prisma.groupMember.findMany({
       where: { userId: session.user.id },
       select: {
