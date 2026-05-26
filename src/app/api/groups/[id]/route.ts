@@ -135,6 +135,9 @@ export async function DELETE(_req: Request, { params }: { params: Promise<{ id: 
   if (!group || group.ownerId !== session.user.id) {
     return NextResponse.json({ error: "Only owner can delete" }, { status: 403 });
   }
+  if (group.isMain) {
+    return NextResponse.json({ error: "Cannot delete the main community" }, { status: 403 });
+  }
 
   await prisma.group.delete({ where: { id } });
 

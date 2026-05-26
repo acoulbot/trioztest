@@ -7,6 +7,7 @@ interface Group {
   name: string;
   icon: string | null;
   description: string;
+  isMain?: boolean;
   _count: { members: number; channels: number };
 }
 
@@ -102,11 +103,18 @@ export default function GroupListPanel({
               >
                 <GroupAvatar icon={g.icon} name={g.name} />
                 <div className="min-w-0 flex-1 text-left">
-                  <div
-                    className="text-sm font-semibold truncate"
-                    style={{ color: isActive ? "var(--cn-accent-text)" : "var(--cn-text)" }}
-                  >
-                    {g.name}
+                  <div className="flex items-center gap-1">
+                    <span
+                      className="text-sm font-semibold truncate"
+                      style={{ color: isActive ? "var(--cn-accent-text)" : "var(--cn-text)" }}
+                    >
+                      {g.name}
+                    </span>
+                    {g.isMain && (
+                      <span className="text-[9px] px-1 py-0.5 rounded bg-violet-100 dark:bg-cyan-400/10 text-violet-600 dark:text-cyan-400 font-medium flex-shrink-0">
+                        Главное
+                      </span>
+                    )}
                   </div>
                   <div className="text-xs truncate" style={{ color: "var(--cn-muted)" }}>
                     {g._count.members} участников · {g._count.channels} каналов
