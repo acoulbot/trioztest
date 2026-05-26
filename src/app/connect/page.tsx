@@ -20,6 +20,7 @@ import ModalBackdrop from "@/components/connect/ModalBackdrop";
 const VoiceScreenShare = dynamic(() => import("@/components/voice/VoiceScreenShare"), { ssr: false });
 const FriendsPanel = dynamic(() => import("@/components/friends/FriendsPanel"), { ssr: false });
 const DMPanel = dynamic(() => import("@/components/dm/DMPanel"), { ssr: false });
+const AiChatPanel = dynamic(() => import("@/components/ai/AiChatPanel"), { ssr: false });
 import { VoiceProvider, useVoice } from "@/contexts/VoiceContext";
 
 /* ─── Types ─── */
@@ -963,6 +964,9 @@ function ConnectPageInner() {
           </>
         )}
       </div>
+
+      {/* AI Assistant — inline right panel */}
+      <AiChatPanel />
 
       {/* Ban notice */}
       {isBanned && (
