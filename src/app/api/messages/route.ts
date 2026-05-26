@@ -105,7 +105,7 @@ export async function POST(req: NextRequest) {
 
   const channel = await prisma.channel.findUnique({
     where: { id: channelId },
-    select: { groupId: true, type: true },
+    select: { groupId: true, type: true, isRestricted: true },
   });
   if (!channel) {
     return NextResponse.json({ error: "Channel not found" }, { status: 404 });
@@ -117,12 +117,16 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
+  const isPrivileged = membership.role === "OWNER" || membership.role === "ADMIN" || membership.role === "MODERATOR";
+
   // NEWS channels: only OWNER/ADMIN/MODERATOR can post
-  if (channel.type === "NEWS") {
-    const canPost = membership.role === "OWNER" || membership.role === "ADMIN" || membership.role === "MODERATOR";
-    if (!canPost) {
-      return NextResponse.json({ error: "Only admins can post in news channels" }, { status: 403 });
-    }
+  if (channel.type === "NEWS" && !isPrivileged) {
+    return NextResponse.json({ error: "Only admins can post in news channels" }, { status: 403 });
+  }
+
+  // Restricted channels (inactive service): only admins can post
+  if (channel.isRestricted && !isPrivileged) {
+    return NextResponse.json({ error: "This channel is temporarily restricted" }, { status: 403 });
   }
 
   const sanitizedContent = content ? sanitizeText(content) : "";

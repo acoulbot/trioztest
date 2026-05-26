@@ -712,9 +712,10 @@ function ConnectPageInner() {
   const canManage = groupDetail?.myRole === "OWNER" || groupDetail?.myRole === "MODERATOR";
 
   const fetchGroups = useCallback(() => {
-    fetch("/api/groups").then((r) => r.json()).then((data) => {
-      if (Array.isArray(data)) setGroups(data);
-    });
+    fetch("/api/groups")
+      .then((r) => { if (!r.ok) throw new Error("fetch failed"); return r.json(); })
+      .then((data) => { if (Array.isArray(data)) setGroups(data); })
+      .catch(() => {});
   }, []);
 
   const fetchGroupDetail = useCallback(async (groupId: string) => {
@@ -723,7 +724,7 @@ function ConnectPageInner() {
   }, []);
 
   const fetchUnread = useCallback(() => {
-    fetch("/api/channels/unread").then((r) => r.json()).then((data) => {
+    fetch("/api/channels/unread").then((r) => { if (!r.ok) throw new Error("fetch failed"); return r.json(); }).then((data) => {
       if (data.unread) setUnreadCounts(data.unread);
     }).catch(() => {});
   }, []);
@@ -751,7 +752,7 @@ function ConnectPageInner() {
   useEffect(() => {
     if (session?.user) {
       fetch("/api/profile/me")
-        .then((r) => r.json())
+        .then((r) => { if (!r.ok) throw new Error("fetch failed"); return r.json(); })
         .then((d) => setMyGlowSettings({ avatarGlowEnabled: d.avatarGlowEnabled ?? false, avatarGlowColors: d.avatarGlowColors ?? null, avatar: d.avatar ?? null }))
         .catch(() => {});
     }

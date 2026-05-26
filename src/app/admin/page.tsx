@@ -35,19 +35,19 @@ export default function AdminPage() {
   useEffect(() => {
     if (session?.user?.role === "ADMIN") {
       Promise.all([
-        fetch("/api/users").then((r) => r.json()),
-        fetch("/api/channels").then((r) => r.json()),
-        fetch("/api/articles").then((r) => r.json()),
-        fetch("/api/services").then((r) => r.json()),
+        fetch("/api/users").then((r) => r.ok ? r.json() : []),
+        fetch("/api/channels").then((r) => r.ok ? r.json() : []),
+        fetch("/api/articles").then((r) => r.ok ? r.json() : []),
+        fetch("/api/services").then((r) => r.ok ? r.json() : []),
       ]).then(([users, channels, articles, services]) => {
         setStats({
-          users: users.length || 0,
-          channels: channels.length || 0,
-          articles: articles.length || 0,
-          services: services.length || 0,
+          users: Array.isArray(users) ? users.length : 0,
+          channels: Array.isArray(channels) ? channels.length : 0,
+          articles: Array.isArray(articles) ? articles.length : 0,
+          services: Array.isArray(services) ? services.length : 0,
         });
-      });
-      fetch("/api/groups/main-community").then((r) => r.json()).then(setMainCommunity);
+      }).catch(() => {});
+      fetch("/api/groups/main-community").then((r) => r.ok ? r.json() : { exists: false }).then(setMainCommunity).catch(() => {});
     }
   }, [session]);
 
