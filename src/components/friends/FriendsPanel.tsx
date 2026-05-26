@@ -37,7 +37,11 @@ interface FriendsData {
 
 type Tab = "friends" | "pending" | "add";
 
-export default function FriendsPanel({ onClose }: { onClose: () => void }) {
+interface FriendsPanelProps {
+  onMessageFriend?: (friendId: string) => void;
+}
+
+export default function FriendsPanel({ onMessageFriend }: FriendsPanelProps) {
   const [data, setData] = useState<FriendsData>({ friends: [], pending: [], sent: [] });
   const [tab, setTab] = useState<Tab>("friends");
   const [username, setUsername] = useState("");
@@ -109,22 +113,14 @@ export default function FriendsPanel({ onClose }: { onClose: () => void }) {
   ];
 
   return (
-    <>
-    {/* Backdrop */}
-    <div className="fixed inset-0 z-40 bg-black/30" onClick={onClose} />
-    <div className="fixed left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 z-50 w-[360px] max-h-[70vh] bg-white dark:bg-neutral-900 rounded-2xl shadow-2xl border border-neutral-200 dark:border-white/10 flex flex-col overflow-hidden">
+    <div className="w-72 bg-white dark:bg-neutral-900 border-r border-neutral-200 dark:border-white/5 flex flex-col h-full flex-shrink-0">
       {/* Header */}
       <div className="p-3 border-b border-neutral-200 dark:border-white/5 flex items-center justify-between flex-shrink-0">
         <span className="text-sm font-semibold text-neutral-900 dark:text-white">Друзья</span>
-        <button onClick={onClose} className="text-neutral-400 hover:text-neutral-600 dark:hover:text-white transition-colors">
-          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-          </svg>
-        </button>
       </div>
 
       {/* Tabs */}
-      <div className="flex border-b border-neutral-200 dark:border-white/5">
+      <div className="flex border-b border-neutral-200 dark:border-white/5 flex-shrink-0">
         {tabs.map((t) => (
           <button
             key={t.key}
@@ -176,15 +172,40 @@ export default function FriendsPanel({ onClose }: { onClose: () => void }) {
                         @{f.username} {!isOnline(f.lastSeen) && f.lastSeen && <span className="text-neutral-400/70">· {timeAgo(f.lastSeen)}</span>}
                       </div>
                     </div>
-                    <button
-                      onClick={() => removeFriend(f.friendshipId)}
-                      className="opacity-0 group-hover:opacity-100 p-1 text-neutral-400 hover:text-red-500 transition-all"
-                      title="Удалить из друзей"
-                    >
-                      <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                      </svg>
-                    </button>
+                    <div className="flex gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
+                      {/* Profile button */}
+                      <a
+                        href={`/user/${f.username}`}
+                        className="p-1.5 text-neutral-400 hover:text-violet-500 dark:hover:text-cyan-400 transition-colors"
+                        title="Профиль"
+                      >
+                        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                        </svg>
+                      </a>
+                      {/* Message button */}
+                      {onMessageFriend && (
+                        <button
+                          onClick={() => onMessageFriend(f.id)}
+                          className="p-1.5 text-neutral-400 hover:text-violet-500 dark:hover:text-cyan-400 transition-colors"
+                          title="Написать"
+                        >
+                          <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z" />
+                          </svg>
+                        </button>
+                      )}
+                      {/* Remove button */}
+                      <button
+                        onClick={() => removeFriend(f.friendshipId)}
+                        className="p-1.5 text-neutral-400 hover:text-red-500 transition-colors"
+                        title="Удалить из друзей"
+                      >
+                        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                        </svg>
+                      </button>
+                    </div>
                   </div>
                 ))
               )}
@@ -270,6 +291,5 @@ export default function FriendsPanel({ onClose }: { onClose: () => void }) {
         </AnimatePresence>
       </div>
     </div>
-    </>
   );
 }

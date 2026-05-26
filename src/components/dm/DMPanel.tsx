@@ -52,11 +52,13 @@ interface Message {
 interface DMPanelProps {
   currentUserId: string;
   onClose?: () => void;
+  initialFriendId?: string | null;
 }
 
-export default function DMPanel({ currentUserId, onClose }: DMPanelProps) {
+export default function DMPanel({ currentUserId, onClose, initialFriendId }: DMPanelProps) {
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [selectedConv, setSelectedConv] = useState<string | null>(null);
+  const [initialHandled, setInitialHandled] = useState(false);
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(true);
@@ -72,10 +74,19 @@ export default function DMPanel({ currentUserId, onClose }: DMPanelProps) {
   useEffect(() => {
     fetch("/api/dm")
       .then((r) => { if (!r.ok) throw new Error(r.statusText); return r.json(); })
-      .then(setConversations)
+      .then((convs: Conversation[]) => {
+        setConversations(convs);
+        if (initialFriendId && !initialHandled) {
+          const existing = convs.find((c: Conversation) => c.other.id === initialFriendId);
+          if (existing) {
+            setSelectedConv(existing.id);
+          }
+          setInitialHandled(true);
+        }
+      })
       .catch(() => setConversations([]))
       .finally(() => setLoading(false));
-  }, []);
+  }, [initialFriendId, initialHandled]);
 
   const loadMessages = useCallback(async (convId: string, cursor?: string) => {
     setMessagesLoading(true);

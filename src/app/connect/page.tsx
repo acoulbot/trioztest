@@ -657,8 +657,8 @@ function ConnectPageInner() {
   const [showCreateChannel, setShowCreateChannel] = useState(false);
   const [showInvite, setShowInvite] = useState(false);
   const [showMembers, setShowMembers] = useState(false);
-  const [showFriends, setShowFriends] = useState(false);
-  const [connectMode, setConnectMode] = useState<"group" | "dm">("group");
+  const [activeSection, setActiveSection] = useState<"groups" | "friends" | "dm">("groups");
+  const [dmFriendId, setDmFriendId] = useState<string | null>(null);
   const [showProfileSettings, setShowProfileSettings] = useState(false);
   const [showGroupSettings, setShowGroupSettings] = useState(false);
   const [myGlowSettings, setMyGlowSettings] = useState<{ avatarGlowEnabled: boolean; avatarGlowColors: string | null; avatar: string | null } | null>(null);
@@ -723,8 +723,13 @@ function ConnectPageInner() {
 
   const handleSelectGroup = (id: string) => {
     setSelectedGroup(id);
-    setConnectMode("group");
+    setActiveSection("groups");
     setMobileView("channels");
+  };
+
+  const handleMessageFriend = (friendId: string) => {
+    setDmFriendId(friendId);
+    setActiveSection("dm");
   };
 
   const voiceState = {
@@ -808,17 +813,15 @@ function ConnectPageInner() {
 
   return (
     <div className="min-h-screen bg-neutral-50 dark:bg-neutral-950 flex h-[calc(100vh-64px)]">
-      {/* Desktop: Group sidebar always visible */}
+      {/* Desktop: Navigation sidebar — Column 1 */}
       <GroupSidebar
         groups={groups}
-        selectedGroup={connectMode === "group" ? selectedGroup : null}
-        showFriends={showFriends}
-        showDM={connectMode === "dm"}
+        selectedGroup={selectedGroup}
+        activeSection={activeSection}
         onSelectGroup={handleSelectGroup}
         onCreateGroup={() => setShowCreateGroup(true)}
         onJoinGroup={() => setShowJoinGroup(true)}
-        onToggleFriends={() => setShowFriends(!showFriends)}
-        onToggleDM={() => setConnectMode(connectMode === "dm" ? "group" : "dm")}
+        onChangeSection={(section) => { setActiveSection(section); if (section !== "dm") setDmFriendId(null); }}
       />
 
       {/* Mobile: Show group list */}
@@ -829,7 +832,7 @@ function ConnectPageInner() {
             onSelectGroup={handleSelectGroup}
             onCreateGroup={() => setShowCreateGroup(true)}
             onJoinGroup={() => setShowJoinGroup(true)}
-            onToggleFriends={() => setShowFriends(!showFriends)}
+            onToggleFriends={() => setActiveSection(activeSection === "friends" ? "groups" : "friends")}
           />
         )}
         {mobileView === "channels" && selectedGroup && groupDetail && (
@@ -868,15 +871,24 @@ function ConnectPageInner() {
         )}
       </div>
 
-      {/* Desktop: Channel sidebar + message area / DM mode */}
+      {/* Desktop: Column 2 (navigation) + Column 3 (content) */}
       <div className="max-md:hidden flex flex-1 h-full">
-        {connectMode === "dm" ? (
-          /* ── DM Mode ── */
-          <div className="flex-1 flex h-full">
-            <DMPanel currentUserId={userId} onClose={() => setConnectMode("group")} />
-          </div>
+        {activeSection === "dm" ? (
+          /* ── DM Mode: conversations list (col 2) + chat (col 3) ── */
+          <DMPanel currentUserId={userId} onClose={() => setActiveSection("groups")} initialFriendId={dmFriendId} />
+        ) : activeSection === "friends" ? (
+          /* ── Friends Mode: friends list (col 2) + placeholder (col 3) ── */
+          <>
+            <FriendsPanel onMessageFriend={handleMessageFriend} />
+            <div className="flex-1 flex items-center justify-center text-neutral-400 text-sm">
+              <div className="text-center">
+                <span className="text-4xl block mb-3">👥</span>
+                <p>Выберите друга для просмотра профиля или начала диалога</p>
+              </div>
+            </div>
+          </>
         ) : (
-          /* ── Group Mode ── */
+          /* ── Group Mode: channel sidebar (col 2) + chat (col 3) ── */
           <>
             {selectedGroup && groupDetail && (
               <ChannelSidebar
@@ -951,9 +963,6 @@ function ConnectPageInner() {
           </>
         )}
       </div>
-
-      {/* Friends popup overlay */}
-      {showFriends && <FriendsPanel onClose={() => setShowFriends(false)} />}
 
       {/* Ban notice */}
       {isBanned && (
