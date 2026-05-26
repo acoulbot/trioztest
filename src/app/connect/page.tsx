@@ -825,9 +825,18 @@ function ConnectPageInner() {
       <NavRail
         activeSection={activeSection}
         onChangeSection={(section) => {
+          if (section === activeSection) {
+            // Repeat click on active section — reset deeper selection
+            if (section === "communities") {
+              setSelectedGroup(null);
+              setGroupDetail(null);
+              setSelectedChannel(null);
+            }
+            if (section === "dm") setDmFriendId(null);
+            return;
+          }
           setActiveSection(section);
           if (section !== "dm") setDmFriendId(null);
-          // reset channel selection when switching top-level sections
           if (section !== "communities") setSelectedChannel(null);
         }}
         myProfileUser={myProfileUser}
