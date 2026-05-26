@@ -718,6 +718,16 @@ function ConnectPageInner() {
       .catch(() => {});
   }, []);
 
+  const handleReorderGroups = useCallback((groupIds: string[]) => {
+    const reordered = groupIds.map((id) => groups.find((g) => g.id === id)).filter(Boolean) as typeof groups;
+    setGroups(reordered);
+    fetch("/api/groups/reorder", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ groupIds }),
+    }).catch(() => {});
+  }, [groups]);
+
   const fetchGroupDetail = useCallback(async (groupId: string) => {
     const res = await fetch(`/api/groups/${groupId}`);
     if (res.ok) setGroupDetail(await res.json());
@@ -971,6 +981,7 @@ function ConnectPageInner() {
                   onSelectGroup={handleSelectGroup}
                   onCreateGroup={() => setShowCreateGroup(true)}
                   onJoinGroup={() => setShowJoinGroup(true)}
+                  onReorder={handleReorderGroups}
                 />
               )}
             </div>

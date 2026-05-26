@@ -12,16 +12,26 @@ export async function GET() {
   }
 
   try {
-    const groups = await prisma.group.findMany({
-      where: {
-        members: { some: { userId: session.user.id } },
+    const memberships = await prisma.groupMember.findMany({
+      where: { userId: session.user.id },
+      select: {
+        sortOrder: true,
+        group: {
+          include: {
+            _count: { select: { members: true, channels: true } },
+            owner: { select: { id: true, name: true, username: true } },
+          },
+        },
       },
-      include: {
-        _count: { select: { members: true, channels: true } },
-        owner: { select: { id: true, name: true, username: true } },
-      },
-      orderBy: [{ isMain: "desc" }, { createdAt: "asc" }],
     });
+
+    const groups = memberships
+      .map((m) => ({ ...m.group, sortOrder: m.sortOrder }))
+      .sort((a, b) => {
+        if (a.isMain !== b.isMain) return a.isMain ? -1 : 1;
+        if (a.sortOrder !== b.sortOrder) return a.sortOrder - b.sortOrder;
+        return new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
+      });
 
     return NextResponse.json(groups);
   } catch {
