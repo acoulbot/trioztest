@@ -17,9 +17,10 @@ import MessageArea from "@/components/connect/MessageArea";
 import MobileGroupList from "@/components/connect/MobileGroupList";
 import ModalBackdrop from "@/components/connect/ModalBackdrop";
 
-const VoiceChannel = dynamic(() => import("@/components/voice/VoiceChannel"), { ssr: false });
+const VoiceScreenShare = dynamic(() => import("@/components/voice/VoiceScreenShare"), { ssr: false });
 const FriendsPanel = dynamic(() => import("@/components/friends/FriendsPanel"), { ssr: false });
 const DMPanel = dynamic(() => import("@/components/dm/DMPanel"), { ssr: false });
+import { VoiceProvider, useVoice } from "@/contexts/VoiceContext";
 
 /* ─── Types ─── */
 
@@ -637,12 +638,20 @@ type MobileView = "groups" | "channels" | "chat";
 /* ─── Main Page ─── */
 
 export default function ConnectPage() {
+  return (
+    <VoiceProvider>
+      <ConnectPageInner />
+    </VoiceProvider>
+  );
+}
+
+function ConnectPageInner() {
   const { data: session, status } = useSession();
   const [groups, setGroups] = useState<Group[]>([]);
   const [selectedGroup, setSelectedGroup] = useState<string | null>(null);
   const [groupDetail, setGroupDetail] = useState<GroupDetail | null>(null);
   const [selectedChannel, setSelectedChannel] = useState<string | null>(null);
-  const [activeVoiceChannel, setActiveVoiceChannel] = useState<{ id: string; name: string } | null>(null);
+  const voice = useVoice();
   const [showCreateGroup, setShowCreateGroup] = useState(false);
   const [showJoinGroup, setShowJoinGroup] = useState(false);
   const [showCreateChannel, setShowCreateChannel] = useState(false);
@@ -717,9 +726,36 @@ export default function ConnectPage() {
     setMobileView("channels");
   };
 
+  const voiceState = {
+    isConnected: voice.isConnected,
+    channelId: voice.channelId,
+    channelName: voice.channelName,
+    isMuted: voice.isMuted,
+    isDeafened: voice.isDeafened,
+    users: voice.users,
+    speakingUsers: voice.speakingUsers,
+    localSpeaking: voice.localSpeaking,
+    nsEnabled: voice.nsEnabled,
+    nsStatus: voice.nsStatus,
+    isSharingScreen: voice.isSharingScreen,
+    screenSharerId: voice.screenSharerId,
+    userVolumes: voice.userVolumes,
+  };
+
+  const voiceActions = {
+    joinVoice: voice.joinVoice,
+    leaveVoice: voice.leaveVoice,
+    toggleMute: voice.toggleMute,
+    toggleDeafen: voice.toggleDeafen,
+    toggleNS: voice.toggleNS,
+    startScreenShare: voice.startScreenShare,
+    stopScreenShare: voice.stopScreenShare,
+    setUserVolume: voice.setUserVolume,
+  };
+
   const handleChannelClick = (channel: Channel) => {
     if (channel.type === "VOICE") {
-      setActiveVoiceChannel({ id: channel.id, name: channel.name });
+      voice.joinVoice(channel.id, channel.name);
     } else {
       setSelectedChannel(channel.id);
       setMobileView("chat");
@@ -814,6 +850,8 @@ export default function ConnectPage() {
             onOpenSettings={() => setShowGroupSettings(true)}
             memberCount={groupDetail.members.length}
             onBack={() => { setSelectedGroup(null); setMobileView("groups"); }}
+            voiceState={voiceState}
+            voiceActions={voiceActions}
           />
         )}
         {mobileView === "chat" && selectedChannel && selectedChannelData && (
@@ -849,7 +887,14 @@ export default function ConnectPage() {
             onProfileSettings={() => setShowProfileSettings(true)}
             onOpenSettings={() => setShowGroupSettings(true)}
             memberCount={groupDetail.members.length}
+            voiceState={voiceState}
+            voiceActions={voiceActions}
           />
+        )}
+
+        {/* Screen share panel */}
+        {voice.isConnected && (voice.isSharingScreen || voice.screenSharerId) && (
+          <VoiceScreenShare />
         )}
 
         {selectedChannel && selectedChannelData ? (
@@ -940,11 +985,6 @@ export default function ConnectPage() {
         )}
       </AnimatePresence>
 
-      <AnimatePresence>
-        {activeVoiceChannel && (
-          <VoiceChannel channelId={activeVoiceChannel.id} channelName={activeVoiceChannel.name} onClose={() => setActiveVoiceChannel(null)} />
-        )}
-      </AnimatePresence>
     </div>
   );
 }

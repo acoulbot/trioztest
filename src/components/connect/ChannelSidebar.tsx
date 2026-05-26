@@ -1,6 +1,11 @@
 "use client";
 
+import { useState, useEffect } from "react";
+import { io } from "socket.io-client";
 import GlowAvatar, { GlowAvatarUser } from "@/components/ui/GlowAvatar";
+import AudioBars from "@/components/ui/AudioBars";
+
+/* ─── Types ─── */
 
 interface Channel {
   id: string;
@@ -11,6 +16,13 @@ interface Channel {
   _count: { members: number; messages: number };
 }
 
+interface VoiceUser {
+  socketId: string;
+  userId: string;
+  userName: string;
+  muted: boolean;
+}
+
 interface GroupDetail {
   name: string;
   icon: string | null;
@@ -18,6 +30,33 @@ interface GroupDetail {
   myRole: string;
   channels: Channel[];
   members: { user: { id: string; name: string; username: string; avatar: string | null; role: string }; role: string }[];
+}
+
+interface VoiceState {
+  isConnected: boolean;
+  channelId: string | null;
+  channelName: string | null;
+  isMuted: boolean;
+  isDeafened: boolean;
+  users: VoiceUser[];
+  speakingUsers: Set<string>;
+  localSpeaking: boolean;
+  nsEnabled: boolean;
+  nsStatus: string;
+  isSharingScreen: boolean;
+  screenSharerId: string | null;
+  userVolumes: Map<string, number>;
+}
+
+interface VoiceActions {
+  joinVoice: (channelId: string, channelName: string) => Promise<void>;
+  leaveVoice: () => void;
+  toggleMute: () => void;
+  toggleDeafen: () => void;
+  toggleNS: () => void;
+  startScreenShare: () => Promise<void>;
+  stopScreenShare: () => Promise<void>;
+  setUserVolume: (socketId: string, volume: number) => void;
 }
 
 interface ChannelSidebarProps {
@@ -38,19 +77,44 @@ interface ChannelSidebarProps {
   onOpenSettings?: () => void;
   memberCount: number;
   onBack?: () => void;
+  voiceState?: VoiceState;
+  voiceActions?: VoiceActions;
 }
+
+/* ═══════════════════════════════════════════════════════════════════════════ */
 
 export default function ChannelSidebar({
   groupDetail, selectedChannel, unreadCounts, canManage,
   myProfileUser, userName, userUsername, userRole,
   onChannelClick, onDeleteChannel, onCreateChannel,
   onInvite, onToggleMembers, onProfileSettings, onOpenSettings, memberCount, onBack,
+  voiceState, voiceActions,
 }: ChannelSidebarProps) {
   const textChannels = groupDetail.channels.filter((c) => c.type === "TEXT");
   const voiceChannels = groupDetail.channels.filter((c) => c.type === "VOICE");
 
+  /* ── Track voice channel occupants via separate socket ── */
+  const [channelUsersMap, setChannelUsersMap] = useState<Record<string, VoiceUser[]>>({});
+  const [volumeOpen, setVolumeOpen] = useState<string | null>(null);
+
+  useEffect(() => {
+    const sock = io({ path: "/api/socketio", transports: ["websocket", "polling"] });
+    const handle = ({ channelId, users }: { channelId: string; users: VoiceUser[] }) => {
+      setChannelUsersMap(prev => ({ ...prev, [channelId]: users }));
+    };
+    sock.on("voice-channel-users", handle);
+    sock.on("connect", () => {
+      voiceChannels.forEach(ch => sock.emit("get-voice-channel-users", { channelId: ch.id }));
+    });
+    return () => { sock.disconnect(); };
+  }, [groupDetail.channels.length]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const isInVoice = voiceState?.isConnected && voiceState?.channelId;
+  const currentVoiceChannelId = voiceState?.channelId;
+
   return (
     <aside className="w-60 max-md:w-full bg-white dark:bg-neutral-900 border-r border-neutral-200 dark:border-white/5 flex flex-col h-full flex-shrink-0">
+      {/* ── Header ── */}
       <div className="p-3 border-b border-neutral-200 dark:border-white/5 flex items-center gap-2">
         {onBack && (
           <button onClick={onBack} className="md:hidden p-1 text-neutral-400 hover:text-neutral-600 dark:hover:text-white" aria-label="Back">
@@ -73,7 +137,9 @@ export default function ChannelSidebar({
         )}
       </div>
 
+      {/* ── Channels ── */}
       <nav className="flex-1 overflow-y-auto p-2 space-y-0.5" aria-label="Channels">
+        {/* Text channels */}
         <div className="flex items-center justify-between px-2 py-1">
           <span className="text-[11px] text-neutral-400 uppercase tracking-wider font-semibold">Текстовые</span>
           {canManage && (
@@ -117,37 +183,115 @@ export default function ChannelSidebar({
           </div>
         ))}
 
+        {/* Voice channels */}
         {voiceChannels.length > 0 && (
           <>
             <div className="flex items-center justify-between px-2 py-1 mt-3">
               <span className="text-[11px] text-neutral-400 uppercase tracking-wider font-semibold">Голосовые</span>
             </div>
-            {voiceChannels.map((ch) => (
-              <div key={ch.id} className="group flex items-center">
-                <button
-                  onClick={() => onChannelClick(ch)}
-                  className="flex-1 text-left px-2.5 py-1.5 rounded-lg flex items-center gap-2 text-neutral-600 dark:text-gray-400 hover:bg-neutral-100 dark:hover:bg-white/5 hover:text-neutral-900 dark:hover:text-white transition-all text-sm"
-                >
-                  <span className="text-base">{ch.icon || "\uD83C\uDF99\uFE0F"}</span>
-                  <span className="truncate">{ch.name}</span>
-                </button>
-                {canManage && (
-                  <button
-                    onClick={() => onDeleteChannel(ch.id)}
-                    className="opacity-0 group-hover:opacity-100 p-1 text-neutral-400 hover:text-red-500 transition-all"
-                    aria-label={`Delete ${ch.name}`}
-                  >
-                    <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                    </svg>
-                  </button>
-                )}
-              </div>
-            ))}
+            {voiceChannels.map((ch) => {
+              const isActive = currentVoiceChannelId === ch.id;
+              const previewUsers = channelUsersMap[ch.id] ?? [];
+              const connectedUsers = isActive && voiceState ? voiceState.users : [];
+              const displayUsers = isActive ? connectedUsers : previewUsers;
+
+              return (
+                <div key={ch.id}>
+                  {/* Channel button */}
+                  <div className="group flex items-center">
+                    <button
+                      onClick={() => {
+                        if (voiceActions && !isActive) {
+                          voiceActions.joinVoice(ch.id, ch.name);
+                        }
+                      }}
+                      className={`flex-1 text-left px-2.5 py-1.5 rounded-lg flex items-center gap-2 transition-all text-sm ${
+                        isActive
+                          ? "bg-green-50 dark:bg-green-500/10 text-green-700 dark:text-green-400"
+                          : "text-neutral-600 dark:text-gray-400 hover:bg-neutral-100 dark:hover:bg-white/5 hover:text-neutral-900 dark:hover:text-white"
+                      }`}
+                    >
+                      <span className="text-base">{ch.icon || "\uD83C\uDF99\uFE0F"}</span>
+                      <span className="truncate flex-1">{ch.name}</span>
+                      {displayUsers.length > 0 && !isActive && (
+                        <span className="text-[10px] text-neutral-400">{displayUsers.length}</span>
+                      )}
+                    </button>
+                    {canManage && (
+                      <button
+                        onClick={() => onDeleteChannel(ch.id)}
+                        className="opacity-0 group-hover:opacity-100 p-1 text-neutral-400 hover:text-red-500 transition-all"
+                        aria-label={`Delete ${ch.name}`}
+                      >
+                        <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                        </svg>
+                      </button>
+                    )}
+                  </div>
+
+                  {/* Users in voice channel (Discord style: vertical list under channel) */}
+                  {displayUsers.length > 0 && (
+                    <div className="ml-5 pl-2.5 border-l-2 border-neutral-200 dark:border-white/10 space-y-0.5 mb-1">
+                      {/* Local user shown first if connected */}
+                      {isActive && voiceState && (
+                        <VoiceUserRow
+                          name={userName}
+                          muted={voiceState.isMuted}
+                          speaking={voiceState.localSpeaking && !voiceState.isMuted}
+                          isLocal
+                        />
+                      )}
+                      {displayUsers.map(u => (
+                        <div key={u.socketId} className="group/user relative">
+                          <VoiceUserRow
+                            name={u.userName}
+                            muted={u.muted}
+                            speaking={isActive ? voiceState?.speakingUsers.has(u.socketId) ?? false : false}
+                          />
+                          {/* Per-user volume control (only when connected) */}
+                          {isActive && voiceActions && (
+                            <button
+                              onClick={() => setVolumeOpen(volumeOpen === u.socketId ? null : u.socketId)}
+                              className="absolute right-0 top-0.5 opacity-0 group-hover/user:opacity-100 p-0.5 text-neutral-400 hover:text-neutral-600 dark:hover:text-white transition-all"
+                              title="Громкость"
+                            >
+                              <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.536 8.464a5 5 0 010 7.072M12 6v12m0 0l-4-4m4 4l4-4" />
+                              </svg>
+                            </button>
+                          )}
+                          {/* Volume slider popup */}
+                          {volumeOpen === u.socketId && voiceActions && voiceState && (
+                            <div className="absolute left-full top-0 ml-2 z-50 bg-white dark:bg-neutral-800 border border-neutral-200 dark:border-white/10 rounded-lg shadow-lg p-2 w-36">
+                              <div className="text-[10px] text-neutral-400 mb-1 truncate">{u.userName}</div>
+                              <div className="flex items-center gap-2">
+                                <input
+                                  type="range"
+                                  min={10}
+                                  max={100}
+                                  value={voiceState.userVolumes.get(u.socketId) ?? 100}
+                                  onChange={(e) => voiceActions.setUserVolume(u.socketId, Number(e.target.value))}
+                                  className="flex-1 h-1 accent-violet-500 dark:accent-cyan-400"
+                                />
+                                <span className="text-[10px] text-neutral-500 w-7 text-right">
+                                  {voiceState.userVolumes.get(u.socketId) ?? 100}%
+                                </span>
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
           </>
         )}
       </nav>
 
+      {/* ── Bottom actions ── */}
       <div className="p-2 border-t border-neutral-200 dark:border-white/5 space-y-1">
         {canManage && (
           <button onClick={onInvite} className="w-full px-3 py-1.5 text-left text-sm text-violet-600 dark:text-cyan-400 hover:bg-violet-50 dark:hover:bg-cyan-400/10 rounded-lg transition-colors flex items-center gap-2">
@@ -165,12 +309,79 @@ export default function ChannelSidebar({
         </button>
       </div>
 
+      {/* ── Voice controls bar (when connected) ── */}
+      {isInVoice && voiceState && voiceActions && (
+        <div className="border-t border-neutral-200 dark:border-white/5 bg-neutral-50 dark:bg-white/[0.02]">
+          <div className="px-3 py-1.5 flex items-center gap-1.5">
+            <div className="w-1.5 h-1.5 rounded-full bg-green-400 animate-pulse" />
+            <span className="text-[11px] text-green-600 dark:text-green-400 font-medium truncate flex-1">
+              {voiceState.channelName}
+            </span>
+          </div>
+          <div className="flex items-center justify-center gap-1.5 px-3 pb-2">
+            {/* Mute */}
+            <VoiceControlBtn
+              active={voiceState.isMuted}
+              color="red"
+              onClick={voiceActions.toggleMute}
+              title={voiceState.isMuted ? "Вкл. микрофон" : "Выкл. микрофон"}
+            >
+              {voiceState.isMuted ? <MutedMicIcon /> : <MicIcon />}
+            </VoiceControlBtn>
+            {/* Deafen */}
+            <VoiceControlBtn
+              active={voiceState.isDeafened}
+              color="red"
+              onClick={voiceActions.toggleDeafen}
+              title={voiceState.isDeafened ? "Вкл. звук" : "Выкл. звук"}
+            >
+              {voiceState.isDeafened ? <DeafenOnIcon /> : <DeafenOffIcon />}
+            </VoiceControlBtn>
+            {/* Noise suppressor */}
+            <VoiceControlBtn
+              active={voiceState.nsEnabled && voiceState.nsStatus === "ready"}
+              color="green"
+              onClick={voiceActions.toggleNS}
+              title={voiceState.nsEnabled ? "Выкл. шумодав" : "Вкл. шумодав"}
+            >
+              <NsIcon />
+            </VoiceControlBtn>
+            {/* Screen share */}
+            <VoiceControlBtn
+              active={voiceState.isSharingScreen}
+              color="green"
+              onClick={voiceState.isSharingScreen ? voiceActions.stopScreenShare : voiceActions.startScreenShare}
+              title={voiceState.isSharingScreen ? "Стоп демонстрация" : "Демонстрация экрана"}
+              disabled={!voiceState.isSharingScreen && voiceState.screenSharerId !== null}
+            >
+              <ScreenShareIcon />
+            </VoiceControlBtn>
+            {/* Disconnect */}
+            <button
+              onClick={voiceActions.leaveVoice}
+              className="p-1.5 rounded-lg bg-red-500 text-white hover:bg-red-600 transition-colors"
+              title="Отключиться"
+            >
+              <HangupIcon />
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* ── User info ── */}
       <div className="p-2 border-t border-neutral-200 dark:border-white/5">
         <div className="flex items-center gap-2 px-2 py-1.5">
           <GlowAvatar user={myProfileUser} size={32} />
           <div className="min-w-0 flex-1">
             <div className="text-sm font-medium text-neutral-900 dark:text-white truncate">{userName}</div>
-            <div className="text-[10px] text-neutral-400 truncate">@{userUsername}</div>
+            {isInVoice ? (
+              <div className="text-[10px] text-green-500 dark:text-green-400 truncate flex items-center gap-1">
+                <span className="w-1.5 h-1.5 rounded-full bg-green-400 inline-block" />
+                В голосовом канале
+              </div>
+            ) : (
+              <div className="text-[10px] text-neutral-400 truncate">@{userUsername}</div>
+            )}
           </div>
           {userRole === "ADMIN" && (
             <button onClick={onProfileSettings} title="Настройки профиля" className="p-1.5 rounded-lg hover:bg-neutral-100 dark:hover:bg-white/10 text-neutral-400 hover:text-violet-500 dark:hover:text-violet-400 transition-colors flex-shrink-0" aria-label="Настройки профиля">
@@ -183,5 +394,118 @@ export default function ChannelSidebar({
         </div>
       </div>
     </aside>
+  );
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════ */
+/*  Voice User Row (Discord-style inline list item)                            */
+/* ═══════════════════════════════════════════════════════════════════════════ */
+
+function VoiceUserRow({ name, muted, speaking, isLocal }: {
+  name: string; muted: boolean; speaking: boolean; isLocal?: boolean;
+}) {
+  return (
+    <div className="flex items-center gap-2 py-0.5 px-1 rounded group/row hover:bg-neutral-100 dark:hover:bg-white/5 transition-colors">
+      <div className="relative">
+        <div className={`w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold transition-all ${
+          speaking
+            ? "bg-green-400/20 text-green-600 dark:text-green-400 ring-2 ring-green-400"
+            : "bg-neutral-200 dark:bg-white/10 text-neutral-600 dark:text-neutral-400"
+        }`}>
+          {name.charAt(0).toUpperCase()}
+        </div>
+        {muted && (
+          <div className="absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full bg-red-400 flex items-center justify-center">
+            <svg className="w-2 h-2 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M6 18L18 6" />
+            </svg>
+          </div>
+        )}
+      </div>
+      <span className={`text-[12px] truncate flex-1 ${
+        speaking ? "text-green-600 dark:text-green-400 font-medium" : "text-neutral-600 dark:text-neutral-400"
+      }`}>
+        {name}{isLocal ? " (Вы)" : ""}
+      </span>
+      {speaking && <AudioBars bars={3} color="bg-green-400" maxH={10} />}
+    </div>
+  );
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════ */
+/*  Voice Control Button                                                       */
+/* ═══════════════════════════════════════════════════════════════════════════ */
+
+function VoiceControlBtn({ onClick, active, color, title, children, disabled }: {
+  onClick: () => void; active: boolean; color: "red" | "green"; title: string; children: React.ReactNode; disabled?: boolean;
+}) {
+  const cls = active
+    ? color === "red"
+      ? "bg-red-100 dark:bg-red-500/20 text-red-500"
+      : "bg-green-100 dark:bg-green-500/20 text-green-500"
+    : "bg-neutral-100 dark:bg-white/8 text-neutral-500 dark:text-neutral-400";
+  return (
+    <button
+      onClick={onClick}
+      title={title}
+      disabled={disabled}
+      className={`p-1.5 rounded-lg transition-colors disabled:opacity-40 ${cls}`}
+    >
+      {children}
+    </button>
+  );
+}
+
+/* ── Icons ── */
+
+function MicIcon() {
+  return (
+    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" />
+    </svg>
+  );
+}
+function MutedMicIcon() {
+  return (
+    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z" />
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2" />
+    </svg>
+  );
+}
+function DeafenOffIcon() {
+  return (
+    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.536 8.464a5 5 0 010 7.072m2.828-9.9a9 9 0 010 12.728M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z" />
+    </svg>
+  );
+}
+function DeafenOnIcon() {
+  return (
+    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z" />
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2" />
+    </svg>
+  );
+}
+function NsIcon() {
+  return (
+    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12-3c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zM9 10l12-3" />
+    </svg>
+  );
+}
+function ScreenShareIcon() {
+  return (
+    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+    </svg>
+  );
+}
+function HangupIcon() {
+  return (
+    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 8l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2M5 3a2 2 0 00-2 2v1c0 8.284 6.716 15 15 15h1a2 2 0 002-2v-3.28a1 1 0 00-.684-.948l-4.493-1.498a1 1 0 00-1.21.502l-1.13 2.257a11.042 11.042 0 01-5.516-5.517l2.257-1.128a1 1 0 00.502-1.21L9.228 3.683A1 1 0 008.279 3H5z" />
+    </svg>
   );
 }
