@@ -74,14 +74,28 @@ export default function DMPanel({ currentUserId, onClose, initialFriendId }: DMP
   useEffect(() => {
     fetch("/api/dm")
       .then((r) => { if (!r.ok) throw new Error(r.statusText); return r.json(); })
-      .then((convs: Conversation[]) => {
+      .then(async (convs: Conversation[]) => {
         setConversations(convs);
         if (initialFriendId && !initialHandled) {
+          setInitialHandled(true);
           const existing = convs.find((c: Conversation) => c.other.id === initialFriendId);
           if (existing) {
             setSelectedConv(existing.id);
+          } else {
+            try {
+              const res = await fetch("/api/dm", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ userId: initialFriendId }),
+              });
+              if (res.ok) {
+                const data = await res.json();
+                setSelectedConv(data.id);
+                const refreshRes = await fetch("/api/dm");
+                if (refreshRes.ok) setConversations(await refreshRes.json());
+              }
+            } catch { /* ignore */ }
           }
-          setInitialHandled(true);
         }
       })
       .catch(() => setConversations([]))
@@ -271,7 +285,7 @@ export default function DMPanel({ currentUserId, onClose, initialFriendId }: DMP
   }
 
   return (
-    <div className="flex h-full">
+    <div className="flex flex-1 h-full">
       {/* Conversations list */}
       <aside className={`w-72 max-md:w-full border-r border-neutral-200 dark:border-white/5 flex flex-col ${selectedConv ? "max-md:hidden" : ""}`}>
         <div className="p-3 border-b border-neutral-200 dark:border-white/5 flex items-center justify-between">

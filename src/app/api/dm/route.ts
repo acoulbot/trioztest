@@ -47,10 +47,12 @@ export async function POST(req: NextRequest) {
   const banned = await checkBan(session.user.id);
   if (banned) return banned;
 
-  const { username } = await req.json();
-  if (!username) return NextResponse.json({ error: "Username required" }, { status: 400 });
+  const { username, userId: targetUserId } = await req.json();
+  if (!username && !targetUserId) return NextResponse.json({ error: "Username or userId required" }, { status: 400 });
 
-  const target = await prisma.user.findUnique({ where: { username } });
+  const target = targetUserId
+    ? await prisma.user.findUnique({ where: { id: targetUserId } })
+    : await prisma.user.findUnique({ where: { username } });
   if (!target) return NextResponse.json({ error: "Пользователь не найден" }, { status: 404 });
   if (target.id === session.user.id) return NextResponse.json({ error: "Нельзя написать себе" }, { status: 400 });
 
