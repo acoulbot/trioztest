@@ -287,7 +287,7 @@ export default function DMPanel({ currentUserId, onClose, initialFriendId }: DMP
   return (
     <div className="flex flex-1 h-full">
       {/* Conversations list */}
-      <aside className={`w-72 max-md:w-full border-r border-neutral-200 dark:border-white/5 flex flex-col ${selectedConv ? "max-md:hidden" : ""}`}>
+      <aside className={`w-60 max-md:w-full cn-sidebar flex-shrink-0 flex flex-col ${selectedConv ? "max-md:hidden" : ""}`}>
         <div className="p-3 border-b border-neutral-200 dark:border-white/5 flex items-center justify-between">
           <h2 className="font-bold text-neutral-900 dark:text-white text-sm">Личные сообщения</h2>
           {onClose && (
@@ -306,7 +306,7 @@ export default function DMPanel({ currentUserId, onClose, initialFriendId }: DMP
               <button
                 key={conv.id}
                 onClick={() => setSelectedConv(conv.id)}
-                className={`w-full text-left p-3 flex items-center gap-3 hover:bg-neutral-100 dark:hover:bg-white/5 transition-colors ${selectedConv === conv.id ? "bg-violet-50 dark:bg-cyan-400/10" : ""}`}
+                className={`w-full text-left p-3 flex items-center gap-3 hover:bg-neutral-100 dark:hover:bg-white/5 transition-colors ${selectedConv === conv.id ? "bg-[var(--cn-accent-dim)] border-l-2 border-[var(--cn-accent)]" : ""}`}
               >
                 <GlowAvatar user={conv.other} size={36} onlineColor={isOnline(conv.other.lastSeen) ? "green" : undefined} />
                 <div className="flex-1 min-w-0">
@@ -423,7 +423,7 @@ export default function DMPanel({ currentUserId, onClose, initialFriendId }: DMP
                     socketRef.current?.emit("dm-typing", { convId: selectedConv });
                   }}
                   placeholder="Написать сообщение..."
-                  className="flex-1 px-3 py-2 bg-neutral-100 dark:bg-white/5 border border-neutral-200 dark:border-white/10 rounded-xl text-sm text-neutral-900 dark:text-white placeholder:text-neutral-400 outline-none focus:border-violet-500 dark:focus:border-cyan-400 transition-colors"
+                  className="flex-1 px-3 py-2 bg-[var(--cn-accent-dim)] border border-[var(--cn-border)] rounded-xl text-sm text-[var(--cn-text)] placeholder:text-[var(--cn-muted)] outline-none focus:border-[var(--cn-accent)] transition-colors"
                   maxLength={4000}
                 />
                 {input.trim() ? (

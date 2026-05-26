@@ -330,14 +330,6 @@ export default function MessageArea({
     try { return JSON.parse(raw); } catch { return []; }
   };
 
-  const typingText = (() => {
-    const names = Array.from(typingUsers.values()).filter((n) => n);
-    if (names.length === 0) return null;
-    if (names.length === 1) return `${names[0]} печатает...`;
-    if (names.length <= 3) return `${names.join(", ")} печатают...`;
-    return "Несколько человек печатают...";
-  })();
-
   if (loading) {
     return (
       <div className="flex-1 flex items-center justify-center">
@@ -349,7 +341,7 @@ export default function MessageArea({
   return (
     <div className="flex-1 flex flex-col h-full min-w-0 relative">
       {/* Header */}
-      <header className="h-12 bg-white/50 dark:bg-neutral-900/50 border-b border-neutral-200 dark:border-white/5 flex items-center px-4 gap-2 backdrop-blur-sm flex-shrink-0">
+      <header className="h-12 border-b bg-[var(--cn-main)]/80 backdrop-blur-sm flex items-center px-4 gap-2 flex-shrink-0">
         {onBack && (
           <button onClick={onBack} className="md:hidden p-1 text-neutral-400 hover:text-neutral-600 dark:hover:text-white" aria-label="Back to channels">
             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -430,7 +422,7 @@ export default function MessageArea({
                         if (e.key === "Enter") saveEdit();
                         if (e.key === "Escape") cancelEdit();
                       }}
-                      className="w-full bg-neutral-50 dark:bg-neutral-700 border border-neutral-200 dark:border-white/10 rounded-lg px-3 py-1.5 text-sm text-neutral-900 dark:text-white"
+                      className="w-full bg-[var(--cn-accent-dim)] border border-[var(--cn-border)] rounded-lg px-3 py-1.5 text-sm text-neutral-900 dark:text-white"
                       autoFocus
                     />
                     <div className="flex gap-1">
@@ -477,7 +469,7 @@ export default function MessageArea({
                         className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs border transition-colors ${
                           data.userReacted
                             ? "bg-violet-50 dark:bg-cyan-400/10 border-violet-200 dark:border-cyan-400/30 text-violet-600 dark:text-cyan-400"
-                            : "bg-neutral-50 dark:bg-white/5 border-neutral-200 dark:border-white/10 text-neutral-500 hover:bg-neutral-100 dark:hover:bg-white/10"
+                            : "bg-[var(--cn-accent-dim)] border-[var(--cn-border)] text-neutral-500 hover:bg-[var(--cn-hover)]"
                         }`}
                       >
                         <span>{emoji}</span>
@@ -500,9 +492,9 @@ export default function MessageArea({
                         Реакция
                       </button>
                       {showEmojiPicker === msg.id && (
-                        <div className="absolute bottom-full left-0 mb-1 bg-white dark:bg-neutral-800 border border-neutral-200 dark:border-white/10 rounded-lg p-1.5 flex gap-0.5 shadow-lg z-10">
+                        <div className="absolute bottom-full left-0 mb-1 bg-[var(--cn-sidebar)] border border-[var(--cn-border)] rounded-lg p-1.5 flex gap-0.5 shadow-lg z-10">
                           {["👍", "❤️", "😂", "😮", "😢", "🔥", "👏", "🎉"].map((e) => (
-                            <button key={e} onClick={() => toggleReaction(msg.id, e)} className="w-7 h-7 text-lg hover:bg-neutral-100 dark:hover:bg-white/10 rounded">{e}</button>
+                            <button key={e} onClick={() => toggleReaction(msg.id, e)} className="w-7 h-7 text-lg hover:bg-[var(--cn-hover)] rounded">{e}</button>
                           ))}
                         </div>
                       )}
@@ -558,7 +550,7 @@ export default function MessageArea({
 
       {/* Reply indicator */}
       {replyTo && (
-        <div className="px-4 py-2 border-t border-neutral-200 dark:border-white/5 flex items-center gap-2 text-xs text-neutral-500 dark:text-gray-400 bg-violet-50/50 dark:bg-cyan-400/5">
+        <div className="px-4 py-2 border-t border-[var(--cn-border)] flex items-center gap-2 text-xs text-neutral-500 dark:text-gray-400 bg-[var(--cn-accent-dim)]">
           <div className="w-0.5 h-4 bg-violet-400 dark:bg-cyan-400 rounded-full" />
           <span>Ответ для <strong className="text-neutral-700 dark:text-gray-300">{replyTo.name}</strong>: {replyTo.content}</span>
           <button onClick={() => setReplyTo(null)} className="ml-auto text-neutral-400 hover:text-neutral-600 dark:hover:text-white">
@@ -569,7 +561,7 @@ export default function MessageArea({
 
       {/* Input */}
       {!isBanned ? (
-        <div className="p-3 border-t border-neutral-200 dark:border-white/5">
+        <div className="p-3 border-t border-[var(--cn-border)]">
           {recordingVoice ? (
             <VoiceRecorder onRecorded={handleVoiceRecorded} />
           ) : (
@@ -611,7 +603,7 @@ export default function MessageArea({
           )}
         </div>
       ) : (
-        <div className="p-3 border-t border-neutral-200 dark:border-white/5 text-center text-red-400/60 text-sm">
+        <div className="p-3 border-t border-[var(--cn-border)] text-center text-red-400/60 text-sm">
           Отправка сообщений ограничена
         </div>
       )}

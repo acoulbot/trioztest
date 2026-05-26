@@ -113,7 +113,7 @@ export default function FriendsPanel({ onMessageFriend }: FriendsPanelProps) {
   ];
 
   return (
-    <div className="w-72 bg-white dark:bg-neutral-900 border-r border-neutral-200 dark:border-white/5 flex flex-col h-full flex-shrink-0">
+    <div className="w-60 cn-sidebar flex flex-col h-full flex-shrink-0">
       {/* Header */}
       <div className="p-3 border-b border-neutral-200 dark:border-white/5 flex items-center justify-between flex-shrink-0">
         <span className="text-sm font-semibold text-neutral-900 dark:text-white">Друзья</span>
@@ -133,12 +133,12 @@ export default function FriendsPanel({ onMessageFriend }: FriendsPanelProps) {
           >
             {t.label}
             {t.count !== undefined && t.count > 0 && (
-              <span className="ml-1 px-1.5 py-0.5 rounded-full bg-violet-100 dark:bg-cyan-400/20 text-violet-600 dark:text-cyan-400 text-[10px]">
+              <span className="ml-1 px-1.5 py-0.5 rounded-full bg-[var(--cn-accent-dim)] text-[var(--cn-accent-text)] text-[10px]">
                 {t.count}
               </span>
             )}
             {tab === t.key && (
-              <motion.div layoutId="friends-tab" className="absolute bottom-0 left-0 right-0 h-0.5 bg-violet-500 dark:bg-cyan-400" />
+              <motion.div layoutId="friends-tab" className="absolute bottom-0 left-0 right-0 h-0.5 bg-[var(--cn-accent)]" />
             )}
           </button>
         ))}
@@ -158,7 +158,7 @@ export default function FriendsPanel({ onMessageFriend }: FriendsPanelProps) {
                 </div>
               ) : (
                 data.friends.map((f) => (
-                  <div key={f.id} className="flex items-center gap-2 px-2 py-2 rounded-lg hover:bg-neutral-100 dark:hover:bg-white/5 transition-colors group">
+                  <div key={f.id} className="flex items-center gap-2 px-2 py-2 rounded-lg hover:bg-[var(--cn-hover)] transition-colors group">
                     <div className="relative flex-shrink-0">
                       <GlowAvatar
                         user={{ id: f.id, name: f.name, avatar: f.avatar, role: f.role ?? "USER", avatarGlowEnabled: f.avatarGlowEnabled, avatarGlowColors: f.avatarGlowColors }}
@@ -219,7 +219,7 @@ export default function FriendsPanel({ onMessageFriend }: FriendsPanelProps) {
               ) : (
                 <>
                   {data.pending.map((r) => (
-                    <div key={r.id} className="px-2 py-2 rounded-lg bg-neutral-50 dark:bg-white/5 space-y-2">
+                    <div key={r.id} className="px-2 py-2 rounded-lg bg-[var(--cn-accent-dim)] space-y-2">
                       <div className="flex items-center gap-2">
                         <div className="w-7 h-7 rounded-full bg-gradient-to-br from-green-400/30 to-emerald-400/30 flex items-center justify-center text-xs font-bold text-neutral-700 dark:text-white flex-shrink-0">
                           {r.sender.name.charAt(0).toUpperCase()}
@@ -245,7 +245,7 @@ export default function FriendsPanel({ onMessageFriend }: FriendsPanelProps) {
                     <>
                       <div className="text-[11px] text-neutral-400 uppercase tracking-wider px-2 pt-2">Отправленные</div>
                       {data.sent.map((r) => (
-                        <div key={r.id} className="flex items-center gap-2 px-2 py-2 rounded-lg bg-neutral-50 dark:bg-white/5">
+                        <div key={r.id} className="flex items-center gap-2 px-2 py-2 rounded-lg bg-[var(--cn-accent-dim)]">
                           <div className="w-7 h-7 rounded-full bg-gradient-to-br from-amber-400/30 to-orange-400/30 flex items-center justify-center text-xs font-bold text-neutral-700 dark:text-white flex-shrink-0">
                             {r.receiver.name.charAt(0).toUpperCase()}
                           </div>
@@ -271,7 +271,7 @@ export default function FriendsPanel({ onMessageFriend }: FriendsPanelProps) {
                 onChange={(e) => setUsername(e.target.value)}
                 onKeyDown={(e) => e.key === "Enter" && sendRequest()}
                 placeholder="@username"
-                className="w-full bg-neutral-50 dark:bg-neutral-800 border border-neutral-200 dark:border-white/10 rounded-xl px-3 py-2.5 text-sm text-neutral-900 dark:text-white placeholder:text-neutral-400"
+                className="w-full bg-[var(--cn-accent-dim)] border border-[var(--cn-border)] rounded-xl px-3 py-2.5 text-sm text-neutral-900 dark:text-white placeholder:text-neutral-400"
                 autoFocus
               />
               <button

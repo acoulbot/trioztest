@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { io } from "socket.io-client";
-import GlowAvatar, { GlowAvatarUser } from "@/components/ui/GlowAvatar";
+import { GlowAvatarUser } from "@/components/ui/GlowAvatar";
 import AudioBars from "@/components/ui/AudioBars";
 
 /* ─── Types ─── */
@@ -85,9 +85,9 @@ interface ChannelSidebarProps {
 
 export default function ChannelSidebar({
   groupDetail, selectedChannel, unreadCounts, canManage,
-  myProfileUser, userName, userUsername, userRole,
+  myProfileUser: _myProfileUser, userName, userUsername: _userUsername, userRole: _userRole,
   onChannelClick, onDeleteChannel, onCreateChannel,
-  onInvite, onToggleMembers, onProfileSettings, onOpenSettings, memberCount, onBack,
+  onInvite, onToggleMembers, onProfileSettings: _onProfileSettings, onOpenSettings, memberCount, onBack,
   voiceState, voiceActions,
 }: ChannelSidebarProps) {
   const textChannels = groupDetail.channels.filter((c) => c.type === "TEXT");
@@ -113,9 +113,9 @@ export default function ChannelSidebar({
   const currentVoiceChannelId = voiceState?.channelId;
 
   return (
-    <aside className="w-60 max-md:w-full bg-white dark:bg-neutral-900 border-r border-neutral-200 dark:border-white/5 flex flex-col h-full flex-shrink-0">
+    <aside className="cn-sidebar w-60 max-md:w-full flex flex-col h-full flex-shrink-0">
       {/* ── Header ── */}
-      <div className="p-3 border-b border-neutral-200 dark:border-white/5 flex items-center gap-2">
+      <div className="p-3 flex items-center gap-2" style={{ borderBottom: "1px solid var(--cn-border)", flexShrink: 0 }}>
         {onBack && (
           <button onClick={onBack} className="md:hidden p-1 text-neutral-400 hover:text-neutral-600 dark:hover:text-white" aria-label="Back">
             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -138,7 +138,7 @@ export default function ChannelSidebar({
       </div>
 
       {/* ── Channels ── */}
-      <nav className="flex-1 overflow-y-auto p-2 space-y-0.5" aria-label="Channels">
+      <nav className="flex-1 overflow-y-auto p-2 space-y-0.5" aria-label="Каналы">
         {/* Text channels */}
         <div className="flex items-center justify-between px-2 py-1">
           <span className="text-[11px] text-neutral-400 uppercase tracking-wider font-semibold">Текстовые</span>
@@ -154,10 +154,8 @@ export default function ChannelSidebar({
           <div key={ch.id} className="group flex items-center">
             <button
               onClick={() => onChannelClick(ch)}
-              className={`flex-1 text-left px-2.5 py-1.5 rounded-lg flex items-center gap-2 transition-all text-sm ${
-                selectedChannel === ch.id
-                  ? "bg-violet-50 dark:bg-cyan-400/10 text-violet-700 dark:text-cyan-400"
-                  : "text-neutral-600 dark:text-gray-400 hover:bg-neutral-100 dark:hover:bg-white/5 hover:text-neutral-900 dark:hover:text-white"
+              className={`cn-channel-btn flex-1 text-left px-2.5 py-1.5 rounded-lg flex items-center gap-2 transition-all text-sm ${
+                selectedChannel === ch.id ? "active" : ""
               }`}
               aria-current={selectedChannel === ch.id ? "page" : undefined}
             >
@@ -205,10 +203,8 @@ export default function ChannelSidebar({
                           voiceActions.joinVoice(ch.id, ch.name);
                         }
                       }}
-                      className={`flex-1 text-left px-2.5 py-1.5 rounded-lg flex items-center gap-2 transition-all text-sm ${
-                        isActive
-                          ? "bg-green-50 dark:bg-green-500/10 text-green-700 dark:text-green-400"
-                          : "text-neutral-600 dark:text-gray-400 hover:bg-neutral-100 dark:hover:bg-white/5 hover:text-neutral-900 dark:hover:text-white"
+                      className={`cn-channel-btn flex-1 text-left px-2.5 py-1.5 rounded-lg flex items-center gap-2 transition-all text-sm ${
+                        isActive ? "active" : ""
                       }`}
                     >
                       <span className="text-base">{ch.icon || "\uD83C\uDF99\uFE0F"}</span>
@@ -368,31 +364,6 @@ export default function ChannelSidebar({
         </div>
       )}
 
-      {/* ── User info ── */}
-      <div className="p-2 border-t border-neutral-200 dark:border-white/5">
-        <div className="flex items-center gap-2 px-2 py-1.5">
-          <GlowAvatar user={myProfileUser} size={32} />
-          <div className="min-w-0 flex-1">
-            <div className="text-sm font-medium text-neutral-900 dark:text-white truncate">{userName}</div>
-            {isInVoice ? (
-              <div className="text-[10px] text-green-500 dark:text-green-400 truncate flex items-center gap-1">
-                <span className="w-1.5 h-1.5 rounded-full bg-green-400 inline-block" />
-                В голосовом канале
-              </div>
-            ) : (
-              <div className="text-[10px] text-neutral-400 truncate">@{userUsername}</div>
-            )}
-          </div>
-          {userRole === "ADMIN" && (
-            <button onClick={onProfileSettings} title="Настройки профиля" className="p-1.5 rounded-lg hover:bg-neutral-100 dark:hover:bg-white/10 text-neutral-400 hover:text-violet-500 dark:hover:text-violet-400 transition-colors flex-shrink-0" aria-label="Настройки профиля">
-              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-              </svg>
-            </button>
-          )}
-        </div>
-      </div>
     </aside>
   );
 }
