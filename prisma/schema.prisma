@@ -93,6 +93,7 @@ model GroupMember {
   groupId       String
   role          String              @default("MEMBER")
   rulesAccepted Boolean             @default(false)
+  sortOrder     Int                 @default(0)
   user          User                @relation(fields: [userId], references: [id], onDelete: Cascade)
   group         Group               @relation(fields: [groupId], references: [id], onDelete: Cascade)
   tags          GroupMemberRole[]
