@@ -91,6 +91,7 @@ export default function ChannelSidebar({
   voiceState, voiceActions,
 }: ChannelSidebarProps) {
   const textChannels = groupDetail.channels.filter((c) => c.type === "TEXT");
+  const newsChannels = groupDetail.channels.filter((c) => c.type === "NEWS");
   const voiceChannels = groupDetail.channels.filter((c) => c.type === "VOICE");
 
   /* ── Track voice channel occupants via separate socket ── */
@@ -139,8 +140,47 @@ export default function ChannelSidebar({
 
       {/* ── Channels ── */}
       <nav className="flex-1 overflow-y-auto p-2 space-y-0.5" aria-label="Каналы">
+        {/* News channels */}
+        {newsChannels.length > 0 && (
+          <>
+            <div className="flex items-center justify-between px-2 py-1">
+              <span className="text-[11px] text-amber-500 dark:text-amber-400 uppercase tracking-wider font-semibold">Новости</span>
+            </div>
+            {newsChannels.map((ch) => (
+              <div key={ch.id} className="group flex items-center">
+                <button
+                  onClick={() => onChannelClick(ch)}
+                  className={`cn-channel-btn flex-1 text-left px-2.5 py-1.5 rounded-lg flex items-center gap-2 transition-all text-sm ${
+                    selectedChannel === ch.id ? "active" : ""
+                  }`}
+                  aria-current={selectedChannel === ch.id ? "page" : undefined}
+                >
+                  <span className="text-base">{ch.icon || "\uD83D\uDCE2"}</span>
+                  <span className="truncate flex-1">{ch.name}</span>
+                  {(unreadCounts[ch.id] ?? 0) > 0 && (
+                    <span className="ml-auto bg-amber-500 text-white text-[10px] px-1.5 py-0.5 rounded-full font-bold min-w-[18px] text-center">
+                      {unreadCounts[ch.id]}
+                    </span>
+                  )}
+                </button>
+                {canManage && (
+                  <button
+                    onClick={() => onDeleteChannel(ch.id)}
+                    className="opacity-0 group-hover:opacity-100 p-1 text-neutral-400 hover:text-red-500 transition-all"
+                    aria-label={`Delete ${ch.name}`}
+                  >
+                    <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                  </button>
+                )}
+              </div>
+            ))}
+          </>
+        )}
+
         {/* Text channels */}
-        <div className="flex items-center justify-between px-2 py-1">
+        <div className="flex items-center justify-between px-2 py-1 mt-1">
           <span className="text-[11px] text-neutral-400 uppercase tracking-wider font-semibold">Текстовые</span>
           {canManage && (
             <button onClick={onCreateChannel} className="text-neutral-400 hover:text-violet-500 dark:hover:text-cyan-400 transition-colors" aria-label="Создать канал">
