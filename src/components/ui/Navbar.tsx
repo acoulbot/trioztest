@@ -32,9 +32,9 @@ export default function Navbar() {
 
   const navLinks = [
     { href: "/", label: "Главная" },
-    { href: "/projects", label: "Т.Р.И.О.Z" },
-    { href: "/pero", label: "Перо Измерений" },
     { href: "/connect", label: "TZ.Connect" },
+    { href: "/projects", label: "T.R.I.O.Z." },
+    { href: "/pero", label: "Перо измерений" },
     { href: "/games", label: "Игры" },
     { href: "/library", label: "TZ.Library" },
   ];
