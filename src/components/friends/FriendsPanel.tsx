@@ -109,9 +109,12 @@ export default function FriendsPanel({ onClose }: { onClose: () => void }) {
   ];
 
   return (
-    <div className="w-80 bg-white dark:bg-neutral-900 border-l border-neutral-200 dark:border-white/5 flex flex-col h-full">
+    <>
+    {/* Backdrop */}
+    <div className="fixed inset-0 z-40 bg-black/30" onClick={onClose} />
+    <div className="fixed left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 z-50 w-[360px] max-h-[70vh] bg-white dark:bg-neutral-900 rounded-2xl shadow-2xl border border-neutral-200 dark:border-white/10 flex flex-col overflow-hidden">
       {/* Header */}
-      <div className="p-3 border-b border-neutral-200 dark:border-white/5 flex items-center justify-between">
+      <div className="p-3 border-b border-neutral-200 dark:border-white/5 flex items-center justify-between flex-shrink-0">
         <span className="text-sm font-semibold text-neutral-900 dark:text-white">Друзья</span>
         <button onClick={onClose} className="text-neutral-400 hover:text-neutral-600 dark:hover:text-white transition-colors">
           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -267,5 +270,6 @@ export default function FriendsPanel({ onClose }: { onClose: () => void }) {
         </AnimatePresence>
       </div>
     </div>
+    </>
   );
 }
