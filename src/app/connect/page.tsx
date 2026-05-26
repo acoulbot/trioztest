@@ -812,7 +812,7 @@ function ConnectPageInner() {
   const userRole = (session.user as { role?: string }).role ?? "USER";
 
   return (
-    <div className="min-h-screen bg-neutral-50 dark:bg-neutral-950 flex h-[calc(100vh-64px)]">
+    <div className="bg-neutral-50 dark:bg-neutral-950 flex h-[calc(100vh-64px)] overflow-hidden">
       {/* Desktop: Navigation sidebar — Column 1 */}
       <GroupSidebar
         groups={groups}

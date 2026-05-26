@@ -332,7 +332,7 @@ export default function DMPanel({ currentUserId, onClose, initialFriendId }: DMP
       </aside>
 
       {/* Messages area */}
-      <main className={`flex-1 flex flex-col ${!selectedConv ? "max-md:hidden" : ""}`}>
+      <main className={`flex-1 flex flex-col min-h-0 ${!selectedConv ? "max-md:hidden" : ""}`}>
         {selectedConv && selectedOther ? (
           <>
             <div className="p-3 border-b border-neutral-200 dark:border-white/5 flex items-center gap-3">
