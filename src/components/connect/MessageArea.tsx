@@ -8,6 +8,7 @@ import GlowAvatar from "@/components/ui/GlowAvatar";
 import TypingIndicator from "@/components/ui/TypingIndicator";
 import VoiceRecorder from "@/components/ui/VoiceRecorder";
 import VoicePlayer from "@/components/ui/VoicePlayer";
+import EmojiPicker from "@/components/connect/EmojiPicker";
 
 interface MessageUser {
   id: string;
@@ -25,6 +26,7 @@ interface Attachment {
   size: number;
   type: string;
   isImage: boolean;
+  isVideo?: boolean;
   isVoice?: boolean;
   duration?: number;
 }
@@ -60,14 +62,16 @@ interface MessageAreaProps {
   channelId: string;
   channelName: string;
   channelIcon: string | null;
+  channelType?: string;
   currentUserId: string;
   currentUserRole: string;
+  groupRole?: string;
   isBanned: boolean;
   onBack?: () => void;
 }
 
 export default function MessageArea({
-  channelId, channelName, channelIcon, currentUserId, currentUserRole, isBanned, onBack,
+  channelId, channelName, channelIcon, channelType, currentUserId, currentUserRole, groupRole, isBanned, onBack,
 }: MessageAreaProps) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [newMessage, setNewMessage] = useState("");
@@ -83,6 +87,11 @@ export default function MessageArea({
   const [sending, setSending] = useState(false);
   const [recordingVoice, setRecordingVoice] = useState(false);
   const [showScrollBtn, setShowScrollBtn] = useState(false);
+  const [showInputEmoji, setShowInputEmoji] = useState(false);
+
+  const isNewsChannel = channelType === "NEWS";
+  const canPostInNews = groupRole === "OWNER" || groupRole === "ADMIN" || groupRole === "MODERATOR";
+  const canSend = !isBanned && (!isNewsChannel || canPostInNews);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
@@ -349,8 +358,13 @@ export default function MessageArea({
             </svg>
           </button>
         )}
-        <span aria-hidden="true">{channelIcon || "\uD83D\uDCAC"}</span>
+        <span aria-hidden="true">{channelIcon || (isNewsChannel ? "\uD83D\uDCE2" : "\uD83D\uDCAC")}</span>
         <span className="font-medium text-neutral-900 dark:text-white text-sm">{channelName}</span>
+        {isNewsChannel && (
+          <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-amber-100 dark:bg-amber-400/10 text-amber-600 dark:text-amber-400 font-medium">
+            Новости
+          </span>
+        )}
       </header>
 
       {/* Messages */}
@@ -437,6 +451,16 @@ export default function MessageArea({
                       att.isVoice ? (
                         <div key={i} className="mt-1.5">
                           <VoicePlayer url={att.url} duration={att.duration} />
+                        </div>
+                      ) : att.isVideo ? (
+                        <div key={i} className="mt-2 max-w-md">
+                          <video
+                            src={att.url}
+                            controls
+                            preload="metadata"
+                            className="rounded-lg max-h-72 w-full"
+                          />
+                          <div className="text-[10px] text-neutral-400 mt-0.5">{att.name} ({Math.round(att.size / 1024 / 1024 * 10) / 10}MB)</div>
                         </div>
                       ) : att.isImage ? (
                         <div key={i} className="mt-2 max-w-xs">
@@ -560,12 +584,34 @@ export default function MessageArea({
       )}
 
       {/* Input */}
-      {!isBanned ? (
+      {canSend ? (
         <div className="p-3 border-t border-[var(--cn-border)]">
           {recordingVoice ? (
             <VoiceRecorder onRecorded={handleVoiceRecorded} />
           ) : (
             <form onSubmit={sendMessage} className="flex gap-2">
+              {/* Emoji picker button */}
+              <div className="relative">
+                <button
+                  type="button"
+                  onClick={() => setShowInputEmoji(!showInputEmoji)}
+                  className="p-2.5 text-neutral-400 hover:text-violet-500 dark:hover:text-cyan-400 transition-colors"
+                  aria-label="Emojis"
+                >
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <circle cx="12" cy="12" r="10" strokeWidth={2} />
+                    <path strokeLinecap="round" strokeWidth={2} d="M8 14s1.5 2 4 2 4-2 4-2" />
+                    <circle cx="9" cy="9" r="1" fill="currentColor" stroke="none" />
+                    <circle cx="15" cy="9" r="1" fill="currentColor" stroke="none" />
+                  </svg>
+                </button>
+                {showInputEmoji && (
+                  <EmojiPicker
+                    onSelect={(emoji) => setNewMessage((prev) => prev + emoji)}
+                    onClose={() => setShowInputEmoji(false)}
+                  />
+                )}
+              </div>
               <button
                 type="button"
                 onClick={() => fileInputRef.current?.click()}
@@ -581,12 +627,12 @@ export default function MessageArea({
                   </svg>
                 )}
               </button>
-              <input ref={fileInputRef} type="file" className="hidden" onChange={handleFileUpload} accept="image/*,.pdf,.doc,.docx,.txt" />
+              <input ref={fileInputRef} type="file" className="hidden" onChange={handleFileUpload} accept="image/*,video/mp4,video/webm,video/quicktime,.pdf,.doc,.docx,.txt" />
               <input
                 type="text"
                 value={newMessage}
                 onChange={(e) => { setNewMessage(e.target.value); emitTyping(); }}
-                placeholder={`Написать в #${channelName}...`}
+                placeholder={isNewsChannel ? `Новость в #${channelName}...` : `Написать в #${channelName}...`}
                 className="input-field flex-1 !py-2.5"
                 aria-label={`Message ${channelName}`}
               />
@@ -603,8 +649,8 @@ export default function MessageArea({
           )}
         </div>
       ) : (
-        <div className="p-3 border-t border-[var(--cn-border)] text-center text-red-400/60 text-sm">
-          Отправка сообщений ограничена
+        <div className="p-3 border-t border-[var(--cn-border)] text-center text-neutral-400/60 text-sm">
+          {isNewsChannel ? "Только администраторы могут публиковать новости" : "Отправка сообщений ограничена"}
         </div>
       )}
     </div>
