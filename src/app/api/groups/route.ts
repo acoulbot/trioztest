@@ -19,7 +19,7 @@ export async function GET() {
       _count: { select: { members: true, channels: true } },
       owner: { select: { id: true, name: true, username: true } },
     },
-    orderBy: { createdAt: "asc" },
+    orderBy: [{ isMain: "desc" }, { createdAt: "asc" }],
   });
 
   return NextResponse.json(groups);

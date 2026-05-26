@@ -36,6 +36,7 @@ interface Group {
   icon: string | null;
   description: string;
   ownerId: string;
+  isMain?: boolean;
   _count: { members: number; channels: number };
 }
 
@@ -45,6 +46,8 @@ interface Channel {
   type: string;
   icon: string | null;
   groupId: string;
+  serviceId?: string | null;
+  isRestricted?: boolean;
   _count: { members: number; messages: number };
 }
 
@@ -59,6 +62,7 @@ interface GroupDetail extends Group {
   myRole: string;
   rules: string;
   rulesAccepted: boolean;
+  isMain?: boolean;
   createdAt: string;
   owner: { id: string; name: string; username: string };
   channels: Channel[];
@@ -434,6 +438,23 @@ function GroupInfoPanel({ group, canManage, onUpdateRules }: { group: GroupDetai
         <RoleManager groupId={group.id} canManage={canManage} />
       </div>
 
+      {/* Service sync for main community */}
+      {group.isMain && canManage && (
+        <div className="mt-6 border border-neutral-200 dark:border-white/10 rounded-xl p-4">
+          <h4 className="text-sm font-semibold text-neutral-900 dark:text-white mb-2">Синхронизация услуг</h4>
+          <p className="text-xs text-neutral-400 mb-3">Обновить каналы услуг из админки</p>
+          <button
+            onClick={async () => {
+              await fetch("/api/groups/main-community", { method: "PUT" });
+              window.location.reload();
+            }}
+            className="px-4 py-2 bg-gradient-to-r from-violet-600 to-indigo-600 dark:from-cyan-500 dark:to-cyan-400 text-white dark:text-neutral-900 rounded-xl text-sm font-medium hover:shadow-lg transition-all"
+          >
+            Синхронизировать
+          </button>
+        </div>
+      )}
+
       <p className="text-center text-neutral-400 text-xs mt-6">Выберите канал для общения</p>
     </div>
   );
@@ -563,7 +584,7 @@ function GroupSettingsModal({ group, onClose, onUpdated, onDelete }: { group: Gr
               <button onClick={handleSaveGeneral} disabled={saving || !name.trim()} className="flex-1 px-4 py-2 bg-gradient-to-r from-violet-600 to-indigo-600 dark:from-cyan-500 dark:to-cyan-400 text-white dark:text-neutral-900 rounded-xl text-sm font-medium disabled:opacity-50">
                 {saving ? "..." : "Сохранить"}
               </button>
-              {isOwner && (
+              {isOwner && !group.isMain && (
                 <button onClick={onDelete} className="px-4 py-2 bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 border border-red-200 dark:border-red-500/30 rounded-xl text-sm font-medium hover:bg-red-100 dark:hover:bg-red-900/40 transition-colors">
                   Удалить
                 </button>
@@ -798,7 +819,7 @@ function ConnectPageInner() {
   };
 
   const deleteGroup = async () => {
-    if (!selectedGroup || !confirm("Удалить группу? Это действие нельзя отменить.")) return;
+    if (!selectedGroup || groupDetail?.isMain || !confirm("Удалить группу? Это действие нельзя отменить.")) return;
     const res = await fetch(`/api/groups/${selectedGroup}`, { method: "DELETE" });
     if (res.ok) {
       setSelectedGroup(null);
@@ -901,6 +922,7 @@ function ConnectPageInner() {
             channelName={selectedChannelData.name}
             channelIcon={selectedChannelData.icon}
             channelType={selectedChannelData.type}
+            isRestricted={selectedChannelData.isRestricted}
             currentUserId={userId}
             currentUserRole={userRole}
             groupRole={groupDetail?.myRole}
@@ -962,6 +984,7 @@ function ConnectPageInner() {
                   channelName={selectedChannelData.name}
                   channelIcon={selectedChannelData.icon}
                   channelType={selectedChannelData.type}
+                  isRestricted={selectedChannelData.isRestricted}
                   currentUserId={userId}
                   currentUserRole={userRole}
                   groupRole={groupDetail?.myRole}

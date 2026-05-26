@@ -13,6 +13,8 @@ interface Channel {
   type: string;
   icon: string | null;
   groupId: string;
+  serviceId?: string | null;
+  isRestricted?: boolean;
   _count: { members: number; messages: number };
 }
 
@@ -28,6 +30,7 @@ interface GroupDetail {
   icon: string | null;
   description: string;
   myRole: string;
+  isMain?: boolean;
   channels: Channel[];
   members: { user: { id: string; name: string; username: string; avatar: string | null; role: string }; role: string }[];
 }
@@ -90,9 +93,22 @@ export default function ChannelSidebar({
   onInvite, onToggleMembers, onProfileSettings: _onProfileSettings, onOpenSettings, memberCount, onBack,
   voiceState, voiceActions,
 }: ChannelSidebarProps) {
-  const textChannels = groupDetail.channels.filter((c) => c.type === "TEXT");
-  const newsChannels = groupDetail.channels.filter((c) => c.type === "NEWS");
-  const voiceChannels = groupDetail.channels.filter((c) => c.type === "VOICE");
+  // Separate service-linked channels from regular channels
+  const serviceChannels = groupDetail.channels.filter((c) => c.serviceId);
+  const regularChannels = groupDetail.channels.filter((c) => !c.serviceId);
+
+  const textChannels = regularChannels.filter((c) => c.type === "TEXT");
+  const newsChannels = regularChannels.filter((c) => c.type === "NEWS");
+  const voiceChannels = regularChannels.filter((c) => c.type === "VOICE");
+
+  // Group service channels by serviceId
+  const serviceGroups = new Map<string, Channel[]>();
+  for (const ch of serviceChannels) {
+    if (!ch.serviceId) continue;
+    const arr = serviceGroups.get(ch.serviceId) ?? [];
+    arr.push(ch);
+    serviceGroups.set(ch.serviceId, arr);
+  }
 
   /* ── Track voice channel occupants via separate socket ── */
   const [channelUsersMap, setChannelUsersMap] = useState<Record<string, VoiceUser[]>>({});
@@ -320,6 +336,62 @@ export default function ChannelSidebar({
                       ))}
                     </div>
                   )}
+                </div>
+              );
+            })}
+          </>
+        )}
+
+        {/* Service-linked channel sections (main community only) */}
+        {serviceGroups.size > 0 && (
+          <>
+            {Array.from(serviceGroups.entries()).map(([serviceId, channels]) => {
+              const newsChannel = channels.find((c) => c.type === "NEWS");
+              const sectionName = newsChannel?.name || channels[0]?.name || serviceId;
+              const isInactive = channels.some((c) => c.isRestricted);
+
+              return (
+                <div key={serviceId} className="mt-3">
+                  <div className="flex items-center gap-1 px-2 py-1">
+                    <span className={`text-[11px] uppercase tracking-wider font-semibold ${isInactive ? "text-red-400/70" : "text-violet-400 dark:text-cyan-400"}`}>
+                      {sectionName}
+                    </span>
+                    {isInactive && (
+                      <span className="text-[9px] px-1 py-0.5 rounded bg-red-100 dark:bg-red-500/10 text-red-500 font-medium whitespace-nowrap">
+                        Не работает
+                      </span>
+                    )}
+                  </div>
+                  {channels.map((ch) => (
+                    <div key={ch.id} className="group flex items-center">
+                      <button
+                        onClick={() => onChannelClick(ch)}
+                        className={`cn-channel-btn flex-1 text-left px-2.5 py-1.5 rounded-lg flex items-center gap-2 transition-all text-sm ${
+                          selectedChannel === ch.id ? "active" : ""
+                        } ${isInactive ? "opacity-60" : ""}`}
+                        aria-current={selectedChannel === ch.id ? "page" : undefined}
+                      >
+                        <span className="text-base">{ch.icon || (ch.type === "NEWS" ? "\uD83D\uDCF0" : "\uD83D\uDCAC")}</span>
+                        <span className="truncate flex-1 text-xs">{ch.name.replace(`${sectionName} \u2014 `, "")}</span>
+                        {(unreadCounts[ch.id] ?? 0) > 0 && (
+                          <span className="ml-auto bg-red-500 text-white text-[10px] px-1.5 py-0.5 rounded-full font-bold min-w-[18px] text-center">
+                            {unreadCounts[ch.id]}
+                          </span>
+                        )}
+                      </button>
+                      {canManage && (
+                        <button
+                          onClick={() => onDeleteChannel(ch.id)}
+                          className="opacity-0 group-hover:opacity-100 p-1 text-neutral-400 hover:text-red-500 transition-all"
+                          aria-label={`Delete ${ch.name}`}
+                        >
+                          <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                          </svg>
+                        </button>
+                      )}
+                    </div>
+                  ))}
                 </div>
               );
             })}

@@ -63,6 +63,7 @@ interface MessageAreaProps {
   channelName: string;
   channelIcon: string | null;
   channelType?: string;
+  isRestricted?: boolean;
   currentUserId: string;
   currentUserRole: string;
   groupRole?: string;
@@ -71,7 +72,7 @@ interface MessageAreaProps {
 }
 
 export default function MessageArea({
-  channelId, channelName, channelIcon, channelType, currentUserId, currentUserRole, groupRole, isBanned, onBack,
+  channelId, channelName, channelIcon, channelType, isRestricted, currentUserId, currentUserRole, groupRole, isBanned, onBack,
 }: MessageAreaProps) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [newMessage, setNewMessage] = useState("");
@@ -90,8 +91,9 @@ export default function MessageArea({
   const [showInputEmoji, setShowInputEmoji] = useState(false);
 
   const isNewsChannel = channelType === "NEWS";
-  const canPostInNews = groupRole === "OWNER" || groupRole === "ADMIN" || groupRole === "MODERATOR";
-  const canSend = !isBanned && (!isNewsChannel || canPostInNews);
+  const isAdmin = groupRole === "OWNER" || groupRole === "ADMIN" || groupRole === "MODERATOR";
+  const canPostInNews = isAdmin;
+  const canSend = !isBanned && (!isNewsChannel || canPostInNews) && (!isRestricted || isAdmin);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
@@ -360,6 +362,11 @@ export default function MessageArea({
         )}
         <span aria-hidden="true">{channelIcon || (isNewsChannel ? "\uD83D\uDCE2" : "\uD83D\uDCAC")}</span>
         <span className="font-medium text-neutral-900 dark:text-white text-sm">{channelName}</span>
+        {isRestricted && (
+          <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-red-100 dark:bg-red-400/10 text-red-500 dark:text-red-400 font-medium">
+            Временно не работает
+          </span>
+        )}
         {isNewsChannel && (
           <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-amber-100 dark:bg-amber-400/10 text-amber-600 dark:text-amber-400 font-medium">
             Новости
@@ -650,7 +657,7 @@ export default function MessageArea({
         </div>
       ) : (
         <div className="p-3 border-t border-[var(--cn-border)] text-center text-neutral-400/60 text-sm">
-          {isNewsChannel ? "Только администраторы могут публиковать новости" : "Отправка сообщений ограничена"}
+          {isRestricted ? "Услуга временно не работает" : isNewsChannel ? "Только администраторы могут публиковать новости" : "Отправка сообщений ограничена"}
         </div>
       )}
     </div>
