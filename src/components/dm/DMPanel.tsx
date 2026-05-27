@@ -128,6 +128,16 @@ export default function DMPanel({ currentUserId, onClose, initialFriendId }: DMP
     if (selectedConv) loadMessages(selectedConv);
   }, [selectedConv, loadMessages]);
 
+  // Join/leave DM conversation room for typing indicators
+  useEffect(() => {
+    const socket = socketRef.current;
+    if (!socket || !selectedConv) return;
+    socket.emit("join-dm-conv", { convId: selectedConv });
+    return () => {
+      socket.emit("leave-dm-conv", { convId: selectedConv });
+    };
+  }, [selectedConv]);
+
   useEffect(() => {
     if (!messagesLoading && messages.length > 0) {
       messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -144,6 +154,8 @@ export default function DMPanel({ currentUserId, onClose, initialFriendId }: DMP
 
     socket.on("connect", () => {
       socket.emit("join-dm", { userId: currentUserId });
+      // Re-join current conversation room after reconnect
+      if (selectedConv) socket.emit("join-dm-conv", { convId: selectedConv });
     });
 
     socket.on("dm-typing", ({ userName }: { userId: string; userName: string }) => {
@@ -200,6 +212,8 @@ export default function DMPanel({ currentUserId, onClose, initialFriendId }: DMP
     setSending(true);
     const content = input.trim();
     setInput("");
+    // Stop typing indicator immediately on send
+    socketRef.current?.emit("dm-stop-typing", { convId: selectedConv });
     try {
       const res = await fetch(`/api/dm/${selectedConv}`, {
         method: "POST",

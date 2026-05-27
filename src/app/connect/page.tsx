@@ -208,14 +208,24 @@ function JoinGroupModal({ onClose, onJoined }: { onClose: () => void; onJoined: 
 function CreateChannelModal({ groupId, onClose, onCreated }: { groupId: string; onClose: () => void; onCreated: () => void }) {
   const [name, setName] = useState("");
   const [type, setType] = useState("TEXT");
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
 
   const handleCreate = async () => {
     if (!name.trim()) return;
-    await fetch("/api/channels", {
+    setLoading(true);
+    setError("");
+    const res = await fetch("/api/channels", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ name, type, groupId }),
+      body: JSON.stringify({ name: name.trim(), type, groupId }),
     });
+    setLoading(false);
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      setError(data.error || "Ошибка создания канала");
+      return;
+    }
     onCreated();
     onClose();
   };
@@ -234,9 +244,10 @@ function CreateChannelModal({ groupId, onClose, onCreated }: { groupId: string; 
             Голосовой
           </button>
         </div>
+        {error && <p className="text-xs text-red-500 dark:text-red-400">{error}</p>}
         <div className="flex gap-2 pt-1">
-          <button onClick={handleCreate} className="flex-1 px-4 py-2.5 bg-gradient-to-r from-violet-600 to-indigo-600 dark:from-cyan-500 dark:to-cyan-400 text-white dark:text-neutral-900 rounded-xl hover:shadow-lg transition-all text-sm font-medium">
-            Создать
+          <button onClick={handleCreate} disabled={loading || !name.trim()} className="flex-1 px-4 py-2.5 bg-gradient-to-r from-violet-600 to-indigo-600 dark:from-cyan-500 dark:to-cyan-400 text-white dark:text-neutral-900 rounded-xl hover:shadow-lg transition-all text-sm font-medium disabled:opacity-50">
+            {loading ? "Создание..." : "Создать"}
           </button>
           <button onClick={onClose} className="flex-1 px-4 py-2.5 bg-neutral-100 dark:bg-neutral-700 text-neutral-600 dark:text-gray-400 rounded-xl hover:bg-neutral-200 dark:hover:bg-neutral-600 transition-all text-sm">
             Отмена
@@ -250,13 +261,16 @@ function CreateChannelModal({ groupId, onClose, onCreated }: { groupId: string; 
 function InviteModal({ groupId, onClose }: { groupId: string; onClose: () => void }) {
   const [inviteCode, setInviteCode] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
 
   const createInvite = async () => {
     setLoading(true);
+    setError("");
     const res = await fetch("/api/invites", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ groupId }) });
-    const data = await res.json();
-    setInviteCode(data.code);
+    const data = await res.json().catch(() => ({}));
     setLoading(false);
+    if (!res.ok) { setError(data.error || "Ошибка создания приглашения"); return; }
+    setInviteCode(data.code);
   };
 
   return (
@@ -278,6 +292,7 @@ function InviteModal({ groupId, onClose }: { groupId: string; onClose: () => voi
             {loading ? "..." : "Создать приглашение"}
           </button>
         )}
+        {error && <p className="text-xs text-red-500 dark:text-red-400">{error}</p>}
         <button onClick={onClose} className="w-full px-4 py-2.5 bg-neutral-100 dark:bg-neutral-700 text-neutral-600 dark:text-gray-400 rounded-xl hover:bg-neutral-200 dark:hover:bg-neutral-600 transition-all text-sm">
           Закрыть
         </button>
@@ -310,7 +325,14 @@ function GroupRulesGate({ group, onAccept }: { group: GroupDetail; onAccept: () 
         <p className="text-sm text-neutral-700 dark:text-gray-300 whitespace-pre-wrap leading-relaxed">{group.rules}</p>
       </div>
       <button
-        onClick={async () => { setLoading(true); await onAccept(); setLoading(false); }}
+        onClick={async () => {
+          setLoading(true);
+          try {
+            await onAccept();
+          } finally {
+            setLoading(false);
+          }
+        }}
         disabled={loading}
         className="w-full px-4 py-2.5 bg-gradient-to-r from-violet-600 to-indigo-600 dark:from-cyan-500 dark:to-cyan-400 text-white dark:text-neutral-900 rounded-xl hover:shadow-lg transition-all text-sm font-medium disabled:opacity-50"
       >
@@ -1032,7 +1054,7 @@ function ConnectPageInner() {
           /* DMPanel contains both COL 2 (dialog list) and COL 3 (chat) */
           <DMPanel
             currentUserId={userId}
-            onClose={() => setActiveSection("communities")}
+            onClose={() => { setActiveSection("communities"); setDmFriendId(null); }}
             initialFriendId={dmFriendId}
           />
         )}

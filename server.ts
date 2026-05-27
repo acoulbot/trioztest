@@ -101,7 +101,35 @@ app.prepare().then(() => {
     // ── DM room ───────────────────────────────────────────────────────
     socket.join(`dm-${authData.userId}`);
 
-    // ── Text channel rooms ──────────────────────────────────────────
+    // DM typing indicators — relay to the other participant via their dm room
+    socket.on("dm-typing", ({ convId }: { convId: string }) => {
+      // Emit to all sockets of the user except the sender
+      // convId used to look up the other participant would require a DB call;
+      // instead we broadcast to the dm-* room of the other user.
+      // The server stores convId→participantIds mapping would be ideal; for now
+      // we relay to the conversation room so the other participant sees it.
+      socket.to(`dm-conv-${convId}`).emit("dm-typing", {
+        userId: authData.userId,
+        userName: authData.userName,
+      });
+    });
+
+    socket.on("dm-stop-typing", ({ convId }: { convId: string }) => {
+      socket.to(`dm-conv-${convId}`).emit("dm-stop-typing", {
+        userId: authData.userId,
+      });
+    });
+
+    // Join a DM conversation room so typing events are scoped to participants
+    socket.on("join-dm-conv", ({ convId }: { convId: string }) => {
+      socket.join(`dm-conv-${convId}`);
+    });
+
+    socket.on("leave-dm-conv", ({ convId }: { convId: string }) => {
+      socket.leave(`dm-conv-${convId}`);
+    });
+
+    // ── Voice channels ──────────────────────────────────────────────
     socket.on("join-channel", ({ channelId }: { channelId: string }) => {
       socket.join(`channel-${channelId}`);
     });
@@ -125,7 +153,8 @@ app.prepare().then(() => {
       });
     });
 
-    // ── Voice channels ──────────────────────────────────────────────
+    // ── DM room ───────────────────────────────────────────────────────
+    socket.join(`dm-${authData.userId}`);
     socket.on("join-voice", ({ channelId }: { channelId: string }) => {
       const user: VoiceUser = { socketId: socket.id, userId: authData.userId, userName: authData.userName, muted: false };
 
