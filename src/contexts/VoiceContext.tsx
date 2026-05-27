@@ -16,9 +16,11 @@ export interface VoiceUser {
 }
 
 export type ConnectionQuality = "good" | "medium" | "poor" | "unknown";
+export type VoiceStatus = "idle" | "connecting" | "connected" | "reconnecting" | "error";
 
 interface VoiceState {
   isConnected:     boolean;
+  voiceStatus:     VoiceStatus;
   channelId:       string | null;
   channelName:     string | null;
   isMuted:         boolean;
@@ -93,6 +95,7 @@ export function VoiceProvider({ children }: { children: React.ReactNode }) {
 
   /* ── Core state ── */
   const [isConnected,   setIsConnected]   = useState(false);
+  const [voiceStatus,   setVoiceStatus]   = useState<VoiceStatus>("idle");
   const [channelId,     setChannelId]     = useState<string | null>(null);
   const [channelName,   setChannelName]   = useState<string | null>(null);
   const [isMuted,       setIsMuted]       = useState(false);
@@ -419,6 +422,7 @@ export function VoiceProvider({ children }: { children: React.ReactNode }) {
     analyserRef.current = null;
 
     setIsConnected(false);
+    setVoiceStatus("idle");
     setChannelId(null);
     setChannelName(null);
     setUsers([]);
@@ -437,6 +441,9 @@ export function VoiceProvider({ children }: { children: React.ReactNode }) {
   const joinVoice = useCallback(async (chId: string, chName: string) => {
     if (!session?.user) return;
 
+    // Guard against double-click: if already connecting/connected to this channel, skip
+    if (channelIdRef.current === chId && (isConnected || socketRef.current)) return;
+
     // If already in another channel, leave first
     if (isConnected && channelIdRef.current && channelIdRef.current !== chId) {
       leaveVoice();
@@ -445,11 +452,13 @@ export function VoiceProvider({ children }: { children: React.ReactNode }) {
     }
 
     setError(null);
+    setVoiceStatus("connecting");
     setChannelId(chId);
     setChannelName(chName);
 
     if (!navigator.mediaDevices?.getUserMedia) {
       setError("Голосовой канал требует защищённого соединения (HTTPS).");
+      setVoiceStatus("error");
       return;
     }
 
@@ -480,18 +489,49 @@ export function VoiceProvider({ children }: { children: React.ReactNode }) {
       ns.setBypass(!nsEnabled);
       localStreamRef.current = processedStream;
 
-      const socket = io({ path: "/api/socketio", transports: ["websocket", "polling"] });
+      const socket = io({
+        path: "/api/socketio",
+        transports: ["websocket", "polling"],
+        timeout: 10000,
+        reconnectionAttempts: 5,
+        reconnectionDelay: 1000,
+      });
       socketRef.current = socket;
 
       socket.on("connect", () => {
+        console.log("[Voice] Socket connected:", socket.id);
         const userName = session.user.name || "Пользователь";
         socket.emit("join-voice", { channelId: chId, userId: session.user.id, userName });
         setIsConnected(true);
+        setVoiceStatus("connected");
         playSound(connectionSfxRef);
 
         // Add self to user list immediately
         const self: VoiceUser = { socketId: socket.id!, userId: session.user.id, userName, muted: false };
         setUsers(prev => [...prev.filter(u => u.socketId !== socket.id), self]);
+      });
+
+      socket.on("disconnect", (reason) => {
+        console.warn("[Voice] Socket disconnected:", reason);
+        if (reason === "io server disconnect" || reason === "io client disconnect") {
+          // Intentional disconnect
+          return;
+        }
+        // Unexpected disconnect — show reconnecting
+        setVoiceStatus("reconnecting");
+      });
+
+      socket.io.on("reconnect", () => {
+        console.log("[Voice] Socket reconnected");
+        setVoiceStatus("connected");
+        const userName = session.user.name || "Пользователь";
+        socket.emit("join-voice", { channelId: chId, userId: session.user.id, userName });
+      });
+
+      socket.io.on("reconnect_failed", () => {
+        console.error("[Voice] Reconnect failed");
+        setVoiceStatus("error");
+        setError("Потеряно соединение с сервером. Переподключитесь.");
       });
 
       socket.on("voice-users", (existing: VoiceUser[]) => {
@@ -575,12 +615,15 @@ export function VoiceProvider({ children }: { children: React.ReactNode }) {
         setChannelUsersMap(prev => { const m = new Map(prev); m.set(cId, cUsers); return m; });
       });
 
-      socket.on("connect_error", () => {
+      socket.on("connect_error", (err) => {
+        console.error("[Voice] Connection error:", err.message);
         rawStream?.getTracks().forEach(t => t.stop());
         ns.destroy();
         socketRef.current?.disconnect();
         socketRef.current = null;
+        setVoiceStatus("error");
         setError("Не удалось подключиться к серверу.");
+        setIsConnected(false);
       });
 
       startSpeakingDetection();
@@ -589,6 +632,7 @@ export function VoiceProvider({ children }: { children: React.ReactNode }) {
       noiseSuppRef.current?.destroy();
       noiseSuppRef.current = null;
       setNsStatus("idle");
+      setVoiceStatus("error");
 
       if (err instanceof DOMException) {
         const msgs: Record<string, string> = {
@@ -711,7 +755,7 @@ export function VoiceProvider({ children }: { children: React.ReactNode }) {
     : screenShareName || "Участник";
 
   const value: VoiceCtx = {
-    isConnected, channelId, channelName, isMuted, isDeafened,
+    isConnected, voiceStatus, channelId, channelName, isMuted, isDeafened,
     users, speakingUsers, localSpeaking, error,
     isSharingScreen, screenSharerId, screenShareName: activeScreenName,
     screenStream,

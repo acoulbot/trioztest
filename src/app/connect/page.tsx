@@ -754,6 +754,7 @@ function ConnectPageInner() {
 
   const voiceState = {
     isConnected: voice.isConnected,
+    voiceStatus: voice.voiceStatus,
     channelId: voice.channelId,
     channelName: voice.channelName,
     isMuted: voice.isMuted,

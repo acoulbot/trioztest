@@ -35,7 +35,7 @@ interface VoiceExpandedPanelProps {
 export default function VoiceExpandedPanel({ onClose }: VoiceExpandedPanelProps) {
   const voice = useVoice();
 
-  if (!voice.isConnected) return null;
+  if (!voice.isConnected && voice.voiceStatus === "idle") return null;
 
   const screenSharer = voice.isSharingScreen
     ? "Вы"
@@ -62,17 +62,29 @@ export default function VoiceExpandedPanel({ onClose }: VoiceExpandedPanelProps)
         {/* Header */}
         <div className="flex items-center justify-between px-5 py-3 border-b border-neutral-200 dark:border-white/10">
           <div className="flex items-center gap-3">
-            <span className="w-3 h-3 rounded-full bg-green-400 animate-pulse" />
+            <span className={`w-3 h-3 rounded-full ${
+              voice.voiceStatus === "connected" ? "bg-green-400 animate-pulse" :
+              voice.voiceStatus === "connecting" ? "bg-yellow-400 animate-pulse" :
+              voice.voiceStatus === "reconnecting" ? "bg-orange-400 animate-pulse" :
+              "bg-red-400"
+            }`} />
             <div>
               <h3 className="text-sm font-semibold text-neutral-900 dark:text-white">
                 {voice.channelName || "Голосовой канал"}
               </h3>
               <span className="text-xs text-neutral-500">
-                {voice.users.length} {voice.users.length === 1 ? "участник" : voice.users.length < 5 ? "участника" : "участников"}
-                {voice.localPing !== null && (
-                  <span className={`ml-2 ${voice.localPing < 150 ? "text-green-400" : voice.localPing < 400 ? "text-yellow-400" : "text-red-400"}`}>
-                    {Math.round(voice.localPing)} мс
-                  </span>
+                {voice.voiceStatus === "connecting" && "Подключение..."}
+                {voice.voiceStatus === "reconnecting" && "Переподключение..."}
+                {voice.voiceStatus === "error" && <span className="text-red-400">{voice.error || "Ошибка соединения"}</span>}
+                {voice.voiceStatus === "connected" && (
+                  <>
+                    {voice.users.length} {voice.users.length === 1 ? "участник" : voice.users.length < 5 ? "участника" : "участников"}
+                    {voice.localPing !== null && (
+                      <span className={`ml-2 ${voice.localPing < 150 ? "text-green-400" : voice.localPing < 400 ? "text-yellow-400" : "text-red-400"}`}>
+                        {Math.round(voice.localPing)} мс
+                      </span>
+                    )}
+                  </>
                 )}
               </span>
             </div>
