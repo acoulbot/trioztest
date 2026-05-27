@@ -35,6 +35,7 @@ interface Group {
   icon: string | null;
   description: string;
   ownerId: string;
+  isMain?: boolean;
   _count: { members: number; channels: number };
 }
 
@@ -44,6 +45,7 @@ interface Channel {
   type: string;
   icon: string | null;
   groupId: string;
+  serviceId?: string | null;
   _count: { members: number; messages: number };
 }
 
@@ -866,6 +868,7 @@ function ConnectPageInner() {
             selectedChannel={selectedChannel}
             unreadCounts={unreadCounts}
             canManage={!!canManage}
+            isMainCommunity={!!groupDetail.isMain}
             myProfileUser={myProfileUser}
             userName={session.user.name ?? ""}
             userUsername={session.user.username ?? ""}
@@ -911,6 +914,7 @@ function ConnectPageInner() {
                   selectedChannel={selectedChannel}
                   unreadCounts={unreadCounts}
                   canManage={!!canManage}
+                  isMainCommunity={!!groupDetail.isMain}
                   myProfileUser={myProfileUser}
                   userName={session.user.name ?? ""}
                   userUsername={session.user.username ?? ""}
