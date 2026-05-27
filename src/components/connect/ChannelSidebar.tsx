@@ -47,6 +47,8 @@ interface VoiceState {
   isSharingScreen: boolean;
   screenSharerId: string | null;
   userVolumes: Map<string, number>;
+  connectionQuality: Map<string, "good" | "medium" | "poor" | "unknown">;
+  localPing: number | null;
 }
 
 interface VoiceActions {
@@ -394,6 +396,7 @@ export default function ChannelSidebar({
                             name={u.userName}
                             muted={u.muted}
                             speaking={isActive ? voiceState?.speakingUsers.has(u.socketId) ?? false : false}
+                            quality={isActive ? voiceState?.connectionQuality.get(u.socketId) : undefined}
                           />
                           {/* Per-user volume control (only when connected) */}
                           {isActive && voiceActions && (
@@ -522,9 +525,10 @@ export default function ChannelSidebar({
 /*  Voice User Row (Discord-style inline list item)                            */
 /* ═══════════════════════════════════════════════════════════════════════════ */
 
-function VoiceUserRow({ name, muted, speaking, isLocal }: {
-  name: string; muted: boolean; speaking: boolean; isLocal?: boolean;
+function VoiceUserRow({ name, muted, speaking, isLocal, quality }: {
+  name: string; muted: boolean; speaking: boolean; isLocal?: boolean; quality?: "good" | "medium" | "poor" | "unknown";
 }) {
+  const qColor = quality === "good" ? "bg-green-400" : quality === "medium" ? "bg-yellow-400" : quality === "poor" ? "bg-red-400" : "bg-neutral-500";
   return (
     <div className="flex items-center gap-2 py-0.5 px-1 rounded group/row hover:bg-neutral-100 dark:hover:bg-white/5 transition-colors">
       <div className="relative">
@@ -548,6 +552,7 @@ function VoiceUserRow({ name, muted, speaking, isLocal }: {
       }`}>
         {name}{isLocal ? " (Вы)" : ""}
       </span>
+      {quality && <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${qColor}`} />}
       {speaking && <AudioBars bars={3} color="bg-green-400" maxH={10} />}
     </div>
   );

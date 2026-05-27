@@ -1,7 +1,32 @@
 "use client";
 
-import { useVoice } from "@/contexts/VoiceContext";
+import { useVoice, type ConnectionQuality } from "@/contexts/VoiceContext";
 import { motion } from "framer-motion";
+
+function QualityIcon({ quality }: { quality: ConnectionQuality }) {
+  const colors: Record<ConnectionQuality, string> = {
+    good: "#22c55e",
+    medium: "#eab308",
+    poor: "#ef4444",
+    unknown: "#6b7280",
+  };
+  const bars = quality === "good" ? 4 : quality === "medium" ? 3 : quality === "poor" ? 1 : 0;
+  return (
+    <svg width={14} height={14} viewBox="0 0 16 16" aria-label={quality}>
+      {[0, 1, 2, 3].map(i => (
+        <rect
+          key={i}
+          x={1 + i * 4}
+          y={12 - (i + 1) * 3}
+          width={3}
+          height={(i + 1) * 3}
+          rx={0.5}
+          fill={i < bars ? colors[quality] : "#4b5563"}
+        />
+      ))}
+    </svg>
+  );
+}
 
 interface VoiceExpandedPanelProps {
   onClose: () => void;
@@ -44,6 +69,11 @@ export default function VoiceExpandedPanel({ onClose }: VoiceExpandedPanelProps)
               </h3>
               <span className="text-xs text-neutral-500">
                 {voice.users.length} {voice.users.length === 1 ? "участник" : voice.users.length < 5 ? "участника" : "участников"}
+                {voice.localPing !== null && (
+                  <span className={`ml-2 ${voice.localPing < 150 ? "text-green-400" : voice.localPing < 400 ? "text-yellow-400" : "text-red-400"}`}>
+                    {Math.round(voice.localPing)} мс
+                  </span>
+                )}
               </span>
             </div>
           </div>
@@ -93,6 +123,7 @@ export default function VoiceExpandedPanel({ onClose }: VoiceExpandedPanelProps)
 
                 {/* Status icons */}
                 <div className="flex items-center gap-1.5">
+                  <QualityIcon quality={voice.connectionQuality.get(u.socketId) ?? "unknown"} />
                   {isScreenSharing && (
                     <span className="text-blue-400" title="Демонстрация экрана">
                       <svg width={14} height={14} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
