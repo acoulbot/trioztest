@@ -124,42 +124,33 @@ export default function AiChatPanel() {
 
   return (
     <>
-      {/* Hover trigger zone on right edge */}
-      <div
-        className="fixed right-0 top-1/4 bottom-1/4 w-2 z-50"
-        onMouseEnter={() => setIsOpen(true)}
-      />
-
-      {/* Collapsed tab */}
+      {/* AI toggle tab — right edge, rectangular */}
       {!isOpen && (
-        <motion.button
-          className="fixed right-0 top-1/2 -translate-y-1/2 z-50 bg-gradient-to-l from-violet-600 to-indigo-600 text-white px-2 py-6 rounded-l-xl shadow-2xl"
+        <button
           onClick={() => setIsOpen(true)}
-          whileHover={{ x: -4 }}
-          initial={{ x: 0 }}
+          className="fixed right-0 top-1/2 -translate-y-1/2 z-40 bg-gradient-to-b from-violet-600 to-indigo-600 text-white shadow-lg hover:shadow-xl transition-all flex items-center justify-center px-1.5 py-3 rounded-l-lg"
+          title="TZ.AI Ассистент"
         >
-          <span className="[writing-mode:vertical-lr] text-xs font-medium tracking-wider">AI</span>
-        </motion.button>
+          <span className="text-[10px] font-bold tracking-wider" style={{ writingMode: "vertical-rl" }}>TZ.AI</span>
+        </button>
       )}
 
-      {/* Panel */}
+      {/* AI panel — right side, inline, no overlaps */}
       <AnimatePresence>
         {isOpen && (
           <motion.div
-            initial={{ x: 400 }}
-            animate={{ x: 0 }}
-            exit={{ x: 400 }}
-            transition={{ type: "spring", damping: 25, stiffness: 200 }}
-            className="fixed right-0 top-0 h-full w-[380px] z-50 flex flex-col
-              bg-white dark:bg-neutral-900 border-l border-neutral-200 dark:border-white/10 shadow-2xl"
+            initial={{ opacity: 0, x: 20 }}
+            animate={{ opacity: 1, x: 0 }}
+            exit={{ opacity: 0, x: 20 }}
+            transition={{ duration: 0.2 }}
+            className="w-[360px] h-full flex-shrink-0 flex flex-col
+              bg-white dark:bg-neutral-900 border-l border-neutral-200 dark:border-white/10"
           >
             {/* Header */}
-            <div className="flex items-center justify-between p-4 border-b border-neutral-200 dark:border-white/10">
+            <div className="flex items-center justify-between p-4 border-b border-neutral-200 dark:border-white/10 flex-shrink-0">
               <div className="flex items-center gap-2">
                 <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-violet-500 to-indigo-600 flex items-center justify-center">
-                  <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
-                  </svg>
+                  <span className="text-[9px] font-bold text-white leading-none">TZ.AI</span>
                 </div>
                 <div>
                   <h3 className="font-semibold text-sm text-neutral-900 dark:text-white">TZ.AI Ассистент</h3>

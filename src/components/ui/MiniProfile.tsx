@@ -1,115 +1,107 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import Link from "next/link";
 import GlowAvatar from "@/components/ui/GlowAvatar";
 import { isOnline, timeAgo } from "@/lib/timeAgo";
 
 interface MiniProfileUser {
   id: string;
   name: string;
-  username: string;
+  username?: string;
   avatar: string | null;
   role: string;
+  lastSeen?: string | null;
   avatarGlowEnabled?: boolean;
   avatarGlowColors?: string | null;
-  lastSeen?: string | null;
-  customStatus?: string | null;
-  statusEmoji?: string | null;
 }
 
 interface MiniProfileProps {
   user: MiniProfileUser;
   children: React.ReactNode;
-  position?: "top" | "bottom" | "left" | "right";
+  onMessageClick?: (userId: string) => void;
+  /** Which side to open the card: right (default) or left */
+  side?: "right" | "left";
 }
 
-const ROLE_LABELS: Record<string, { label: string; color: string }> = {
-  ADMIN: { label: "Администратор", color: "text-red-400" },
-  EDITOR: { label: "Редактор", color: "text-violet-400" },
-  CONSULTANT: { label: "Консультант", color: "text-blue-400" },
-  USER: { label: "Пользователь", color: "text-gray-400" },
+const ROLE_BADGE: Record<string, { label: string; color: string }> = {
+  ADMIN:      { label: "Администратор", color: "text-red-500 dark:text-red-400" },
+  EDITOR:     { label: "Редактор",      color: "text-amber-500 dark:text-amber-400" },
+  MODERATOR:  { label: "Модератор",     color: "text-violet-500 dark:text-cyan-400" },
+  CONSULTANT: { label: "Консультант",   color: "text-sky-500" },
+  USER:       { label: "Участник",      color: "text-neutral-400" },
 };
 
-export default function MiniProfile({ user, children, position = "top" }: MiniProfileProps) {
-  const [show, setShow] = useState(false);
-  const timeoutRef = useRef<NodeJS.Timeout | null>(null);
-  const containerRef = useRef<HTMLDivElement>(null);
+export default function MiniProfile({ user, children, onMessageClick, side = "right" }: MiniProfileProps) {
+  const [visible, setVisible] = useState(false);
+  const timerRef = useRef<NodeJS.Timeout | null>(null);
+  const online = isOnline(user.lastSeen ?? null);
+  const badge = ROLE_BADGE[user.role] ?? ROLE_BADGE.USER;
 
-  const handleMouseEnter = () => {
-    if (timeoutRef.current) clearTimeout(timeoutRef.current);
-    timeoutRef.current = setTimeout(() => setShow(true), 400);
+  const show = () => {
+    timerRef.current && clearTimeout(timerRef.current);
+    timerRef.current = setTimeout(() => setVisible(true), 350);
+  };
+  const hide = () => {
+    timerRef.current && clearTimeout(timerRef.current);
+    timerRef.current = setTimeout(() => setVisible(false), 120);
   };
 
-  const handleMouseLeave = () => {
-    if (timeoutRef.current) clearTimeout(timeoutRef.current);
-    timeoutRef.current = setTimeout(() => setShow(false), 200);
-  };
-
-  useEffect(() => {
-    return () => {
-      if (timeoutRef.current) clearTimeout(timeoutRef.current);
-    };
-  }, []);
-
-  const role = ROLE_LABELS[user.role] ?? ROLE_LABELS.USER;
-
-  const positionClasses: Record<string, string> = {
-    top: "bottom-full left-0 mb-2",
-    bottom: "top-full left-0 mt-2",
-    left: "right-full top-0 mr-2",
-    right: "left-full top-0 ml-2",
-  };
+  useEffect(() => () => { timerRef.current && clearTimeout(timerRef.current); }, []);
 
   return (
-    <div
-      ref={containerRef}
-      className="relative inline-block"
-      onMouseEnter={handleMouseEnter}
-      onMouseLeave={handleMouseLeave}
-    >
+    <div className="relative inline-block" onMouseEnter={show} onMouseLeave={hide}>
       {children}
+
       <AnimatePresence>
-        {show && (
+        {visible && (
           <motion.div
-            initial={{ opacity: 0, scale: 0.95 }}
-            animate={{ opacity: 1, scale: 1 }}
-            exit={{ opacity: 0, scale: 0.95 }}
-            transition={{ duration: 0.15 }}
-            className={`absolute z-50 ${positionClasses[position]} w-64 bg-white dark:bg-neutral-900 border border-neutral-200 dark:border-white/10 rounded-xl shadow-xl p-4`}
-            onMouseEnter={handleMouseEnter}
-            onMouseLeave={handleMouseLeave}
+            initial={{ opacity: 0, scale: 0.92, y: 4 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            exit={{ opacity: 0, scale: 0.92, y: 4 }}
+            transition={{ type: "spring", damping: 22, stiffness: 320 }}
+            onMouseEnter={show}
+            onMouseLeave={hide}
+            className={`absolute z-[9999] w-56 rounded-2xl overflow-hidden shadow-2xl
+              bg-white dark:bg-neutral-800
+              border border-neutral-200 dark:border-white/10
+              ${side === "left" ? "right-full mr-2" : "left-full ml-2"} top-0`}
           >
-            <div className="flex items-start gap-3">
-              <GlowAvatar user={user} size={40} onlineColor={isOnline(user.lastSeen) ? "green" : undefined} />
-              <div className="flex-1 min-w-0">
-                <p className="text-sm font-semibold text-neutral-900 dark:text-white truncate">{user.name}</p>
-                <p className="text-xs text-neutral-500 dark:text-gray-400">@{user.username}</p>
-                <span className={`text-[10px] font-medium ${role.color}`}>{role.label}</span>
+            {/* Banner */}
+            <div className="h-14 bg-gradient-to-br from-violet-500/30 to-indigo-600/20 dark:from-cyan-500/20 dark:to-violet-600/20" />
+
+            <div className="px-3 pb-3 -mt-6">
+              {/* Avatar */}
+              <div className="mb-2">
+                <GlowAvatar user={user} size={40} />
               </div>
-            </div>
 
-            {user.customStatus && (
-              <div className="mt-2 flex items-center gap-1 text-xs text-neutral-500 dark:text-gray-400">
-                {user.statusEmoji && <span>{user.statusEmoji}</span>}
-                <span className="truncate">{user.customStatus}</span>
+              {/* Name + role */}
+              <div className="mb-2">
+                <div className="flex items-center gap-1.5">
+                  <span className="font-semibold text-sm text-neutral-900 dark:text-white truncate">{user.name}</span>
+                  {online && <span className="w-2 h-2 rounded-full bg-green-400 flex-shrink-0" />}
+                </div>
+                {user.username && <div className="text-[11px] text-neutral-400">@{user.username}</div>}
+                <div className={`text-[11px] font-medium mt-0.5 ${badge.color}`}>{badge.label}</div>
               </div>
-            )}
 
-            {user.lastSeen && (
-              <p className="text-[10px] text-neutral-400 mt-1.5">
-                {isOnline(user.lastSeen) ? "🟢 Онлайн" : `Был(а) ${timeAgo(user.lastSeen)}`}
-              </p>
-            )}
+              {/* Status */}
+              <div className="text-[11px] text-neutral-500 mb-2.5">
+                {online ? "В сети" : user.lastSeen ? `Был(а) ${timeAgo(user.lastSeen)}` : "Не в сети"}
+              </div>
 
-            <div className="mt-3 pt-3 border-t border-neutral-200 dark:border-white/5">
-              <Link
-                href={`/user/${user.username}`}
-                className="block w-full text-center px-3 py-1.5 bg-violet-50 dark:bg-cyan-400/10 text-violet-600 dark:text-cyan-400 rounded-lg text-xs font-medium hover:bg-violet-100 dark:hover:bg-cyan-400/20 transition-colors"
-              >
-                Открыть профиль
-              </Link>
+              {/* Action */}
+              {onMessageClick && (
+                <button
+                  onClick={() => { onMessageClick(user.id); setVisible(false); }}
+                  className="w-full py-1.5 rounded-lg text-xs font-medium transition-all
+                    bg-violet-600 dark:bg-cyan-500 text-white dark:text-neutral-900
+                    hover:opacity-90"
+                >
+                  Написать
+                </button>
+              )}
             </div>
           </motion.div>
         )}

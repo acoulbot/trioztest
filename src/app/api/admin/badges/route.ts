@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import prisma from "@/lib/prisma";
+import { logAction } from "@/lib/audit";
 import { writeFile, mkdir } from "fs/promises";
 import path from "path";
 
@@ -58,6 +59,15 @@ export async function POST(req: NextRequest) {
 
   const badge = await prisma.badge.create({
     data: { name, description, icon: icon || null, imageUrl, rarity },
+  });
+
+  await logAction({
+    userId: session.user.id,
+    username: session.user.username || session.user.name || "admin",
+    action: "create",
+    target: "Badge",
+    targetId: badge.id,
+    details: `Создание бейджа "${name}"`,
   });
 
   return NextResponse.json(badge, { status: 201 });

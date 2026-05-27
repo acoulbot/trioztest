@@ -6,6 +6,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { io, Socket } from "socket.io-client";
 import { NoiseSuppressor, NSStatus } from "@/lib/noiseSuppressor";
 import { patchedOffer, patchedAnswer } from "@/lib/sdpUtils";
+import AudioBars from "@/components/ui/AudioBars";
 
 /* ─── Types ──────────────────────────────────────────────────────────────── */
 
@@ -160,8 +161,12 @@ export default function VoiceChannel({ channelId, channelName, onClose }: VoiceC
     };
 
     pc.onconnectionstatechange = () => {
-      if (pc.connectionState === "failed" || pc.connectionState === "disconnected")
-        cleanupPeer(remoteSocketId);
+      if (pc.connectionState === "failed") {
+        pc.restartIce();
+        patchedOffer(pc).then(offer =>
+          socketRef.current?.emit("voice-offer", { to: remoteSocketId, offer })
+        ).catch(() => cleanupPeer(remoteSocketId));
+      }
     };
 
     if (isInitiator) {
@@ -744,18 +749,7 @@ function VoiceUserCard({ name, muted, speaking, isLocal, isSharing, vadProb = 0,
       </span>
 
       {/* Speaking equalizer */}
-      {speaking && (
-        <div className="flex items-end gap-[2px] h-3">
-          {[0,1,2,3,4].map(i => (
-            <motion.div
-              key={i}
-              className="w-[3px] bg-green-400 rounded-full"
-              animate={{ height: [2, 6 + i * 2, 2] }}
-              transition={{ duration: 0.25 + i * 0.07, repeat: Infinity, ease: "easeInOut" }}
-            />
-          ))}
-        </div>
-      )}
+      {speaking && <AudioBars bars={5} color="bg-green-400" maxH={16} />}
 
       {/* VAD noise meter for local user */}
       {isLocal && nsActive && !speaking && vadProb > 0 && (

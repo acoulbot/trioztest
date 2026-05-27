@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import prisma from "@/lib/prisma";
+import { logAction } from "@/lib/audit";
 import { writeFile, mkdir } from "fs/promises";
 import path from "path";
 
@@ -43,6 +44,16 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   }
 
   const badge = await prisma.badge.update({ where: { id }, data });
+
+  await logAction({
+    userId: session.user.id,
+    username: session.user.username || session.user.name || "admin",
+    action: "update",
+    target: "Badge",
+    targetId: id,
+    details: `Редактирование бейджа "${badge.name}"`,
+  });
+
   return NextResponse.json(badge);
 }
 
@@ -53,6 +64,17 @@ export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ 
   }
 
   const { id } = await params;
+  const badge = await prisma.badge.findUnique({ where: { id } });
   await prisma.badge.delete({ where: { id } });
+
+  await logAction({
+    userId: session.user.id,
+    username: session.user.username || session.user.name || "admin",
+    action: "delete",
+    target: "Badge",
+    targetId: id,
+    details: `Удаление бейджа "${badge?.name || id}"`,
+  });
+
   return NextResponse.json({ ok: true });
 }

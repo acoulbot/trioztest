@@ -90,6 +90,9 @@ app.prepare().then(() => {
     }
     userSockets.get(authData.userId)!.add(socket.id);
 
+    // ── DM room ───────────────────────────────────────────────────────
+    socket.join(`dm-${authData.userId}`);
+
     // ── Text channel rooms ──────────────────────────────────────────
     socket.on("join-channel", ({ channelId }: { channelId: string }) => {
       socket.join(`channel-${channelId}`);
@@ -131,11 +134,30 @@ app.prepare().then(() => {
 
       socket.to(`voice-${channelId}`).emit("user-joined", user);
 
+      // Broadcast updated user list for sidebar previews
+      broadcastVoiceChannelUsers(channelId);
+
       console.log(`[Voice] ${authData.userName} joined channel ${channelId}. Users: ${room.size}`);
     });
 
     socket.on("leave-voice", ({ channelId }: { channelId: string }) => {
       leaveVoiceChannel(socket, channelId);
+    });
+
+    // Query who is in a voice channel (without joining)
+    socket.on("get-voice-channel-users", ({ channelId }: { channelId: string }) => {
+      const room = voiceRooms.get(channelId);
+      const users = room ? Array.from(room.values()) : [];
+      socket.emit("voice-channel-users", { channelId, users });
+    });
+
+    // Query all voice channels at once
+    socket.on("get-all-voice-users", () => {
+      const result: Record<string, VoiceUser[]> = {};
+      voiceRooms.forEach((room, chId) => {
+        result[chId] = Array.from(room.values());
+      });
+      socket.emit("all-voice-users", result);
     });
 
     socket.on("voice-offer", ({ to, offer }: { to: string; offer: RTCSessionDescriptionInit }) => {
@@ -165,6 +187,14 @@ app.prepare().then(() => {
       socket.to(`voice-${channelId}`).emit("user-speaking", { socketId: socket.id, speaking });
     });
 
+    socket.on("screen-share-started", ({ channelId }: { channelId: string }) => {
+      socket.to(`voice-${channelId}`).emit("screen-share-started", { socketId: socket.id });
+    });
+
+    socket.on("screen-share-stopped", ({ channelId }: { channelId: string }) => {
+      socket.to(`voice-${channelId}`).emit("screen-share-stopped", { socketId: socket.id });
+    });
+
     // ── Disconnect ──────────────────────────────────────────────────
     socket.on("disconnect", () => {
       console.log(`[Socket] Disconnected: ${socket.id}`);
@@ -186,6 +216,12 @@ app.prepare().then(() => {
       });
     });
 
+    function broadcastVoiceChannelUsers(channelId: string) {
+      const room = voiceRooms.get(channelId);
+      const users = room ? Array.from(room.values()) : [];
+      io.emit("voice-channel-users", { channelId, users });
+    }
+
     function leaveVoiceChannel(sock: typeof socket, channelId: string) {
       const room = voiceRooms.get(channelId);
       if (room) {
@@ -197,6 +233,9 @@ app.prepare().then(() => {
         if (room.size === 0) {
           voiceRooms.delete(channelId);
         }
+
+        // Broadcast updated user list for sidebar previews
+        broadcastVoiceChannelUsers(channelId);
 
         if (user) {
           console.log(`[Voice] ${user.userName} left channel ${channelId}. Users: ${room.size}`);

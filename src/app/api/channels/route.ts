@@ -25,13 +25,34 @@ export async function GET(req: Request) {
     return NextResponse.json({ error: "Not a member" }, { status: 403 });
   }
 
+  const isAdminRole = membership.role === "OWNER" || membership.role === "ADMIN" || membership.role === "MODERATOR";
+
   const channels = await prisma.channel.findMany({
     where: { groupId },
     include: {
       _count: { select: { members: true, messages: true } },
+      allowedRoles: isAdminRole ? false : { select: { roleId: true } },
     },
     orderBy: { createdAt: "asc" },
   });
+
+  // Filter out restricted channels if user doesn't have the required role
+  if (!isAdminRole) {
+    const memberRecord = await prisma.groupMember.findUnique({
+      where: { userId_groupId: { userId: session.user.id, groupId } },
+      include: { tags: { select: { roleId: true } } },
+    });
+    const userRoleIds = new Set(memberRecord?.tags.map((t) => t.roleId) ?? []);
+
+    const visible = channels.filter((ch) => {
+      if (!ch.isRestricted) return true;
+      const allowed = (ch as typeof ch & { allowedRoles?: { roleId: string }[] }).allowedRoles;
+      if (!allowed || allowed.length === 0) return true;
+      return allowed.some((a) => userRoleIds.has(a.roleId));
+    });
+
+    return NextResponse.json(visible.map(({ allowedRoles: _ar, ...rest }) => rest));
+  }
 
   return NextResponse.json(channels);
 }
@@ -48,13 +69,16 @@ export async function POST(req: NextRequest) {
   const banned = await checkBan(session.user.id);
   if (banned) return banned;
 
-  const { name, type, groupId } = await req.json();
+  const { name, type, groupId, isRestricted, roleIds } = await req.json();
   if (!name || !groupId) {
     return NextResponse.json({ error: "Name and groupId required" }, { status: 400 });
   }
   if (name.length > 100) {
     return NextResponse.json({ error: "Имя канала слишком длинное (макс. 100 символов)" }, { status: 400 });
   }
+
+  const validTypes = ["TEXT", "VOICE", "NEWS"];
+  const channelType = validTypes.includes(type) ? type : "TEXT";
 
   const membership = await prisma.groupMember.findUnique({
     where: { userId_groupId: { userId: session.user.id, groupId } },
@@ -65,8 +89,21 @@ export async function POST(req: NextRequest) {
   }
 
   const channel = await prisma.channel.create({
-    data: { name, type: type || "TEXT", groupId },
+    data: {
+      name,
+      type: channelType,
+      groupId,
+      isRestricted: isRestricted || false,
+    },
   });
+
+  // If restricted, set allowed roles
+  if (isRestricted && Array.isArray(roleIds) && roleIds.length > 0) {
+    await prisma.channelRoleAccess.createMany({
+      data: roleIds.map((roleId: string) => ({ channelId: channel.id, roleId })),
+      skipDuplicates: true,
+    });
+  }
 
   return NextResponse.json(channel);
 }

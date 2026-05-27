@@ -13,7 +13,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Email и тип обязательны" }, { status: 400 });
     }
 
-    if (type !== "register" && type !== "login") {
+    if (type !== "register" && type !== "login" && type !== "reset") {
       return NextResponse.json({ error: "Неверный тип" }, { status: 400 });
     }
 
@@ -24,6 +24,10 @@ export async function POST(req: NextRequest) {
     }
 
     if (type === "register" && existingUser) {
+      return NextResponse.json({ ok: true, message: "Если аккаунт существует, код отправлен на " + email });
+    }
+
+    if (type === "reset" && !existingUser) {
       return NextResponse.json({ ok: true, message: "Если аккаунт существует, код отправлен на " + email });
     }
 

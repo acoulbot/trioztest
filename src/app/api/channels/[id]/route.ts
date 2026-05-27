@@ -30,10 +30,12 @@ export async function PUT(req: Request, { params }: { params: Promise<{ id: stri
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
-  const { name, icon } = await req.json();
+  const { name, icon, type, isRestricted } = await req.json();
   const data: Record<string, unknown> = {};
   if (name !== undefined) data.name = name;
   if (icon !== undefined) data.icon = icon;
+  if (type !== undefined && ["TEXT", "VOICE", "NEWS"].includes(type)) data.type = type;
+  if (isRestricted !== undefined) data.isRestricted = isRestricted;
 
   const updated = await prisma.channel.update({
     where: { id },

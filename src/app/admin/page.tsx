@@ -27,18 +27,18 @@ export default function AdminPage() {
   useEffect(() => {
     if (session?.user?.role === "ADMIN") {
       Promise.all([
-        fetch("/api/users").then((r) => r.json()),
-        fetch("/api/channels").then((r) => r.json()),
-        fetch("/api/articles").then((r) => r.json()),
-        fetch("/api/services").then((r) => r.json()),
+        fetch("/api/users").then((r) => r.ok ? r.json() : []),
+        fetch("/api/channels").then((r) => r.ok ? r.json() : []),
+        fetch("/api/articles").then((r) => r.ok ? r.json() : []),
+        fetch("/api/services").then((r) => r.ok ? r.json() : []),
       ]).then(([users, channels, articles, services]) => {
         setStats({
-          users: users.length || 0,
-          channels: channels.length || 0,
-          articles: articles.length || 0,
-          services: services.length || 0,
+          users: Array.isArray(users) ? users.length : 0,
+          channels: Array.isArray(channels) ? channels.length : 0,
+          articles: Array.isArray(articles) ? articles.length : 0,
+          services: Array.isArray(services) ? services.length : 0,
         });
-      });
+      }).catch(() => {});
     }
   }, [session]);
 
@@ -107,6 +107,15 @@ export default function AdminPage() {
       color: "from-violet-400/20 to-indigo-600/20",
       borderColor: "border-violet-400/20 hover:border-violet-400/40",
     },
+    {
+      title: "Логи редактора",
+      count: "📋",
+      href: "/admin/logs",
+      icon: "📋",
+      description: "Кто что редактировал",
+      color: "from-gray-400/20 to-slate-600/20",
+      borderColor: "border-gray-400/20 hover:border-gray-400/40",
+    },
   ];
 
   return (
@@ -170,8 +179,13 @@ export default function AdminPage() {
               <span className="text-xl">🧠</span>
               <span>Настроить ИИ-ассистент</span>
             </Link>
+            <Link href="/admin/logs" className="flex items-center gap-3 p-3 rounded-xl hover:bg-white/5 transition-colors text-gray-300 hover:text-white">
+              <span className="text-xl">📋</span>
+              <span>Логи редактора сайта</span>
+            </Link>
           </div>
         </div>
+
       </div>
     </div>
   );

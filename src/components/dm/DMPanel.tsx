@@ -1,8 +1,23 @@
 "use client";
 
 import { useState, useEffect, useRef, useCallback } from "react";
+import { io, Socket } from "socket.io-client";
 import GlowAvatar from "@/components/ui/GlowAvatar";
 import { isOnline, timeAgo } from "@/lib/timeAgo";
+import TypingIndicator from "@/components/ui/TypingIndicator";
+import VoiceRecorder from "@/components/ui/VoiceRecorder";
+import VoicePlayer from "@/components/ui/VoicePlayer";
+import { playDMNotification } from "@/lib/dmSound";
+
+interface Attachment {
+  url: string;
+  name: string;
+  size: number;
+  type: string;
+  isImage: boolean;
+  isVoice?: boolean;
+  duration?: number;
+}
 
 interface DMUser {
   id: string;
@@ -38,11 +53,13 @@ interface Message {
 interface DMPanelProps {
   currentUserId: string;
   onClose?: () => void;
+  initialFriendId?: string | null;
 }
 
-export default function DMPanel({ currentUserId, onClose }: DMPanelProps) {
+export default function DMPanel({ currentUserId, onClose, initialFriendId }: DMPanelProps) {
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [selectedConv, setSelectedConv] = useState<string | null>(null);
+  const [initialHandled, setInitialHandled] = useState(false);
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(true);
@@ -50,23 +67,61 @@ export default function DMPanel({ currentUserId, onClose }: DMPanelProps) {
   const [nextCursor, setNextCursor] = useState<string | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editContent, setEditContent] = useState("");
+  const [sending, setSending] = useState(false);
+  const [voiceUploading, setVoiceUploading] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const socketRef = useRef<Socket | null>(null);
 
   useEffect(() => {
-    fetch("/api/dm").then((r) => r.json()).then(setConversations).finally(() => setLoading(false));
-  }, []);
+    fetch("/api/dm")
+      .then((r) => { if (!r.ok) throw new Error(r.statusText); return r.json(); })
+      .then(async (convs: Conversation[]) => {
+        setConversations(convs);
+        if (initialFriendId && !initialHandled) {
+          setInitialHandled(true);
+          const existing = convs.find((c: Conversation) => c.other.id === initialFriendId);
+          if (existing) {
+            setSelectedConv(existing.id);
+          } else {
+            try {
+              const res = await fetch("/api/dm", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ userId: initialFriendId }),
+              });
+              if (res.ok) {
+                const data = await res.json();
+                setSelectedConv(data.id);
+                const refreshRes = await fetch("/api/dm");
+                if (refreshRes.ok) setConversations(await refreshRes.json());
+              }
+            } catch { /* ignore */ }
+          }
+        }
+      })
+      .catch(() => setConversations([]))
+      .finally(() => setLoading(false));
+  }, [initialFriendId, initialHandled]);
 
   const loadMessages = useCallback(async (convId: string, cursor?: string) => {
     setMessagesLoading(true);
-    const url = `/api/dm/${convId}${cursor ? `?cursor=${cursor}` : ""}`;
-    const data = await fetch(url).then((r) => r.json());
-    if (cursor) {
-      setMessages((prev) => [...data.messages, ...prev]);
-    } else {
-      setMessages(data.messages);
+    try {
+      const url = `/api/dm/${convId}${cursor ? `?cursor=${cursor}` : ""}`;
+      const res = await fetch(url);
+      if (!res.ok) throw new Error(res.statusText);
+      const data = await res.json();
+      if (cursor) {
+        setMessages((prev) => [...data.messages, ...prev]);
+      } else {
+        setMessages(data.messages);
+      }
+      setNextCursor(data.nextCursor);
+    } catch {
+      setMessages([]);
+      setNextCursor(null);
+    } finally {
+      setMessagesLoading(false);
     }
-    setNextCursor(data.nextCursor);
-    setMessagesLoading(false);
   }, []);
 
   useEffect(() => {
@@ -79,34 +134,128 @@ export default function DMPanel({ currentUserId, onClose }: DMPanelProps) {
     }
   }, [messages.length, messagesLoading]);
 
-  // Poll for new messages
+  const [dmTypingName, setDmTypingName] = useState<string | null>(null);
+  const dmTypingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+  // Socket.IO for real-time DM messages
   useEffect(() => {
-    if (!selectedConv) return;
-    const interval = setInterval(async () => {
-      const data = await fetch(`/api/dm/${selectedConv}`).then((r) => r.json());
-      setMessages(data.messages);
-    }, 5000);
-    return () => clearInterval(interval);
-  }, [selectedConv]);
+    const socket = io({ path: "/api/socketio", withCredentials: true });
+    socketRef.current = socket;
+
+    socket.on("connect", () => {
+      socket.emit("join-dm", { userId: currentUserId });
+    });
+
+    socket.on("dm-typing", ({ userName }: { userId: string; userName: string }) => {
+      setDmTypingName(userName);
+      if (dmTypingTimeoutRef.current) clearTimeout(dmTypingTimeoutRef.current);
+      dmTypingTimeoutRef.current = setTimeout(() => setDmTypingName(null), 3000);
+    });
+
+    socket.on("dm-stop-typing", () => {
+      setDmTypingName(null);
+      if (dmTypingTimeoutRef.current) clearTimeout(dmTypingTimeoutRef.current);
+    });
+
+    socket.on("dm-message", (msg: Message & { conversationId: string }) => {
+      if (msg.conversationId === selectedConv) {
+        setMessages((prev) => {
+          if (prev.find((m) => m.id === msg.id)) return prev;
+          return [...prev, msg];
+        });
+      }
+      // Play notification only for incoming messages (not own)
+      if (msg.userId !== currentUserId) {
+        playDMNotification();
+      }
+      setConversations((prev) =>
+        prev.map((c) => c.id === msg.conversationId
+          ? { ...c, lastMessage: { id: msg.id, content: msg.content, createdAt: msg.createdAt, userId: msg.userId }, lastMessageAt: msg.createdAt }
+          : c
+        ).sort((a, b) => new Date(b.lastMessageAt || 0).getTime() - new Date(a.lastMessageAt || 0).getTime())
+      );
+    });
+
+    socket.on("dm-edited", (msg: Message & { conversationId: string }) => {
+      if (msg.conversationId === selectedConv) {
+        setMessages((prev) => prev.map((m) => m.id === msg.id ? msg : m));
+      }
+    });
+
+    socket.on("dm-deleted", ({ messageId, conversationId }: { messageId: string; conversationId: string }) => {
+      if (conversationId === selectedConv) {
+        setMessages((prev) => prev.map((m) => m.id === messageId ? { ...m, deleted: true, content: "" } : m));
+      }
+    });
+
+    return () => {
+      socket.disconnect();
+      socketRef.current = null;
+    };
+  }, [currentUserId, selectedConv]);
 
   const sendMessage = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!input.trim() || !selectedConv) return;
+    if (!input.trim() || !selectedConv || sending) return;
+    setSending(true);
     const content = input.trim();
     setInput("");
-    const res = await fetch(`/api/dm/${selectedConv}`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ content }),
-    });
-    if (res.ok) {
-      const msg = await res.json();
-      setMessages((prev) => [...prev, msg]);
-      setConversations((prev) =>
-        prev.map((c) => c.id === selectedConv ? { ...c, lastMessage: msg, lastMessageAt: msg.createdAt } : c)
-          .sort((a, b) => new Date(b.lastMessageAt || 0).getTime() - new Date(a.lastMessageAt || 0).getTime())
-      );
+    try {
+      const res = await fetch(`/api/dm/${selectedConv}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ content }),
+      });
+      if (res.ok) {
+        const msg = await res.json();
+        setMessages((prev) => {
+          if (prev.find((m) => m.id === msg.id)) return prev;
+          return [...prev, msg];
+        });
+        setConversations((prev) =>
+          prev.map((c) => c.id === selectedConv ? { ...c, lastMessage: msg, lastMessageAt: msg.createdAt } : c)
+            .sort((a, b) => new Date(b.lastMessageAt || 0).getTime() - new Date(a.lastMessageAt || 0).getTime())
+        );
+      } else {
+        setInput(content);
+      }
+    } catch {
+      setInput(content);
+    } finally {
+      setSending(false);
     }
+  };
+
+  const handleVoiceRecorded = async (blob: Blob, duration: number) => {
+    if (!selectedConv) return;
+    setVoiceUploading(true);
+    try {
+      const fd = new FormData();
+      fd.append("file", blob, "voice.webm");
+      fd.append("duration", String(duration));
+      const uploadRes = await fetch("/api/messages/upload", { method: "POST", body: fd });
+      if (!uploadRes.ok) return;
+      const attachment = await uploadRes.json();
+      const res = await fetch(`/api/dm/${selectedConv}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ content: "", attachments: [attachment] }),
+      });
+      if (res.ok) {
+        const msg = await res.json();
+        setMessages((prev) => {
+          if (prev.find((m) => m.id === msg.id)) return prev;
+          return [...prev, msg];
+        });
+      }
+    } finally {
+      setVoiceUploading(false);
+    }
+  };
+
+  const parseAttachments = (raw: string | null | undefined): Attachment[] => {
+    if (!raw) return [];
+    try { return JSON.parse(raw); } catch { return []; }
   };
 
   const editMessage = async (messageId: string) => {
@@ -141,9 +290,9 @@ export default function DMPanel({ currentUserId, onClose }: DMPanelProps) {
   }
 
   return (
-    <div className="flex h-full">
+    <div className="flex flex-1 h-full">
       {/* Conversations list */}
-      <aside className={`w-72 max-md:w-full border-r border-neutral-200 dark:border-white/5 flex flex-col ${selectedConv ? "max-md:hidden" : ""}`}>
+      <aside className={`w-60 max-md:w-full cn-sidebar flex-shrink-0 flex flex-col ${selectedConv ? "max-md:hidden" : ""}`}>
         <div className="p-3 border-b border-neutral-200 dark:border-white/5 flex items-center justify-between">
           <h2 className="font-bold text-neutral-900 dark:text-white text-sm">Личные сообщения</h2>
           {onClose && (
@@ -162,7 +311,7 @@ export default function DMPanel({ currentUserId, onClose }: DMPanelProps) {
               <button
                 key={conv.id}
                 onClick={() => setSelectedConv(conv.id)}
-                className={`w-full text-left p-3 flex items-center gap-3 hover:bg-neutral-100 dark:hover:bg-white/5 transition-colors ${selectedConv === conv.id ? "bg-violet-50 dark:bg-cyan-400/10" : ""}`}
+                className={`w-full text-left p-3 flex items-center gap-3 hover:bg-neutral-100 dark:hover:bg-white/5 transition-colors ${selectedConv === conv.id ? "bg-[var(--cn-accent-dim)] border-l-2 border-[var(--cn-accent)]" : ""}`}
               >
                 <GlowAvatar user={conv.other} size={36} onlineColor={isOnline(conv.other.lastSeen) ? "green" : undefined} />
                 <div className="flex-1 min-w-0">
@@ -188,7 +337,7 @@ export default function DMPanel({ currentUserId, onClose }: DMPanelProps) {
       </aside>
 
       {/* Messages area */}
-      <main className={`flex-1 flex flex-col ${!selectedConv ? "max-md:hidden" : ""}`}>
+      <main className={`flex-1 flex flex-col min-h-0 ${!selectedConv ? "max-md:hidden" : ""}`}>
         {selectedConv && selectedOther ? (
           <>
             <div className="p-3 border-b border-neutral-200 dark:border-white/5 flex items-center gap-3">
@@ -229,7 +378,22 @@ export default function DMPanel({ currentUserId, onClose }: DMPanelProps) {
                       </div>
                     ) : (
                       <>
-                        <p className="text-sm whitespace-pre-wrap break-words">{msg.content}</p>
+                        {msg.content && <p className="text-sm whitespace-pre-wrap break-words">{msg.content}</p>}
+                        {parseAttachments(msg.attachments).map((att, i) => (
+                          att.isVoice ? (
+                            <div key={i} className="mt-1">
+                              <VoicePlayer url={att.url} duration={att.duration} isOwn={msg.userId === currentUserId} />
+                            </div>
+                          ) : att.isImage ? (
+                            <div key={i} className="mt-1">
+                              <img src={att.url} alt={att.name} className="max-w-[200px] rounded-lg" />
+                            </div>
+                          ) : (
+                            <a key={i} href={att.url} target="_blank" rel="noopener noreferrer" className="mt-1 block text-xs underline opacity-80">
+                              {att.name}
+                            </a>
+                          )
+                        ))}
                         <div className="flex items-center gap-1 mt-0.5">
                           <span className={`text-[10px] ${msg.userId === currentUserId ? "text-white/60" : "text-neutral-400"}`}>
                             {new Date(msg.createdAt).toLocaleTimeString("ru-RU", { hour: "2-digit", minute: "2-digit" })}
@@ -254,22 +418,30 @@ export default function DMPanel({ currentUserId, onClose }: DMPanelProps) {
               <div ref={messagesEndRef} />
             </div>
 
-            <form onSubmit={sendMessage} className="p-3 border-t border-neutral-200 dark:border-white/5">
-              <div className="flex items-center gap-2">
+            <TypingIndicator names={dmTypingName ? [dmTypingName] : []} />
+            <div className="p-3 border-t border-neutral-200 dark:border-white/5">
+              <form onSubmit={sendMessage} className="flex items-center gap-2">
                 <input
                   value={input}
-                  onChange={(e) => setInput(e.target.value)}
+                  onChange={(e) => {
+                    setInput(e.target.value);
+                    socketRef.current?.emit("dm-typing", { convId: selectedConv });
+                  }}
                   placeholder="Написать сообщение..."
-                  className="flex-1 px-3 py-2 bg-neutral-100 dark:bg-white/5 border border-neutral-200 dark:border-white/10 rounded-xl text-sm text-neutral-900 dark:text-white placeholder:text-neutral-400 outline-none focus:border-violet-500 dark:focus:border-cyan-400 transition-colors"
+                  className="flex-1 px-3 py-2 bg-[var(--cn-accent-dim)] border border-[var(--cn-border)] rounded-xl text-sm text-[var(--cn-text)] placeholder:text-[var(--cn-muted)] outline-none focus:border-[var(--cn-accent)] transition-colors"
                   maxLength={4000}
                 />
-                <button type="submit" disabled={!input.trim()} className="p-2 bg-violet-500 dark:bg-cyan-600 text-white rounded-xl disabled:opacity-50 hover:opacity-90 transition-opacity">
-                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
-                  </svg>
-                </button>
-              </div>
-            </form>
+                {input.trim() ? (
+                  <button type="submit" className="p-2 bg-violet-500 dark:bg-cyan-600 text-white rounded-xl hover:opacity-90 transition-opacity">
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
+                    </svg>
+                  </button>
+                ) : (
+                  <VoiceRecorder onRecorded={handleVoiceRecorded} disabled={voiceUploading} />
+                )}
+              </form>
+            </div>
           </>
         ) : (
           <div className="flex-1 flex items-center justify-center text-neutral-400 text-sm">
