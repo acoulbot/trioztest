@@ -830,13 +830,7 @@ function ConnectPageInner() {
   const userRole = (session.user as { role?: string }).role ?? "USER";
 
   return (
-
-    {/* ══════════════════════════════════════════════════════════════════════
-        Root: full viewport height, 3 columns
-        COL 1 (68px)  — NavRail: Communities / Friends / Messages
-        COL 2 (240px) — Context panel: channel list / friend list / DM list
-        COL 3 (flex)  — Chat + message input (Col 3 is read-only entry point)
-    ═══════════════════════════════════════════════════════════════════════ */}
+    <>
     {!splashDone && <ConnectSplash onDone={handleSplashDone} />}
     <div className="cn-main flex h-[calc(100vh-64px)] overflow-hidden">
 
@@ -1079,6 +1073,6 @@ function ConnectPageInner() {
         )}
       </AnimatePresence>
     </div>
-
+    </>
   );
 }
