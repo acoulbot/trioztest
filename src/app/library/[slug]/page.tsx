@@ -4,7 +4,7 @@ import { useState, useEffect } from "react";
 import { useParams } from "next/navigation";
 import { motion } from "framer-motion";
 import Link from "next/link";
-import DOMPurify from "dompurify";
+import MarkdownRenderer from "@/components/ui/MarkdownRenderer";
 
 interface Article {
   id: string;
@@ -15,29 +15,6 @@ interface Article {
   tags: string;
   createdAt: string;
   updatedAt: string;
-}
-
-function renderMarkdown(content: string) {
-  const raw = content
-    .split("\n")
-    .map((line) => {
-      if (line.startsWith("# ")) return `<h1 class="text-3xl font-bold text-white mb-4 mt-8">${line.slice(2)}</h1>`;
-      if (line.startsWith("## ")) return `<h2 class="text-2xl font-bold text-white mb-3 mt-6">${line.slice(3)}</h2>`;
-      if (line.startsWith("### ")) return `<h3 class="text-xl font-bold text-white mb-2 mt-4">${line.slice(4)}</h3>`;
-      if (line.startsWith("- ")) return `<li class="text-gray-300 ml-4 list-disc">${line.slice(2)}</li>`;
-      if (line.startsWith("*") && line.endsWith("*")) return `<p class="text-gray-400 italic">${line.slice(1, -1)}</p>`;
-      if (line.trim() === "") return `<br/>`;
-      const formatted = line
-        .replace(/\*\*(.+?)\*\*/g, '<strong class="text-white">$1</strong>')
-        .replace(/\*(.+?)\*/g, '<em class="text-gray-400">$1</em>');
-      return `<p class="text-gray-300 leading-relaxed">${formatted}</p>`;
-    })
-    .join("\n");
-  // Sanitize the generated HTML to prevent XSS
-  return DOMPurify.sanitize(raw, {
-    ALLOWED_TAGS: ["h1","h2","h3","p","br","li","ul","ol","strong","em"],
-    ALLOWED_ATTR: ["class"],
-  });
 }
 
 export default function ArticlePage() {
@@ -81,10 +58,9 @@ export default function ArticlePage() {
             </span>
           </div>
 
-          <div
-            className="glass-card p-8 md:p-12"
-            dangerouslySetInnerHTML={{ __html: renderMarkdown(article.content) }}
-          />
+          <div className="glass-card p-8 md:p-12">
+            <MarkdownRenderer content={article.content} />
+          </div>
 
           {article.tags && (
             <div className="flex gap-2 mt-6">

@@ -13,6 +13,9 @@ export async function GET() {
     select: {
       id: true, name: true, username: true, email: true,
       avatar: true, role: true, emailVerified: true,
+      bio: true, socialLinks: true, customStatus: true, statusEmoji: true,
+      privacyOnline: true, privacyFriends: true, privacyEmail: true,
+      notifySound: true, notifyPush: true,
       createdAt: true, lastSeen: true,
       _count: {
         select: {
@@ -21,6 +24,10 @@ export async function GET() {
           friendsReceived: true,
           gamePlayers: true,
         },
+      },
+      badges: {
+        include: { badge: true },
+        orderBy: { awardedAt: "desc" },
       },
     },
   });
@@ -34,7 +41,7 @@ export async function PATCH(req: Request) {
   if (!session?.user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const body = await req.json();
-  const { name, username, email, currentPassword, newPassword } = body;
+  const { name, username, email, currentPassword, newPassword, bio, socialLinks } = body;
   const data: Record<string, unknown> = {};
 
   // Name
@@ -63,6 +70,23 @@ export async function PATCH(req: Request) {
       return NextResponse.json({ error: "Email уже используется" }, { status: 409 });
     data.email = email;
     data.emailVerified = false; // require re-verification
+  }
+
+  // Bio
+  if (bio !== undefined) {
+    if (bio !== null && typeof bio === "string" && bio.length > 200) {
+      return NextResponse.json({ error: "Био не должно превышать 200 символов" }, { status: 400 });
+    }
+    data.bio = bio || null;
+  }
+
+  // Social links
+  if (socialLinks !== undefined) {
+    if (socialLinks !== null && typeof socialLinks === "object") {
+      data.socialLinks = JSON.stringify(socialLinks);
+    } else {
+      data.socialLinks = null;
+    }
   }
 
   // Password change

@@ -6,7 +6,7 @@ import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 import Link from "next/link";
 
-type Step = "form" | "verify";
+type Step = "form" | "verify" | "reset-password";
 type AuthType = "login" | "register";
 
 function CodeInput({
@@ -85,6 +85,8 @@ export default function SignInPage() {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const [countdown, setCountdown] = useState(0);
+  const [newPassword, setNewPassword] = useState("");
+  const [resetStep, setResetStep] = useState<"email" | "code" | "newpass">("email");
 
   useEffect(() => {
     if (countdown <= 0) return;
@@ -95,7 +97,7 @@ export default function SignInPage() {
   const handleLogin = async () => {
     setError("");
     if (!email || !password) {
-      setError("Введите email и пароль");
+      setError("Введите email/username и пароль");
       return;
     }
     setLoading(true);
@@ -106,11 +108,75 @@ export default function SignInPage() {
         redirect: false,
       });
       if (result?.error) {
-        setError("Неверный email или пароль");
+        setError("Неверный логин или пароль");
       } else {
         router.push("/");
         router.refresh();
       }
+    } catch {
+      setError("Произошла ошибка");
+    }
+    setLoading(false);
+  };
+
+  const handleForgotPassword = async () => {
+    setError("");
+    if (!email) {
+      setError("Введите email");
+      return;
+    }
+    if (!email.includes("@")) {
+      setError("Для сброса пароля введите email (не username)");
+      return;
+    }
+    setLoading(true);
+    try {
+      const res = await fetch("/api/auth/send-code", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email, type: "reset" }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setError(data.error || "Ошибка отправки кода");
+        setLoading(false);
+        return;
+      }
+      setResetStep("code");
+      setCode("");
+      setCountdown(60);
+    } catch {
+      setError("Произошла ошибка");
+    }
+    setLoading(false);
+  };
+
+  const handleResetPassword = async () => {
+    setError("");
+    if (!newPassword || newPassword.length < 8) {
+      setError("Пароль должен содержать минимум 8 символов");
+      return;
+    }
+    setLoading(true);
+    try {
+      const res = await fetch("/api/auth/reset-password", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email, code, newPassword }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setError(data.error || "Ошибка сброса пароля");
+        setLoading(false);
+        return;
+      }
+      setStep("form");
+      setResetStep("email");
+      setPassword("");
+      setCode("");
+      setNewPassword("");
+      setError("");
+      alert("Пароль успешно изменён! Войдите с новым паролем.");
     } catch {
       setError("Произошла ошибка");
     }
@@ -244,7 +310,7 @@ export default function SignInPage() {
               <p className="text-neutral-500 dark:text-gray-400 text-sm mt-1">
                 {authType === "register"
                   ? "Создайте аккаунт — код подтверждения придёт на email"
-                  : "Введите email и пароль"}
+                  : "Введите email/username и пароль"}
               </p>
             </>
           ) : (
@@ -297,13 +363,15 @@ export default function SignInPage() {
                 </>
               )}
               <div>
-                <label className="block text-sm text-neutral-600 dark:text-gray-400 mb-1">Email</label>
+                <label className="block text-sm text-neutral-600 dark:text-gray-400 mb-1">
+                  {authType === "register" ? "Email" : "Email или Username"}
+                </label>
                 <input
-                  type="email"
+                  type={authType === "register" ? "email" : "text"}
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   className="input-field"
-                  placeholder="email@example.com"
+                  placeholder={authType === "register" ? "email@example.com" : "email или username"}
                   required
                 />
               </div>
@@ -319,6 +387,17 @@ export default function SignInPage() {
                   required
                 />
               </div>
+              {authType === "login" && (
+                <div className="text-right -mt-2">
+                  <button
+                    type="button"
+                    onClick={() => { setStep("reset-password"); setResetStep("email"); setError(""); setCode(""); setNewPassword(""); }}
+                    className="text-xs text-violet-600 dark:text-cyan-400 hover:text-violet-500 dark:hover:text-cyan-300 transition-colors"
+                  >
+                    Забыли пароль?
+                  </button>
+                </div>
+              )}
 
               <button
                 onClick={authType === "login" ? handleLogin : sendCode}
@@ -376,6 +455,103 @@ export default function SignInPage() {
                 className="w-full text-sm text-neutral-500 dark:text-gray-400 hover:text-neutral-700 dark:hover:text-gray-200 transition-colors text-center py-2"
               >
                 ← Назад
+              </button>
+            </div>
+          </>
+        )}
+        {step === "reset-password" && (
+          <>
+            <div className="text-center mb-6">
+              <h1 className="text-2xl font-display font-bold text-neutral-900 dark:text-white">
+                Сброс пароля
+              </h1>
+              <p className="text-neutral-500 dark:text-gray-400 text-sm mt-1">
+                {resetStep === "email" && "Введите email для получения кода"}
+                {resetStep === "code" && <>Код отправлен на <span className="text-violet-600 dark:text-cyan-400">{email}</span></>}
+                {resetStep === "newpass" && "Введите новый пароль"}
+              </p>
+            </div>
+
+            {error && (
+              <div className="mb-4 p-3 bg-red-50 dark:bg-red-500/10 border border-red-200 dark:border-red-500/30 rounded-xl text-red-600 dark:text-red-400 text-sm text-center">
+                {error}
+              </div>
+            )}
+
+            <div className="space-y-4">
+              {resetStep === "email" && (
+                <>
+                  <div>
+                    <label className="block text-sm text-neutral-600 dark:text-gray-400 mb-1">Email</label>
+                    <input
+                      type="email"
+                      value={email}
+                      onChange={(e) => setEmail(e.target.value)}
+                      onKeyDown={(e) => { if (e.key === "Enter") handleForgotPassword(); }}
+                      className="input-field"
+                      placeholder="email@example.com"
+                      required
+                    />
+                  </div>
+                  <button
+                    onClick={handleForgotPassword}
+                    disabled={loading}
+                    className="btn-primary w-full disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {loading ? "Отправка..." : "Отправить код"}
+                  </button>
+                </>
+              )}
+
+              {resetStep === "code" && (
+                <>
+                  <CodeInput length={6} value={code} onChange={(val) => {
+                    setCode(val);
+                    if (val.length === 6) {
+                      setResetStep("newpass");
+                    }
+                  }} />
+                  <div className="text-center">
+                    <button
+                      onClick={handleForgotPassword}
+                      disabled={countdown > 0}
+                      className="text-sm text-violet-600 dark:text-cyan-400 hover:text-violet-500 dark:hover:text-cyan-300 transition-colors disabled:text-neutral-400 dark:disabled:text-gray-600 disabled:cursor-not-allowed"
+                    >
+                      {countdown > 0 ? `Отправить повторно (${countdown}с)` : "Отправить код повторно"}
+                    </button>
+                  </div>
+                </>
+              )}
+
+              {resetStep === "newpass" && (
+                <>
+                  <div>
+                    <label className="block text-sm text-neutral-600 dark:text-gray-400 mb-1">Новый пароль</label>
+                    <input
+                      type="password"
+                      value={newPassword}
+                      onChange={(e) => setNewPassword(e.target.value)}
+                      onKeyDown={(e) => { if (e.key === "Enter") handleResetPassword(); }}
+                      className="input-field"
+                      placeholder="Минимум 8 символов"
+                      required
+                    />
+                  </div>
+                  <button
+                    onClick={handleResetPassword}
+                    disabled={loading}
+                    className="btn-primary w-full disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {loading ? "Сохранение..." : "Сохранить новый пароль"}
+                  </button>
+                </>
+              )}
+
+              <button
+                onClick={() => { setStep("form"); setError(""); setResetStep("email"); }}
+                className="w-full text-sm text-neutral-500 dark:text-gray-400 hover:text-neutral-700 dark:hover:text-gray-200 transition-colors text-center py-2"
+              >
+                ← Назад к входу
               </button>
             </div>
           </>

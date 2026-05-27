@@ -2,9 +2,10 @@ import { NextRequest, NextResponse } from "next/server";
 import bcrypt from "bcryptjs";
 import prisma from "@/lib/prisma";
 import { rateLimit } from "@/lib/rateLimit";
+import { autoJoinMainCommunity } from "@/lib/mainCommunity";
 
 export async function POST(req: NextRequest) {
-  const limited = rateLimit(req, "register", { limit: 10, windowMs: 60 * 60 * 1000 });
+  const limited = await rateLimit(req, "register", { limit: 10, windowMs: 60 * 60 * 1000 });
   if (limited) return limited;
   try {
     const { email, name, username, password, verificationCode } = await req.json();
@@ -72,6 +73,13 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ error: "Email или юзернейм уже заняты" }, { status: 409 });
       }
       throw e;
+    }
+
+    // Auto-join to main community
+    try {
+      await autoJoinMainCommunity(user.id);
+    } catch {
+      // Non-critical — don't fail registration if main community join fails
     }
 
     return NextResponse.json({ id: user.id, email: user.email, name: user.name, username: user.username });

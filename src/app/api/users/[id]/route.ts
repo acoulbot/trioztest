@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import prisma from "@/lib/prisma";
+import { logAction } from "@/lib/audit";
 
 const ROLE_RANK: Record<string, number> = {
   USER: 1,
@@ -52,6 +53,15 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
     where: { id },
     data: { username: trimmed },
     select: { id: true, username: true, email: true, name: true, role: true },
+  });
+
+  await logAction({
+    userId: session.user.id,
+    username: session.user.username || session.user.name || "admin",
+    action: "update",
+    target: "User",
+    targetId: id,
+    details: `Изменение username на "${trimmed}"`,
   });
 
   return NextResponse.json(updated);
@@ -118,6 +128,20 @@ export async function PUT(req: Request, { params }: { params: Promise<{ id: stri
     },
   });
 
+  const actions: string[] = [];
+  if (role !== undefined) actions.push(`роль → ${role}`);
+  if (banned === true) actions.push(`бан: ${banReason || "без причины"}`);
+  if (banned === false) actions.push("разбан");
+
+  await logAction({
+    userId: session.user.id,
+    username: session.user.username || session.user.name || "admin",
+    action: banned === true ? "ban" : banned === false ? "unban" : "update",
+    target: "User",
+    targetId: id,
+    details: `Пользователь "${targetUser.username}": ${actions.join(", ")}`,
+  });
+
   return NextResponse.json(user);
 }
 
@@ -144,5 +168,15 @@ export async function DELETE(req: Request, { params }: { params: Promise<{ id: s
   }
 
   await prisma.user.delete({ where: { id } });
+
+  await logAction({
+    userId: session.user.id,
+    username: session.user.username || session.user.name || "admin",
+    action: "delete",
+    target: "User",
+    targetId: id,
+    details: `Удаление пользователя "${targetUser.username}"`,
+  });
+
   return NextResponse.json({ success: true });
 }

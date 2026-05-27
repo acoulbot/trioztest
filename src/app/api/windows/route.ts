@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import prisma from "@/lib/prisma";
+import { logAction } from "@/lib/audit";
 
 export async function GET() {
   const windows = await prisma.windowConfig.findMany({
@@ -26,6 +27,15 @@ export async function PUT(req: Request) {
   const item = await prisma.windowConfig.update({
     where: { id },
     data: updateData,
+  });
+
+  await logAction({
+    userId: session.user.id,
+    username: session.user.username || session.user.name || "admin",
+    action: "update",
+    target: "WindowConfig",
+    targetId: id,
+    details: `Изменение окна "${item.title || id}"`,
   });
 
   return NextResponse.json(item);

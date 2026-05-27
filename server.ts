@@ -1,6 +1,9 @@
 import { createServer } from "http";
 import next from "next";
 import { Server as SocketIOServer } from "socket.io";
+import { getToken } from "next-auth/jwt";
+import { IncomingMessage } from "http";
+import { connectRedis } from "./src/lib/redis";
 
 const dev = process.env.NODE_ENV !== "production";
 const hostname = "0.0.0.0";
@@ -16,7 +19,18 @@ interface VoiceUser {
   muted: boolean;
 }
 
+interface AuthenticatedSocket {
+  userId: string;
+  userName: string;
+}
+
 const voiceRooms = new Map<string, Map<string, VoiceUser>>();
+const authenticatedSockets = new Map<string, AuthenticatedSocket>();
+const userSockets = new Map<string, Set<string>>();
+
+const allowedOrigins = process.env.ALLOWED_ORIGINS
+  ? process.env.ALLOWED_ORIGINS.split(",").map((o) => o.trim())
+  : [`http://localhost:${port}`, `http://0.0.0.0:${port}`];
 
 app.prepare().then(() => {
   const httpServer = createServer((req, res) => {
@@ -24,15 +38,88 @@ app.prepare().then(() => {
   });
 
   const io = new SocketIOServer(httpServer, {
-    cors: { origin: "*", methods: ["GET", "POST"] },
+    cors: {
+      origin: allowedOrigins,
+      methods: ["GET", "POST"],
+      credentials: true,
+    },
     path: "/api/socketio",
   });
 
-  io.on("connection", (socket) => {
-    console.log(`[Socket] Connected: ${socket.id}`);
+  // Export io globally so API routes can emit events
+  (globalThis as Record<string, unknown>).__socketio = io;
 
-    socket.on("join-voice", ({ channelId, userId, userName }: { channelId: string; userId: string; userName: string }) => {
-      const user: VoiceUser = { socketId: socket.id, userId, userName, muted: false };
+  io.use(async (socket, next) => {
+    try {
+      const req = socket.request as IncomingMessage & { cookies?: Record<string, string> };
+      const cookieHeader = req.headers.cookie || "";
+      const cookies: Record<string, string> = {};
+      cookieHeader.split(";").forEach((c) => {
+        const [key, ...val] = c.split("=");
+        if (key) cookies[key.trim()] = val.join("=").trim();
+      });
+      req.cookies = cookies;
+
+      const token = await getToken({ req: req as Parameters<typeof getToken>[0]["req"], secret: process.env.NEXTAUTH_SECRET });
+      if (!token || !token.id) {
+        return next(new Error("Authentication required"));
+      }
+
+      authenticatedSockets.set(socket.id, {
+        userId: token.id as string,
+        userName: (token.name || token.username || "Unknown") as string,
+      });
+
+      next();
+    } catch {
+      next(new Error("Authentication failed"));
+    }
+  });
+
+  io.on("connection", (socket) => {
+    const authData = authenticatedSockets.get(socket.id);
+    if (!authData) {
+      socket.disconnect(true);
+      return;
+    }
+    console.log(`[Socket] Connected: ${socket.id} (user: ${authData.userId})`);
+
+    // Track user -> sockets mapping for targeted notifications
+    if (!userSockets.has(authData.userId)) {
+      userSockets.set(authData.userId, new Set());
+    }
+    userSockets.get(authData.userId)!.add(socket.id);
+
+    // ── DM room ───────────────────────────────────────────────────────
+    socket.join(`dm-${authData.userId}`);
+
+    // ── Text channel rooms ──────────────────────────────────────────
+    socket.on("join-channel", ({ channelId }: { channelId: string }) => {
+      socket.join(`channel-${channelId}`);
+    });
+
+    socket.on("leave-channel", ({ channelId }: { channelId: string }) => {
+      socket.leave(`channel-${channelId}`);
+    });
+
+    socket.on("typing", ({ channelId }: { channelId: string }) => {
+      socket.to(`channel-${channelId}`).emit("user-typing", {
+        userId: authData.userId,
+        userName: authData.userName,
+        channelId,
+      });
+    });
+
+    socket.on("stop-typing", ({ channelId }: { channelId: string }) => {
+      socket.to(`channel-${channelId}`).emit("user-stop-typing", {
+        userId: authData.userId,
+        channelId,
+      });
+    });
+
+    // ── Voice channels ──────────────────────────────────────────────
+    socket.on("join-voice", ({ channelId }: { channelId: string }) => {
+      const user: VoiceUser = { socketId: socket.id, userId: authData.userId, userName: authData.userName, muted: false };
 
       if (!voiceRooms.has(channelId)) {
         voiceRooms.set(channelId, new Map());
@@ -47,11 +134,30 @@ app.prepare().then(() => {
 
       socket.to(`voice-${channelId}`).emit("user-joined", user);
 
-      console.log(`[Voice] ${userName} joined channel ${channelId}. Users: ${room.size}`);
+      // Broadcast updated user list for sidebar previews
+      broadcastVoiceChannelUsers(channelId);
+
+      console.log(`[Voice] ${authData.userName} joined channel ${channelId}. Users: ${room.size}`);
     });
 
     socket.on("leave-voice", ({ channelId }: { channelId: string }) => {
       leaveVoiceChannel(socket, channelId);
+    });
+
+    // Query who is in a voice channel (without joining)
+    socket.on("get-voice-channel-users", ({ channelId }: { channelId: string }) => {
+      const room = voiceRooms.get(channelId);
+      const users = room ? Array.from(room.values()) : [];
+      socket.emit("voice-channel-users", { channelId, users });
+    });
+
+    // Query all voice channels at once
+    socket.on("get-all-voice-users", () => {
+      const result: Record<string, VoiceUser[]> = {};
+      voiceRooms.forEach((room, chId) => {
+        result[chId] = Array.from(room.values());
+      });
+      socket.emit("all-voice-users", result);
     });
 
     socket.on("voice-offer", ({ to, offer }: { to: string; offer: RTCSessionDescriptionInit }) => {
@@ -81,14 +187,40 @@ app.prepare().then(() => {
       socket.to(`voice-${channelId}`).emit("user-speaking", { socketId: socket.id, speaking });
     });
 
+    socket.on("screen-share-started", ({ channelId }: { channelId: string }) => {
+      socket.to(`voice-${channelId}`).emit("screen-share-started", { socketId: socket.id });
+    });
+
+    socket.on("screen-share-stopped", ({ channelId }: { channelId: string }) => {
+      socket.to(`voice-${channelId}`).emit("screen-share-stopped", { socketId: socket.id });
+    });
+
+    // ── Disconnect ──────────────────────────────────────────────────
     socket.on("disconnect", () => {
       console.log(`[Socket] Disconnected: ${socket.id}`);
+
+      // Clean up user socket tracking
+      if (authData) {
+        const sockets = userSockets.get(authData.userId);
+        if (sockets) {
+          sockets.delete(socket.id);
+          if (sockets.size === 0) userSockets.delete(authData.userId);
+        }
+      }
+
+      authenticatedSockets.delete(socket.id);
       voiceRooms.forEach((room, channelId) => {
         if (room.has(socket.id)) {
           leaveVoiceChannel(socket, channelId);
         }
       });
     });
+
+    function broadcastVoiceChannelUsers(channelId: string) {
+      const room = voiceRooms.get(channelId);
+      const users = room ? Array.from(room.values()) : [];
+      io.emit("voice-channel-users", { channelId, users });
+    }
 
     function leaveVoiceChannel(sock: typeof socket, channelId: string) {
       const room = voiceRooms.get(channelId);
@@ -102,11 +234,19 @@ app.prepare().then(() => {
           voiceRooms.delete(channelId);
         }
 
+        // Broadcast updated user list for sidebar previews
+        broadcastVoiceChannelUsers(channelId);
+
         if (user) {
           console.log(`[Voice] ${user.userName} left channel ${channelId}. Users: ${room.size}`);
         }
       }
     }
+  });
+
+  // Connect Redis for rate limiting (fallback to in-memory if unavailable)
+  connectRedis().then((ok) => {
+    if (ok) console.log("[Redis] Connected successfully");
   });
 
   httpServer.listen(port, () => {

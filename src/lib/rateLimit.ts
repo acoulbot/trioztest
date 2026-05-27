@@ -1,52 +1,70 @@
 import { LRUCache } from "lru-cache";
 import { NextRequest, NextResponse } from "next/server";
+import { redis } from "./redis";
 
 type RateLimitOptions = {
-  /** Maximum number of requests allowed in the window */
   limit: number;
-  /** Window size in milliseconds */
   windowMs: number;
 };
 
-const counters = new LRUCache<string, number[]>({ max: 10_000 });
+const memoryCounters = new LRUCache<string, number[]>({ max: 10_000 });
 
-/**
- * Simple in-memory rate limiter based on IP + route key.
- * Returns a 429 NextResponse if the limit is exceeded, otherwise null.
- */
-export function rateLimit(
+function buildResponse(limit: number, windowMs: number): NextResponse {
+  return NextResponse.json(
+    { error: "Слишком много запросов. Попробуйте позже." },
+    {
+      status: 429,
+      headers: {
+        "Retry-After": String(Math.ceil(windowMs / 1000)),
+        "X-RateLimit-Limit": String(limit),
+        "X-RateLimit-Remaining": "0",
+      },
+    }
+  );
+}
+
+async function rateLimitRedis(
+  cacheKey: string,
+  limit: number,
+  windowMs: number
+): Promise<boolean> {
+  try {
+    if (redis.status !== "ready") throw new Error("not connected");
+    const windowSec = Math.ceil(windowMs / 1000);
+    const current = await redis.incr(cacheKey);
+    if (current === 1) {
+      await redis.expire(cacheKey, windowSec);
+    }
+    return current > limit;
+  } catch {
+    return false;
+  }
+}
+
+function rateLimitMemory(cacheKey: string, limit: number, windowMs: number): boolean {
+  const now = Date.now();
+  const windowStart = now - windowMs;
+  const timestamps = (memoryCounters.get(cacheKey) ?? []).filter((t) => t > windowStart);
+  timestamps.push(now);
+  memoryCounters.set(cacheKey, timestamps);
+  return timestamps.length > limit;
+}
+
+export async function rateLimit(
   req: NextRequest,
   key: string,
   { limit, windowMs }: RateLimitOptions
-): NextResponse | null {
+): Promise<NextResponse | null> {
   const ip =
     req.headers.get("x-forwarded-for")?.split(",")[0].trim() ||
     req.headers.get("x-real-ip") ||
     "unknown";
 
-  const cacheKey = `${key}:${ip}`;
-  const now = Date.now();
-  const windowStart = now - windowMs;
+  const cacheKey = `rl:${key}:${ip}`;
 
-  const timestamps = (counters.get(cacheKey) ?? []).filter(
-    (t) => t > windowStart
-  );
-  timestamps.push(now);
-  counters.set(cacheKey, timestamps);
+  const exceeded =
+    (await rateLimitRedis(cacheKey, limit, windowMs)) ||
+    rateLimitMemory(cacheKey, limit, windowMs);
 
-  if (timestamps.length > limit) {
-    return NextResponse.json(
-      { error: "Слишком много запросов. Попробуйте позже." },
-      {
-        status: 429,
-        headers: {
-          "Retry-After": String(Math.ceil(windowMs / 1000)),
-          "X-RateLimit-Limit": String(limit),
-          "X-RateLimit-Remaining": "0",
-        },
-      }
-    );
-  }
-
-  return null;
+  return exceeded ? buildResponse(limit, windowMs) : null;
 }

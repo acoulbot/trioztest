@@ -3,7 +3,7 @@
 import { motion, AnimatePresence } from "framer-motion";
 import Link from "next/link";
 import Image from "next/image";
-import { useEffect, useState, useMemo } from "react";
+import { useEffect, useState, useMemo, useRef } from "react";
 import { useSession, signOut } from "next-auth/react";
 import { useTheme } from "@/components/Providers";
 import { useInlineEdit } from "@/components/InlineEditContext";
@@ -84,6 +84,8 @@ function WindowAnimation({ accentColor, seed }: { accentColor: string; seed: num
 
 function WindowCard({ window, index }: { window: WindowData; index: number }) {
   const [hovered, setHovered] = useState(false);
+  const [tilt, setTilt] = useState({ x: 0, y: 0 });
+  const cardRef = useRef<HTMLDivElement>(null);
   const seeds = [42, 77, 123, 99];
 
   const bgStyle = window.backgroundType === "video" && window.backgroundUrl
@@ -92,62 +94,104 @@ function WindowCard({ window, index }: { window: WindowData; index: number }) {
         background: `linear-gradient(135deg, ${window.gradientFrom} 0%, ${window.gradientTo} 100%)`,
       };
 
+  const handleMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
+    if (!cardRef.current) return;
+    const rect = cardRef.current.getBoundingClientRect();
+    const x = ((e.clientX - rect.left) / rect.width - 0.5) * 10;   // -5 to +5 deg
+    const y = ((e.clientY - rect.top)  / rect.height - 0.5) * -10;  // flip Y
+    setTilt({ x, y });
+  };
+
+  const handleMouseLeave = () => {
+    setHovered(false);
+    setTilt({ x: 0, y: 0 });
+  };
+
   return (
     <motion.div
       initial={{ opacity: 0, scale: 0.9 }}
       animate={{ opacity: 1, scale: 1 }}
       transition={{ duration: 0.8, delay: index * 0.15, ease: [0.25, 0.1, 0.25, 1] }}
       className="relative"
+      style={{ perspective: 800 }}
     >
       <Link href={window.href}>
         <motion.div
+          ref={cardRef}
           className="relative w-full h-full overflow-hidden cursor-pointer group"
-          style={bgStyle}
+          style={{
+            ...bgStyle,
+            transformStyle: "preserve-3d",
+            rotateX: tilt.y,
+            rotateY: tilt.x,
+          }}
+          animate={{
+            scale: hovered ? 1.025 : 1,
+            rotateX: tilt.y,
+            rotateY: tilt.x,
+          }}
+          transition={{ type: "spring", stiffness: 300, damping: 25 }}
           onMouseEnter={() => setHovered(true)}
-          onMouseLeave={() => setHovered(false)}
-          whileHover={{ scale: 1.01 }}
-          transition={{ duration: 0.3 }}
+          onMouseMove={handleMouseMove}
+          onMouseLeave={handleMouseLeave}
         >
           {window.backgroundType === "video" && window.backgroundUrl && (
-            <video
+            <motion.video
               autoPlay muted loop playsInline
               className="absolute inset-0 w-full h-full object-cover"
               src={window.backgroundUrl}
+              animate={{ scale: hovered ? 1.06 : 1 }}
+              transition={{ duration: 0.5, ease: "easeOut" }}
             />
           )}
 
           {window.backgroundType === "image" && window.backgroundUrl && (
-            <div
+            <motion.div
               className="absolute inset-0 bg-cover bg-center"
               style={{ backgroundImage: `url(${window.backgroundUrl})` }}
+              animate={{ scale: hovered ? 1.06 : 1 }}
+              transition={{ duration: 0.5, ease: "easeOut" }}
             />
           )}
 
           <WindowAnimation accentColor={window.accentColor} seed={seeds[index] || 42} />
 
+          {/* Layered gradient — bottom text mask stays, top vignette lifts on hover */}
           <motion.div
-            className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/30 to-transparent"
-            animate={{ opacity: hovered ? 0.5 : 0.7 }}
+            className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/25 to-transparent"
+            animate={{ opacity: hovered ? 0.75 : 1 }}
+            transition={{ duration: 0.35 }}
+          />
+
+          {/* Subtle edge glow on hover */}
+          <motion.div
+            className="absolute inset-0 pointer-events-none rounded-inherit"
+            style={{
+              boxShadow: `inset 0 0 40px ${window.accentColor}22`,
+            }}
+            animate={{ opacity: hovered ? 1 : 0 }}
             transition={{ duration: 0.4 }}
           />
 
           <div className="relative z-10 flex flex-col justify-end h-full p-4 sm:p-6">
-            <EditableText
-              contentKey={`window.${window.windowKey}.title`}
-              defaultValue={window.title}
-              tag="h3"
-              className="text-lg sm:text-xl md:text-2xl font-display font-bold text-white mb-1 group-hover:translate-x-1 transition-transform duration-500"
-            />
+            <motion.div animate={{ y: hovered ? -3 : 0 }} transition={{ duration: 0.3, ease: "easeOut" }}>
+              <EditableText
+                contentKey={`window.${window.windowKey}.title`}
+                defaultValue={window.title}
+                tag="h3"
+                className="text-lg sm:text-xl md:text-2xl font-display font-bold text-white mb-1"
+              />
+            </motion.div>
 
             <motion.div
-              animate={hovered ? { opacity: 1 } : { opacity: 0.3 }}
+              animate={{ opacity: hovered ? 1 : 0.35, y: hovered ? 0 : 4 }}
               transition={{ duration: 0.3 }}
             >
               <EditableText
                 contentKey={`window.${window.windowKey}.subtitle`}
                 defaultValue={window.subtitle}
                 tag="p"
-                className="text-gray-500 text-xs sm:text-sm"
+                className="text-gray-300 text-xs sm:text-sm"
               />
             </motion.div>
           </div>

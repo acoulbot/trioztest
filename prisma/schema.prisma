@@ -3,7 +3,7 @@ generator client {
 }
 
 datasource db {
-  provider = "sqlite"
+  provider = "postgresql"
   url      = env("DATABASE_URL")
 }
 
@@ -19,6 +19,17 @@ model User {
   banned         Boolean         @default(false)
   banReason      String?
   bannedUntil    DateTime?
+  bio            String?         @db.VarChar(200)
+  socialLinks    String?         @db.Text
+  customStatus   String?         @db.VarChar(100)
+  statusEmoji    String?         @db.VarChar(10)
+  privacyOnline  String          @default("everyone")
+  privacyFriends String          @default("everyone")
+  privacyEmail   Boolean         @default(false)
+  notifySound    Boolean         @default(true)
+  notifyPush     Boolean         @default(true)
+  mutedGroups    String?         @db.Text
+  mutedChannels  String?         @db.Text
   messages       Message[]
   channelMembers ChannelMember[]
   groupMembers   GroupMember[]
@@ -31,11 +42,20 @@ model User {
   gamePlayers       GamePlayer[]
   gameInvitesSent   GameInvite[]   @relation("GameInviteSender")
   gameInvitesRecvd  GameInvite[]   @relation("GameInviteReceiver")
+  reactions         Reaction[]
+  badges            UserBadge[]
+  sessions          UserSession[]
+  dmConversations1  DirectConversation[] @relation("DMUser1")
+  dmConversations2  DirectConversation[] @relation("DMUser2")
+  directMessages    DirectMessage[]
   avatarGlowEnabled Boolean         @default(false)
   avatarGlowColors  String?
   lastSeen          DateTime?
   createdAt         DateTime        @default(now())
   updatedAt         DateTime        @updatedAt
+
+  @@index([email])
+  @@index([username])
 }
 
 model VerificationCode {
@@ -55,23 +75,29 @@ model Group {
   name        String
   icon        String?
   description String        @default("")
+  rules       String        @default("") @db.Text
+  isMain      Boolean       @default(false)
   ownerId     String
   owner       User          @relation("GroupOwner", fields: [ownerId], references: [id], onDelete: Cascade)
   channels    Channel[]
   members     GroupMember[]
   invites     Invite[]
+  roles       GroupRole[]
   createdAt   DateTime      @default(now())
   updatedAt   DateTime      @updatedAt
 }
 
 model GroupMember {
-  id       String   @id @default(cuid())
-  userId   String
-  groupId  String
-  role     String   @default("MEMBER")
-  user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  group    Group    @relation(fields: [groupId], references: [id], onDelete: Cascade)
-  joinedAt DateTime @default(now())
+  id            String              @id @default(cuid())
+  userId        String
+  groupId       String
+  role          String              @default("MEMBER")
+  rulesAccepted Boolean             @default(false)
+  sortOrder     Int                 @default(0)
+  user          User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  group         Group               @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  tags          GroupMemberRole[]
+  joinedAt      DateTime            @default(now())
 
   @@unique([userId, groupId])
 }
@@ -90,16 +116,22 @@ model Invite {
 }
 
 model Channel {
-  id        String          @id @default(cuid())
-  name      String
-  type      String          @default("TEXT")
-  icon      String?
-  groupId   String
-  group     Group           @relation(fields: [groupId], references: [id], onDelete: Cascade)
-  members   ChannelMember[]
-  messages  Message[]
-  createdAt DateTime        @default(now())
-  updatedAt DateTime        @updatedAt
+  id             String               @id @default(cuid())
+  name           String
+  type           String               @default("TEXT")
+  icon           String?
+  groupId        String
+  isRestricted   Boolean              @default(false)
+  serviceId      String?
+  group          Group                @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  members        ChannelMember[]
+  messages       Message[]
+  allowedRoles   ChannelRoleAccess[]
+  createdAt      DateTime             @default(now())
+  updatedAt      DateTime             @updatedAt
+
+  @@index([groupId])
+  @@index([serviceId])
 }
 
 model ChannelMember {
@@ -110,25 +142,127 @@ model ChannelMember {
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   channel   Channel  @relation(fields: [channelId], references: [id], onDelete: Cascade)
   joinedAt  DateTime @default(now())
+  lastRead  DateTime @default(now())
 
   @@unique([userId, channelId])
 }
 
 model Message {
+  id           String    @id @default(cuid())
+  content      String
+  userId       String
+  channelId    String
+  edited       Boolean   @default(false)
+  editedAt     DateTime?
+  deleted      Boolean   @default(false)
+  pinned       Boolean   @default(false)
+  pinnedBy     String?
+  pinnedAt     DateTime?
+  replyToId    String?
+  replyTo      Message?  @relation("MessageReplies", fields: [replyToId], references: [id], onDelete: SetNull)
+  replies      Message[] @relation("MessageReplies")
+  attachments  String?
+  mentions     String?   @db.Text
+  reactions    Reaction[]
+  user         User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  channel      Channel   @relation(fields: [channelId], references: [id], onDelete: Cascade)
+  createdAt    DateTime  @default(now())
+
+  @@index([channelId, createdAt])
+  @@index([replyToId])
+}
+
+model Reaction {
   id        String   @id @default(cuid())
-  content   String
+  emoji     String
   userId    String
-  channelId String
+  messageId String
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  channel   Channel  @relation(fields: [channelId], references: [id], onDelete: Cascade)
+  message   Message  @relation(fields: [messageId], references: [id], onDelete: Cascade)
   createdAt DateTime @default(now())
+
+  @@unique([userId, messageId, emoji])
+  @@index([messageId])
+}
+
+model DirectConversation {
+  id        String          @id @default(cuid())
+  user1Id   String
+  user2Id   String
+  user1     User            @relation("DMUser1", fields: [user1Id], references: [id], onDelete: Cascade)
+  user2     User            @relation("DMUser2", fields: [user2Id], references: [id], onDelete: Cascade)
+  messages  DirectMessage[]
+  lastMessageAt DateTime?  
+  createdAt DateTime        @default(now())
+  updatedAt DateTime        @updatedAt
+
+  @@unique([user1Id, user2Id])
+  @@index([user1Id])
+  @@index([user2Id])
+}
+
+model DirectMessage {
+  id             String             @id @default(cuid())
+  content        String
+  userId         String
+  conversationId String
+  edited         Boolean            @default(false)
+  editedAt       DateTime?
+  deleted        Boolean            @default(false)
+  attachments    String?
+  user           User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  conversation   DirectConversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  createdAt      DateTime           @default(now())
+
+  @@index([conversationId, createdAt])
+}
+
+model Badge {
+  id          String      @id @default(cuid())
+  name        String
+  description String      @db.Text
+  icon        String?
+  imageUrl    String?
+  rarity      String      @default("common")
+  active      Boolean     @default(true)
+  users       UserBadge[]
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+}
+
+model UserBadge {
+  id        String   @id @default(cuid())
+  userId    String
+  badgeId   String
+  awardedBy String?
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  badge     Badge    @relation(fields: [badgeId], references: [id], onDelete: Cascade)
+  awardedAt DateTime @default(now())
+
+  @@unique([userId, badgeId])
+  @@index([userId])
+}
+
+model UserSession {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userAgent String?
+  ip        String?
+  token     String   @unique
+  active    Boolean  @default(true)
+  lastUsed  DateTime @default(now())
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+  @@index([token])
 }
 
 model Article {
   id        String   @id @default(cuid())
   title     String
   slug      String   @unique
-  content   String
+  content   String   @db.Text
   category  String
   tags      String   @default("")
   published Boolean  @default(false)
@@ -139,16 +273,55 @@ model Article {
 model Service {
   id          String  @id @default(cuid())
   title       String
-  description String
+  description String  @db.Text
   icon        String?
   order       Int     @default(0)
   active      Boolean @default(true)
 }
 
+// Custom roles (tags) for groups — no admin/mod powers, just labels
+model GroupRole {
+  id        String              @id @default(cuid())
+  name      String
+  color     String              @default("#808080")
+  groupId   String
+  group     Group               @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  members   GroupMemberRole[]
+  channels  ChannelRoleAccess[]
+  createdAt DateTime            @default(now())
+
+  @@unique([groupId, name])
+  @@index([groupId])
+}
+
+// Many-to-many: which members have which tags
+model GroupMemberRole {
+  id        String      @id @default(cuid())
+  memberId  String
+  roleId    String
+  member    GroupMember  @relation(fields: [memberId], references: [id], onDelete: Cascade)
+  role      GroupRole    @relation(fields: [roleId], references: [id], onDelete: Cascade)
+
+  @@unique([memberId, roleId])
+  @@index([roleId])
+}
+
+// Which roles can see a restricted channel
+model ChannelRoleAccess {
+  id        String    @id @default(cuid())
+  channelId String
+  roleId    String
+  channel   Channel   @relation(fields: [channelId], references: [id], onDelete: Cascade)
+  role      GroupRole @relation(fields: [roleId], references: [id], onDelete: Cascade)
+
+  @@unique([channelId, roleId])
+  @@index([channelId])
+}
+
 model EcosystemItem {
   id          String  @id @default(cuid())
   title       String
-  description String
+  description String  @db.Text
   imageUrl    String?
   linkUrl     String?
   section     String
@@ -175,7 +348,7 @@ model WindowConfig {
 model SiteConfig {
   id    String @id @default(cuid())
   key   String @unique
-  value String
+  value String @db.Text
 }
 
 model AiChat {
@@ -186,6 +359,8 @@ model AiChat {
   messages  AiMessage[]
   createdAt DateTime    @default(now())
   updatedAt DateTime    @updatedAt
+
+  @@index([userId])
 }
 
 model Friendship {
@@ -199,6 +374,7 @@ model Friendship {
   updatedAt  DateTime @updatedAt
 
   @@unique([senderId, receiverId])
+  @@index([receiverId])
 }
 
 model GameRoom {
@@ -250,7 +426,24 @@ model AiMessage {
   id        String   @id @default(cuid())
   chatId    String
   role      String
-  content   String
+  content   String   @db.Text
   chat      AiChat   @relation(fields: [chatId], references: [id], onDelete: Cascade)
   createdAt DateTime @default(now())
+
+  @@index([chatId])
+}
+
+model AuditLog {
+  id         String   @id @default(cuid())
+  userId     String
+  username   String
+  action     String
+  target     String
+  targetId   String?
+  details    String?  @db.Text
+  createdAt  DateTime @default(now())
+
+  @@index([userId])
+  @@index([createdAt])
+  @@index([action])
 }

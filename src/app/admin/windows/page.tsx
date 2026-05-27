@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
 import Link from "next/link";
+import ImageInput from "@/components/admin/ImageInput";
 
 interface WindowConfig {
   id: string;
@@ -74,7 +75,7 @@ export default function AdminWindowsPage() {
 
   if (status === "loading") {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-dark-900">
+      <div className="min-h-screen flex items-center justify-center bg-neutral-50 dark:bg-dark-900">
         <div className="animate-spin w-8 h-8 border-2 border-cyan-400 border-t-transparent rounded-full" />
       </div>
     );
@@ -83,7 +84,7 @@ export default function AdminWindowsPage() {
   if ((session?.user as { role?: string })?.role !== "ADMIN") return null;
 
   return (
-    <div className="min-h-screen bg-dark-900 py-8 px-4">
+    <div className="min-h-screen bg-neutral-50 dark:bg-dark-900 py-8 px-4">
       <div className="max-w-6xl mx-auto">
         <div className="flex items-center justify-between mb-8">
           <div>
@@ -225,21 +226,29 @@ export default function AdminWindowsPage() {
 
                   {(form.backgroundType === "video" || form.backgroundType === "image") && (
                     <div>
-                      <label className="block text-sm text-gray-400 mb-1">
-                        URL {form.backgroundType === "video" ? "видео" : "изображения"}
-                      </label>
-                      <input
-                        type="text"
-                        value={form.backgroundUrl || ""}
-                        onChange={(e) => setForm({ ...form, backgroundUrl: e.target.value })}
-                        className="input-field"
-                        placeholder={form.backgroundType === "video" ? "https://example.com/bg.mp4" : "https://example.com/bg.jpg"}
-                      />
-                      <p className="text-xs text-gray-500 mt-1">
-                        {form.backgroundType === "video"
-                          ? "Поддерживаются MP4, WebM. Видео будет зациклено и приглушено."
-                          : "Поддерживаются JPG, PNG, WebP."}
-                      </p>
+                      {form.backgroundType === "image" ? (
+                        <ImageInput
+                          label="Изображение фона"
+                          value={form.backgroundUrl || ""}
+                          onChange={(url) => setForm({ ...form, backgroundUrl: url })}
+                          uploadDir="windows"
+                          placeholder="https://... или загрузите файл"
+                        />
+                      ) : (
+                        <>
+                          <label className="block text-sm text-gray-400 mb-1">URL видео</label>
+                          <input
+                            type="text"
+                            value={form.backgroundUrl || ""}
+                            onChange={(e) => setForm({ ...form, backgroundUrl: e.target.value })}
+                            className="input-field"
+                            placeholder="https://example.com/bg.mp4"
+                          />
+                          <p className="text-xs text-gray-500 mt-1">
+                            Поддерживаются MP4, WebM. Видео будет зациклено и приглушено.
+                          </p>
+                        </>
+                      )}
                     </div>
                   )}
 

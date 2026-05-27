@@ -3,6 +3,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import prisma from "@/lib/prisma";
 import { rateLimit } from "@/lib/rateLimit";
+import { decrypt, isEncrypted } from "@/lib/encryption";
 
 // Roles that bypass the daily request limit
 const UNLIMITED_ROLES = ["ADMIN", "EDITOR", "CONSULTANT"];
@@ -24,7 +25,7 @@ export async function GET() {
 }
 
 export async function POST(req: NextRequest) {
-  const limited = rateLimit(req, "ai-chat", { limit: 30, windowMs: 60 * 60 * 1000 });
+  const limited = await rateLimit(req, "ai-chat", { limit: 30, windowMs: 60 * 60 * 1000 });
   if (limited) return limited;
 
   const session = await getServerSession(authOptions);
@@ -83,7 +84,7 @@ export async function POST(req: NextRequest) {
     });
   }
 
-  await prisma.aiMessage.create({
+  const userMessage = await prisma.aiMessage.create({
     data: { chatId: chat.id, role: "user", content: message },
   });
 
@@ -101,6 +102,15 @@ export async function POST(req: NextRequest) {
     // No API configured — save a one-time info message (not counted as AI response)
     aiResponseContent = "ИИ-ассистент пока не подключён. Администратор может настроить API в панели управления.";
   } else {
+    let apiKey = apiKeyConfig.value;
+    try {
+      if (isEncrypted(apiKey)) apiKey = decrypt(apiKey);
+    } catch {
+      aiResponseContent = "Ошибка расшифровки API ключа. Обратитесь к администратору.";
+    }
+    if (aiResponseContent) {
+      // skip AI call
+    } else
     try {
       const allMessages = await prisma.aiMessage.findMany({
         where: { chatId: chat.id },
@@ -123,7 +133,7 @@ export async function POST(req: NextRequest) {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
-            "x-api-key": apiKeyConfig.value,
+            "x-api-key": apiKey,
             "anthropic-version": "2023-06-01",
           },
           body: JSON.stringify({
@@ -144,7 +154,7 @@ export async function POST(req: NextRequest) {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
-            Authorization: `Bearer ${apiKeyConfig.value}`,
+            Authorization: `Bearer ${apiKey}`,
           },
           body: JSON.stringify({
             model: modelConfig?.value || "gpt-4o-mini",
@@ -168,8 +178,8 @@ export async function POST(req: NextRequest) {
   // On error, return 502 without polluting the chat history.
   if (isError) {
     // Roll back the user message so the request doesn't count against the limit
-    await prisma.aiMessage.deleteMany({
-      where: { chatId: chat.id, role: "user", content: message },
+    await prisma.aiMessage.delete({
+      where: { id: userMessage.id },
     });
     return NextResponse.json(
       { error: "Ошибка при обращении к ИИ API. Проверьте настройки." },

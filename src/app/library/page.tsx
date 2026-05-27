@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
 import Link from "next/link";
 import EditableText from "@/components/EditableText";
+import { stripMarkdown } from "@/components/ui/MarkdownRenderer";
 
 interface Article {
   id: string;
@@ -19,15 +20,39 @@ interface Article {
 export default function LibraryPage() {
   const [articles, setArticles] = useState<Article[]>([]);
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [searchResults, setSearchResults] = useState<Article[] | null>(null);
+  const [searching, setSearching] = useState(false);
 
   useEffect(() => {
     fetch("/api/articles?published=true").then((r) => r.json()).then(setArticles);
   }, []);
 
+  useEffect(() => {
+    if (!searchQuery.trim() || searchQuery.length < 2) {
+      setSearchResults(null);
+      return;
+    }
+    const timer = setTimeout(async () => {
+      setSearching(true);
+      try {
+        const res = await fetch(`/api/search?q=${encodeURIComponent(searchQuery)}&type=articles`);
+        if (res.ok) {
+          const data = await res.json();
+          setSearchResults(data.articles || []);
+        }
+      } catch {
+        setSearchResults(null);
+      }
+      setSearching(false);
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [searchQuery]);
+
   const categories = Array.from(new Set(articles.map((a) => a.category)));
-  const filteredArticles = selectedCategory
+  const displayArticles = searchResults ?? (selectedCategory
     ? articles.filter((a) => a.category === selectedCategory)
-    : articles;
+    : articles);
 
   return (
     <div className="min-h-screen bg-dark-900 py-12 px-4">
@@ -45,7 +70,33 @@ export default function LibraryPage() {
           <EditableText contentKey="library.subtitle" defaultValue="Хранилище знаний и лора вселенной T.Р.И.О.Z. Статьи, история, мифология." tag="p" className="text-gray-400 max-w-xl mx-auto" />
         </motion.div>
 
-        {categories.length > 0 && (
+        {/* Search */}
+        <div className="max-w-lg mx-auto mb-8">
+          <div className="relative">
+            <svg className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+            </svg>
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="Поиск по статьям..."
+              className="w-full bg-dark-700/50 border border-white/10 rounded-xl pl-12 pr-4 py-3 text-sm text-white placeholder:text-gray-500 focus:outline-none focus:border-cyan-400/50 transition-colors"
+            />
+            {searching && (
+              <div className="absolute right-4 top-1/2 -translate-y-1/2">
+                <div className="w-4 h-4 border-2 border-cyan-400 border-t-transparent rounded-full animate-spin" />
+              </div>
+            )}
+          </div>
+          {searchResults !== null && (
+            <p className="text-xs text-gray-500 mt-2 text-center">
+              {searchResults.length === 0 ? "Ничего не найдено" : `Найдено: ${searchResults.length}`}
+            </p>
+          )}
+        </div>
+
+        {categories.length > 0 && !searchResults && (
           <div className="flex flex-wrap gap-2 justify-center mb-8">
             <button
               onClick={() => setSelectedCategory(null)}
@@ -74,7 +125,7 @@ export default function LibraryPage() {
         )}
 
         <div className="space-y-4">
-          {filteredArticles.map((article, i) => (
+          {displayArticles.map((article, i) => (
             <motion.div
               key={article.id}
               initial={{ opacity: 0, y: 20 }}
@@ -97,7 +148,7 @@ export default function LibraryPage() {
                         {article.title}
                       </h3>
                       <p className="text-gray-400 text-sm mt-2 line-clamp-2">
-                        {article.content.replace(/[#*_\[\]]/g, "").slice(0, 200)}...
+                        {stripMarkdown(article.content).slice(0, 200)}...
                       </p>
                       {article.tags && (
                         <div className="flex gap-1 mt-3">
@@ -118,7 +169,7 @@ export default function LibraryPage() {
             </motion.div>
           ))}
 
-          {filteredArticles.length === 0 && (
+          {displayArticles.length === 0 && !searchResults && (
             <div className="text-center py-20 text-gray-500">
               <span className="text-4xl block mb-3">📚</span>
               <p>Статьи скоро появятся</p>

@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo } from "react";
+import { motion } from "framer-motion";
 
 /* ─── Presets ─── */
 export const GLOW_PRESETS: Record<string, { label: string; colors: string[] }> = {
@@ -149,14 +150,34 @@ export default function GlowAvatar({ user, size = 32, onlineColor, speed = 3 }: 
             width: Math.max(8, Math.round(size * 0.28)),
             height: Math.max(8, Math.round(size * 0.28)),
             borderRadius: "50%",
-            background: onlineColor === "green" ? "#22c55e" : "#9ca3af",
             zIndex: 2,
-            outline: "2px solid",
-            outlineColor: "var(--tz-online-border, #ffffff)",
-            outlineOffset: "-1px",
           }}
-          className="dark:[--tz-online-border:#171717]"
-        />
+        >
+          {/* Pulse ring for online */}
+          {onlineColor === "green" && (
+            <motion.span
+              style={{
+                position: "absolute",
+                inset: 0,
+                borderRadius: "50%",
+                background: "#22c55e",
+              }}
+              animate={{ scale: [1, 2, 1], opacity: [0.5, 0, 0.5] }}
+              transition={{ duration: 2.5, repeat: Infinity, ease: "easeOut" }}
+            />
+          )}
+          <span
+            style={{
+              position: "absolute",
+              inset: 0,
+              borderRadius: "50%",
+              background: onlineColor === "green" ? "#22c55e" : "#9ca3af",
+              outline: "2px solid",
+              outlineOffset: "-1px",
+            }}
+            className="outline-white dark:outline-[#171717]"
+          />
+        </span>
       )}
     </div>
   );
