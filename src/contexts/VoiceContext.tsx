@@ -15,6 +15,8 @@ export interface VoiceUser {
   muted:    boolean;
 }
 
+export type ConnectionQuality = "good" | "medium" | "poor" | "unknown";
+
 interface VoiceState {
   isConnected:     boolean;
   channelId:       string | null;
@@ -34,6 +36,8 @@ interface VoiceState {
   vadProb:         number;
   userVolumes:     Map<string, number>;
   channelUsersMap: Map<string, VoiceUser[]>;
+  connectionQuality: Map<string, ConnectionQuality>;
+  localPing:       number | null;
 }
 
 interface VoiceActions {
@@ -114,6 +118,11 @@ export function VoiceProvider({ children }: { children: React.ReactNode }) {
 
   /* ── Channel users preview (before joining) ── */
   const [channelUsersMap, setChannelUsersMap] = useState<Map<string, VoiceUser[]>>(new Map());
+
+  /* ── Connection quality monitoring ── */
+  const [connectionQuality, setConnectionQuality] = useState<Map<string, ConnectionQuality>>(new Map());
+  const [localPing, setLocalPing] = useState<number | null>(null);
+  const statsIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
   /* ── Refs ── */
   const socketRef           = useRef<Socket | null>(null);
@@ -606,6 +615,63 @@ export function VoiceProvider({ children }: { children: React.ReactNode }) {
     }
   }, []);
 
+  /* ── Connection quality stats polling ── */
+  useEffect(() => {
+    if (!isConnected) {
+      if (statsIntervalRef.current) { clearInterval(statsIntervalRef.current); statsIntervalRef.current = null; }
+      setConnectionQuality(new Map());
+      setLocalPing(null);
+      return;
+    }
+
+    const pollStats = async () => {
+      const qualityMap = new Map<string, ConnectionQuality>();
+      let bestPing: number | null = null;
+
+      for (const [socketId, pc] of peersRef.current.entries()) {
+        if (pc.connectionState !== "connected") {
+          qualityMap.set(socketId, "unknown");
+          continue;
+        }
+        try {
+          const stats = await pc.getStats();
+          let rtt: number | null = null;
+          let packetsLost = 0;
+          let packetsReceived = 0;
+
+          stats.forEach(report => {
+            if (report.type === "candidate-pair" && report.state === "succeeded") {
+              rtt = report.currentRoundTripTime != null ? report.currentRoundTripTime * 1000 : null;
+            }
+            if (report.type === "inbound-rtp" && report.kind === "audio") {
+              packetsLost = report.packetsLost ?? 0;
+              packetsReceived = report.packetsReceived ?? 0;
+            }
+          });
+
+          const lossRate = packetsReceived > 0 ? packetsLost / (packetsLost + packetsReceived) : 0;
+
+          let quality: ConnectionQuality = "good";
+          if (rtt === null) quality = "unknown";
+          else if (rtt > 400 || lossRate > 0.1) quality = "poor";
+          else if (rtt > 150 || lossRate > 0.03) quality = "medium";
+
+          qualityMap.set(socketId, quality);
+          if (rtt !== null && (bestPing === null || rtt < bestPing)) bestPing = rtt;
+        } catch {
+          qualityMap.set(socketId, "unknown");
+        }
+      }
+
+      setConnectionQuality(qualityMap);
+      setLocalPing(bestPing);
+    };
+
+    pollStats();
+    statsIntervalRef.current = setInterval(pollStats, 3000);
+    return () => { if (statsIntervalRef.current) clearInterval(statsIntervalRef.current); };
+  }, [isConnected]);
+
   /* ── Cleanup on unmount ── */
   useEffect(() => () => {
     if (isConnected) leaveVoice();
@@ -629,6 +695,7 @@ export function VoiceProvider({ children }: { children: React.ReactNode }) {
     isSharingScreen, screenSharerId, screenShareName: activeScreenName,
     screenStream,
     nsEnabled, nsStatus, vadProb, userVolumes, channelUsersMap,
+    connectionQuality, localPing,
     joinVoice, leaveVoice, toggleMute, toggleDeafen, toggleNS,
     startScreenShare, stopScreenShare, setUserVolume, setNsEnabled,
     queryChannelUsers,

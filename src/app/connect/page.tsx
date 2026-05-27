@@ -766,6 +766,8 @@ function ConnectPageInner() {
     isSharingScreen: voice.isSharingScreen,
     screenSharerId: voice.screenSharerId,
     userVolumes: voice.userVolumes,
+    connectionQuality: voice.connectionQuality,
+    localPing: voice.localPing,
   };
 
   const voiceActions = {

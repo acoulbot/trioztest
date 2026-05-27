@@ -41,6 +41,11 @@ export default function VoiceMiniWidget() {
                 <span className="text-[10px] text-neutral-400">
                   {voice.users.length}
                 </span>
+                {voice.localPing !== null && (
+                  <span className={`text-[9px] ${voice.localPing < 150 ? "text-green-400" : voice.localPing < 400 ? "text-yellow-400" : "text-red-400"}`}>
+                    {Math.round(voice.localPing)}ms
+                  </span>
+                )}
               </div>
               <div className="flex items-center gap-1 flex-shrink-0">
                 <button
@@ -86,6 +91,12 @@ export default function VoiceMiniWidget() {
                       {u.userName.charAt(0).toUpperCase()}
                     </div>
                     <span className="text-xs text-neutral-200 truncate flex-1">{u.userName}</span>
+                    {/* Quality dot */}
+                    {(() => {
+                      const q = voice.connectionQuality.get(u.socketId);
+                      const color = q === "good" ? "bg-green-400" : q === "medium" ? "bg-yellow-400" : q === "poor" ? "bg-red-400" : "bg-neutral-500";
+                      return <span className={`w-2 h-2 rounded-full flex-shrink-0 ${color}`} />;
+                    })()}
                     {u.muted && (
                       <svg width={10} height={10} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="text-red-400 flex-shrink-0">
                         <line x1="1" y1="1" x2="23" y2="23" />
