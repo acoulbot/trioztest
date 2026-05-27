@@ -1,6 +1,5 @@
 "use client";
 
-import { useState, useRef, useCallback } from "react";
 import Image from "next/image";
 
 interface Group {
@@ -8,8 +7,6 @@ interface Group {
   name: string;
   icon: string | null;
   description: string;
-  isMain?: boolean;
-  sortOrder?: number;
   _count: { members: number; channels: number };
 }
 
@@ -19,7 +16,6 @@ interface GroupListPanelProps {
   onSelectGroup: (id: string) => void;
   onCreateGroup: () => void;
   onJoinGroup: () => void;
-  onReorder?: (groupIds: string[]) => void;
 }
 
 function GroupAvatar({ icon, name }: { icon: string | null; name: string }) {
@@ -56,53 +52,7 @@ export default function GroupListPanel({
   onSelectGroup,
   onCreateGroup,
   onJoinGroup,
-  onReorder,
 }: GroupListPanelProps) {
-  const [dragOverId, setDragOverId] = useState<string | null>(null);
-  const dragItemRef = useRef<string | null>(null);
-
-  const handleDragStart = useCallback((groupId: string) => {
-    dragItemRef.current = groupId;
-  }, []);
-
-  const handleDragOver = useCallback((e: React.DragEvent, groupId: string) => {
-    e.preventDefault();
-    if (dragItemRef.current && dragItemRef.current !== groupId) {
-      setDragOverId(groupId);
-    }
-  }, []);
-
-  const handleDragLeave = useCallback(() => {
-    setDragOverId(null);
-  }, []);
-
-  const handleDrop = useCallback((targetId: string) => {
-    setDragOverId(null);
-    const sourceId = dragItemRef.current;
-    dragItemRef.current = null;
-    if (!sourceId || sourceId === targetId || !onReorder) return;
-
-    // Separate pinned (isMain) from draggable groups
-    const pinned = groups.filter((g) => g.isMain);
-    const draggable = groups.filter((g) => !g.isMain);
-
-    const sourceIdx = draggable.findIndex((g) => g.id === sourceId);
-    const targetIdx = draggable.findIndex((g) => g.id === targetId);
-    if (sourceIdx === -1 || targetIdx === -1) return;
-
-    const reordered = [...draggable];
-    const [moved] = reordered.splice(sourceIdx, 1);
-    reordered.splice(targetIdx, 0, moved);
-
-    const newOrder = [...pinned, ...reordered].map((g) => g.id);
-    onReorder(newOrder);
-  }, [groups, onReorder]);
-
-  const handleDragEnd = useCallback(() => {
-    dragItemRef.current = null;
-    setDragOverId(null);
-  }, []);
-
   return (
     <div className="flex flex-col h-full cn-sidebar">
       {/* Header */}
@@ -134,66 +84,35 @@ export default function GroupListPanel({
         ) : (
           groups.map((g) => {
             const isActive = selectedGroup === g.id;
-            const isDraggable = !g.isMain;
-            const isDragOver = dragOverId === g.id;
-
             return (
-              <div
+              <button
                 key={g.id}
-                draggable={isDraggable}
-                onDragStart={isDraggable ? () => handleDragStart(g.id) : undefined}
-                onDragOver={isDraggable ? (e) => handleDragOver(e, g.id) : undefined}
-                onDragLeave={isDraggable ? handleDragLeave : undefined}
-                onDrop={isDraggable ? () => handleDrop(g.id) : undefined}
-                onDragEnd={handleDragEnd}
-                className={`transition-all ${isDragOver ? "border-t-2 border-cyan-400 dark:border-cyan-400" : "border-t-2 border-transparent"}`}
-                style={{ cursor: isDraggable ? "grab" : undefined }}
+                onClick={() => onSelectGroup(g.id)}
+                className="cn-channel-btn"
+                style={
+                  isActive
+                    ? {
+                        background: "var(--cn-accent-dim)",
+                        color: "var(--cn-accent-text)",
+                        borderLeftColor: "var(--cn-accent)",
+                        fontWeight: 600,
+                      }
+                    : {}
+                }
               >
-                <button
-                  onClick={() => onSelectGroup(g.id)}
-                  className="cn-channel-btn w-full"
-                  style={
-                    isActive
-                      ? {
-                          background: "var(--cn-accent-dim)",
-                          color: "var(--cn-accent-text)",
-                          borderLeftColor: "var(--cn-accent)",
-                          fontWeight: 600,
-                        }
-                      : {}
-                  }
-                >
-                  <GroupAvatar icon={g.icon} name={g.name} />
-                  <div className="min-w-0 flex-1 text-left">
-                    <div className="flex items-center gap-1">
-                      <span
-                        className="text-sm font-semibold truncate"
-                        style={{ color: isActive ? "var(--cn-accent-text)" : "var(--cn-text)" }}
-                      >
-                        {g.name}
-                      </span>
-                      {g.isMain && (
-                        <span className="text-[9px] px-1 py-0.5 rounded bg-violet-100 dark:bg-cyan-400/10 text-violet-600 dark:text-cyan-400 font-medium flex-shrink-0">
-                          Главное
-                        </span>
-                      )}
-                    </div>
-                    <div className="text-xs truncate" style={{ color: "var(--cn-muted)" }}>
-                      {g._count.members} участников · {g._count.channels} каналов
-                    </div>
+                <GroupAvatar icon={g.icon} name={g.name} />
+                <div className="min-w-0 flex-1 text-left">
+                  <div
+                    className="text-sm font-semibold truncate"
+                    style={{ color: isActive ? "var(--cn-accent-text)" : "var(--cn-text)" }}
+                  >
+                    {g.name}
                   </div>
-                  {isDraggable && (
-                    <svg className="w-4 h-4 flex-shrink-0 opacity-30" viewBox="0 0 24 24" fill="currentColor">
-                      <circle cx="9" cy="6" r="1.5" />
-                      <circle cx="15" cy="6" r="1.5" />
-                      <circle cx="9" cy="12" r="1.5" />
-                      <circle cx="15" cy="12" r="1.5" />
-                      <circle cx="9" cy="18" r="1.5" />
-                      <circle cx="15" cy="18" r="1.5" />
-                    </svg>
-                  )}
-                </button>
-              </div>
+                  <div className="text-xs truncate" style={{ color: "var(--cn-muted)" }}>
+                    {g._count.members} участников · {g._count.channels} каналов
+                  </div>
+                </div>
+              </button>
             );
           })
         )}

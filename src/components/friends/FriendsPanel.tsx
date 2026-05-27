@@ -47,7 +47,6 @@ export default function FriendsPanel({ onMessageFriend }: FriendsPanelProps) {
   const [username, setUsername] = useState("");
   const [message, setMessage] = useState<{ text: string; type: "ok" | "err" } | null>(null);
   const [loading, setLoading] = useState(false);
-  const [selectedFriend, setSelectedFriend] = useState<Friend | null>(null);
 
   const fetchFriends = useCallback(async () => {
     const res = await fetch("/api/friends");
@@ -159,11 +158,7 @@ export default function FriendsPanel({ onMessageFriend }: FriendsPanelProps) {
                 </div>
               ) : (
                 data.friends.map((f) => (
-                  <button
-                    key={f.id}
-                    onClick={() => setSelectedFriend(f)}
-                    className="w-full flex items-center gap-2 px-2 py-2 rounded-lg hover:bg-[var(--cn-hover)] transition-colors cursor-pointer text-left"
-                  >
+                  <div key={f.id} className="flex items-center gap-2 px-2 py-2 rounded-lg hover:bg-[var(--cn-hover)] transition-colors group">
                     <div className="relative flex-shrink-0">
                       <GlowAvatar
                         user={{ id: f.id, name: f.name, avatar: f.avatar, role: f.role ?? "USER", avatarGlowEnabled: f.avatarGlowEnabled, avatarGlowColors: f.avatarGlowColors }}
@@ -177,7 +172,41 @@ export default function FriendsPanel({ onMessageFriend }: FriendsPanelProps) {
                         @{f.username} {!isOnline(f.lastSeen) && f.lastSeen && <span className="text-neutral-400/70">· {timeAgo(f.lastSeen)}</span>}
                       </div>
                     </div>
-                  </button>
+                    <div className="flex gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
+                      {/* Profile button */}
+                      <a
+                        href={`/user/${f.username}`}
+                        className="p-1.5 text-neutral-400 hover:text-violet-500 dark:hover:text-cyan-400 transition-colors"
+                        title="Профиль"
+                      >
+                        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                        </svg>
+                      </a>
+                      {/* Message button */}
+                      {onMessageFriend && (
+                        <button
+                          onClick={() => onMessageFriend(f.id)}
+                          className="p-1.5 text-neutral-400 hover:text-violet-500 dark:hover:text-cyan-400 transition-colors"
+                          title="Написать"
+                        >
+                          <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z" />
+                          </svg>
+                        </button>
+                      )}
+                      {/* Remove button */}
+                      <button
+                        onClick={() => removeFriend(f.friendshipId)}
+                        className="p-1.5 text-neutral-400 hover:text-red-500 transition-colors"
+                        title="Удалить из друзей"
+                      >
+                        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                        </svg>
+                      </button>
+                    </div>
+                  </div>
                 ))
               )}
             </motion.div>
@@ -261,77 +290,6 @@ export default function FriendsPanel({ onMessageFriend }: FriendsPanelProps) {
           )}
         </AnimatePresence>
       </div>
-
-      {/* Friend profile popup */}
-      <AnimatePresence>
-        {selectedFriend && (
-          <motion.div
-            key="friend-popup-overlay"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm"
-            onClick={() => setSelectedFriend(null)}
-          >
-            <motion.div
-              key="friend-popup"
-              initial={{ opacity: 0, scale: 0.92, y: 12 }}
-              animate={{ opacity: 1, scale: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.92, y: 12 }}
-              transition={{ duration: 0.15 }}
-              className="w-72 rounded-2xl bg-white dark:bg-neutral-900 border border-neutral-200 dark:border-white/10 shadow-2xl overflow-hidden"
-              onClick={(e) => e.stopPropagation()}
-            >
-              {/* Banner */}
-              <div className="h-20 bg-gradient-to-br from-violet-500/30 to-indigo-500/30 dark:from-cyan-500/20 dark:to-violet-500/20" />
-
-              {/* Avatar */}
-              <div className="-mt-8 px-5">
-                <GlowAvatar
-                  user={{ id: selectedFriend.id, name: selectedFriend.name, avatar: selectedFriend.avatar, role: selectedFriend.role ?? "USER", avatarGlowEnabled: selectedFriend.avatarGlowEnabled, avatarGlowColors: selectedFriend.avatarGlowColors }}
-                  size={56}
-                  onlineColor={isOnline(selectedFriend.lastSeen) ? "green" : "gray"}
-                />
-              </div>
-
-              {/* Info */}
-              <div className="px-5 pt-2 pb-4">
-                <div className="text-base font-semibold text-neutral-900 dark:text-white">{selectedFriend.name}</div>
-                <div className="text-xs text-neutral-400">@{selectedFriend.username}</div>
-                {selectedFriend.lastSeen && (
-                  <div className="text-[11px] text-neutral-400/70 mt-0.5">
-                    {isOnline(selectedFriend.lastSeen) ? "В сети" : `Был(а) ${timeAgo(selectedFriend.lastSeen)}`}
-                  </div>
-                )}
-
-                {/* Actions */}
-                <div className="flex flex-col gap-2 mt-4">
-                  {onMessageFriend && (
-                    <button
-                      onClick={() => { onMessageFriend(selectedFriend.id); setSelectedFriend(null); }}
-                      className="w-full px-3 py-2 bg-gradient-to-r from-violet-600 to-indigo-600 dark:from-cyan-500 dark:to-cyan-400 text-white dark:text-neutral-900 rounded-xl text-sm font-medium hover:shadow-lg transition-all"
-                    >
-                      Написать
-                    </button>
-                  )}
-                  <a
-                    href={`/user/${selectedFriend.username}`}
-                    className="w-full px-3 py-2 bg-neutral-100 dark:bg-white/5 text-neutral-700 dark:text-gray-300 rounded-xl text-sm font-medium text-center hover:bg-neutral-200 dark:hover:bg-white/10 transition-colors"
-                  >
-                    Профиль
-                  </a>
-                  <button
-                    onClick={() => { removeFriend(selectedFriend.friendshipId); setSelectedFriend(null); }}
-                    className="w-full px-3 py-2 bg-red-50 dark:bg-red-900/10 text-red-500 dark:text-red-400 border border-red-200 dark:border-red-500/20 rounded-xl text-sm font-medium hover:bg-red-100 dark:hover:bg-red-900/20 transition-colors"
-                  >
-                    Удалить из друзей
-                  </button>
-                </div>
-              </div>
-            </motion.div>
-          </motion.div>
-        )}
-      </AnimatePresence>
     </div>
   );
 }

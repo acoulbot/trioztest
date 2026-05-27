@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { io } from "socket.io-client";
-import { GlowAvatarUser } from "@/components/ui/GlowAvatar";
+import GlowAvatar, { GlowAvatarUser } from "@/components/ui/GlowAvatar";
 import AudioBars from "@/components/ui/AudioBars";
 
 /* ─── Types ─── */
@@ -13,8 +13,6 @@ interface Channel {
   type: string;
   icon: string | null;
   groupId: string;
-  serviceId?: string | null;
-  isRestricted?: boolean;
   _count: { members: number; messages: number };
 }
 
@@ -30,7 +28,6 @@ interface GroupDetail {
   icon: string | null;
   description: string;
   myRole: string;
-  isMain?: boolean;
   channels: Channel[];
   members: { user: { id: string; name: string; username: string; avatar: string | null; role: string }; role: string }[];
 }
@@ -88,27 +85,17 @@ interface ChannelSidebarProps {
 
 export default function ChannelSidebar({
   groupDetail, selectedChannel, unreadCounts, canManage,
-  myProfileUser: _myProfileUser, userName, userUsername: _userUsername, userRole: _userRole,
+  myProfileUser, userName, userUsername, userRole,
   onChannelClick, onDeleteChannel, onCreateChannel,
-  onInvite, onToggleMembers, onProfileSettings: _onProfileSettings, onOpenSettings, memberCount, onBack,
+  onInvite, onToggleMembers, onProfileSettings, onOpenSettings, memberCount, onBack,
   voiceState, voiceActions,
 }: ChannelSidebarProps) {
-  // Separate service-linked channels from regular channels
-  const serviceChannels = groupDetail.channels.filter((c) => c.serviceId);
-  const regularChannels = groupDetail.channels.filter((c) => !c.serviceId);
+  const textChannels = groupDetail.channels.filter((c) => c.type === "TEXT");
+  const voiceChannels = groupDetail.channels.filter((c) => c.type === "VOICE");
 
-  const textChannels = regularChannels.filter((c) => c.type === "TEXT");
-  const newsChannels = regularChannels.filter((c) => c.type === "NEWS");
-  const voiceChannels = regularChannels.filter((c) => c.type === "VOICE");
-
-  // Group service channels by serviceId
-  const serviceGroups = new Map<string, Channel[]>();
-  for (const ch of serviceChannels) {
-    if (!ch.serviceId) continue;
-    const arr = serviceGroups.get(ch.serviceId) ?? [];
-    arr.push(ch);
-    serviceGroups.set(ch.serviceId, arr);
-  }
+  /* ── Collapsible category state ── */
+  const [textOpen,  setTextOpen]  = useState(true);
+  const [voiceOpen, setVoiceOpen] = useState(true);
 
   /* ── Track voice channel occupants via separate socket ── */
   const [channelUsersMap, setChannelUsersMap] = useState<Record<string, VoiceUser[]>>({});
@@ -156,57 +143,33 @@ export default function ChannelSidebar({
 
       {/* ── Channels ── */}
       <nav className="flex-1 overflow-y-auto p-2 space-y-0.5" aria-label="Каналы">
-        {/* News channels */}
-        {newsChannels.length > 0 && (
-          <>
-            <div className="flex items-center justify-between px-2 py-1">
-              <span className="text-[11px] text-amber-500 dark:text-amber-400 uppercase tracking-wider font-semibold">Новости</span>
-            </div>
-            {newsChannels.map((ch) => (
-              <div key={ch.id} className="group flex items-center">
-                <button
-                  onClick={() => onChannelClick(ch)}
-                  className={`cn-channel-btn flex-1 text-left px-2.5 py-1.5 rounded-lg flex items-center gap-2 transition-all text-sm ${
-                    selectedChannel === ch.id ? "active" : ""
-                  }`}
-                  aria-current={selectedChannel === ch.id ? "page" : undefined}
-                >
-                  <span className="text-base">{ch.icon || "\uD83D\uDCE2"}</span>
-                  <span className="truncate flex-1">{ch.name}</span>
-                  {(unreadCounts[ch.id] ?? 0) > 0 && (
-                    <span className="ml-auto bg-amber-500 text-white text-[10px] px-1.5 py-0.5 rounded-full font-bold min-w-[18px] text-center">
-                      {unreadCounts[ch.id]}
-                    </span>
-                  )}
-                </button>
-                {canManage && (
-                  <button
-                    onClick={() => onDeleteChannel(ch.id)}
-                    className="opacity-0 group-hover:opacity-100 p-1 text-neutral-400 hover:text-red-500 transition-all"
-                    aria-label={`Delete ${ch.name}`}
-                  >
-                    <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                    </svg>
-                  </button>
-                )}
-              </div>
-            ))}
-          </>
-        )}
-
-        {/* Text channels */}
-        <div className="flex items-center justify-between px-2 py-1 mt-1">
-          <span className="text-[11px] text-neutral-400 uppercase tracking-wider font-semibold">Текстовые</span>
-          {canManage && (
-            <button onClick={onCreateChannel} className="text-neutral-400 hover:text-violet-500 dark:hover:text-cyan-400 transition-colors" aria-label="Создать канал">
+        {/* Text channels — collapsible */}
+        <div className="flex items-center justify-between px-2 py-1 group/cat">
+          <button
+            onClick={() => setTextOpen(o => !o)}
+            className="flex items-center gap-1.5 flex-1 text-left text-[11px] text-neutral-400 uppercase tracking-wider font-semibold hover:text-neutral-600 dark:hover:text-neutral-300 transition-colors"
+            aria-expanded={textOpen}
+          >
+            <svg
+              className={`w-2.5 h-2.5 flex-shrink-0 transition-transform duration-200 ${textOpen ? "rotate-90" : "rotate-0"}`}
+              fill="currentColor" viewBox="0 0 6 10"
+            >
+              <path d="M1 1l4 4-4 4" stroke="currentColor" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round" fill="none" />
+            </svg>
+            Текстовые
+            {!textOpen && textChannels.some(c => (unreadCounts[c.id] ?? 0) > 0) && (
+              <span className="ml-auto w-1.5 h-1.5 rounded-full bg-violet-500 dark:bg-cyan-400 flex-shrink-0" />
+            )}
+          </button>
+          {canManage && textOpen && (
+            <button onClick={onCreateChannel} className="text-neutral-400 hover:text-violet-500 dark:hover:text-cyan-400 transition-colors opacity-0 group-hover/cat:opacity-100" aria-label="Создать канал">
               <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
               </svg>
             </button>
           )}
         </div>
-        {textChannels.map((ch) => (
+        {textOpen && textChannels.map((ch) => (
           <div key={ch.id} className="group flex items-center">
             <button
               onClick={() => onChannelClick(ch)}
@@ -237,13 +200,25 @@ export default function ChannelSidebar({
           </div>
         ))}
 
-        {/* Voice channels */}
+        {/* Voice channels — collapsible */}
         {voiceChannels.length > 0 && (
           <>
-            <div className="flex items-center justify-between px-2 py-1 mt-3">
-              <span className="text-[11px] text-neutral-400 uppercase tracking-wider font-semibold">Голосовые</span>
+            <div className="flex items-center justify-between px-2 py-1 mt-3 group/cat">
+              <button
+                onClick={() => setVoiceOpen(o => !o)}
+                className="flex items-center gap-1.5 flex-1 text-left text-[11px] text-neutral-400 uppercase tracking-wider font-semibold hover:text-neutral-600 dark:hover:text-neutral-300 transition-colors"
+                aria-expanded={voiceOpen}
+              >
+                <svg
+                  className={`w-2.5 h-2.5 flex-shrink-0 transition-transform duration-200 ${voiceOpen ? "rotate-90" : "rotate-0"}`}
+                  fill="none" viewBox="0 0 6 10"
+                >
+                  <path d="M1 1l4 4-4 4" stroke="currentColor" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round" />
+                </svg>
+                Голосовые
+              </button>
             </div>
-            {voiceChannels.map((ch) => {
+            {voiceOpen && voiceChannels.map((ch) => {
               const isActive = currentVoiceChannelId === ch.id;
               const previewUsers = channelUsersMap[ch.id] ?? [];
               const connectedUsers = isActive && voiceState ? voiceState.users : [];
@@ -336,62 +311,6 @@ export default function ChannelSidebar({
                       ))}
                     </div>
                   )}
-                </div>
-              );
-            })}
-          </>
-        )}
-
-        {/* Service-linked channel sections (main community only) */}
-        {serviceGroups.size > 0 && (
-          <>
-            {Array.from(serviceGroups.entries()).map(([serviceId, channels]) => {
-              const newsChannel = channels.find((c) => c.type === "NEWS");
-              const sectionName = newsChannel?.name || channels[0]?.name || serviceId;
-              const isInactive = channels.some((c) => c.isRestricted);
-
-              return (
-                <div key={serviceId} className="mt-3">
-                  <div className="flex items-center gap-1 px-2 py-1">
-                    <span className={`text-[11px] uppercase tracking-wider font-semibold ${isInactive ? "text-red-400/70" : "text-violet-400 dark:text-cyan-400"}`}>
-                      {sectionName}
-                    </span>
-                    {isInactive && (
-                      <span className="text-[9px] px-1 py-0.5 rounded bg-red-100 dark:bg-red-500/10 text-red-500 font-medium whitespace-nowrap">
-                        Не работает
-                      </span>
-                    )}
-                  </div>
-                  {channels.map((ch) => (
-                    <div key={ch.id} className="group flex items-center">
-                      <button
-                        onClick={() => onChannelClick(ch)}
-                        className={`cn-channel-btn flex-1 text-left px-2.5 py-1.5 rounded-lg flex items-center gap-2 transition-all text-sm ${
-                          selectedChannel === ch.id ? "active" : ""
-                        } ${isInactive ? "opacity-60" : ""}`}
-                        aria-current={selectedChannel === ch.id ? "page" : undefined}
-                      >
-                        <span className="text-base">{ch.icon || (ch.type === "NEWS" ? "\uD83D\uDCF0" : "\uD83D\uDCAC")}</span>
-                        <span className="truncate flex-1 text-xs">{ch.name.replace(`${sectionName} \u2014 `, "")}</span>
-                        {(unreadCounts[ch.id] ?? 0) > 0 && (
-                          <span className="ml-auto bg-red-500 text-white text-[10px] px-1.5 py-0.5 rounded-full font-bold min-w-[18px] text-center">
-                            {unreadCounts[ch.id]}
-                          </span>
-                        )}
-                      </button>
-                      {canManage && (
-                        <button
-                          onClick={() => onDeleteChannel(ch.id)}
-                          className="opacity-0 group-hover:opacity-100 p-1 text-neutral-400 hover:text-red-500 transition-all"
-                          aria-label={`Delete ${ch.name}`}
-                        >
-                          <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                          </svg>
-                        </button>
-                      )}
-                    </div>
-                  ))}
                 </div>
               );
             })}

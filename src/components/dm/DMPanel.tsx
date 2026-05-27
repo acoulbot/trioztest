@@ -7,6 +7,7 @@ import { isOnline, timeAgo } from "@/lib/timeAgo";
 import TypingIndicator from "@/components/ui/TypingIndicator";
 import VoiceRecorder from "@/components/ui/VoiceRecorder";
 import VoicePlayer from "@/components/ui/VoicePlayer";
+import { playDMNotification } from "@/lib/dmSound";
 
 interface Attachment {
   url: string;
@@ -162,6 +163,10 @@ export default function DMPanel({ currentUserId, onClose, initialFriendId }: DMP
           if (prev.find((m) => m.id === msg.id)) return prev;
           return [...prev, msg];
         });
+      }
+      // Play notification only for incoming messages (not own)
+      if (msg.userId !== currentUserId) {
+        playDMNotification();
       }
       setConversations((prev) =>
         prev.map((c) => c.id === msg.conversationId

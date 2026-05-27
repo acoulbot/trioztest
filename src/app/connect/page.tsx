@@ -18,8 +18,7 @@ import ChannelSidebar from "@/components/connect/ChannelSidebar";
 import MessageArea from "@/components/connect/MessageArea";
 import MobileGroupList from "@/components/connect/MobileGroupList";
 import ModalBackdrop from "@/components/connect/ModalBackdrop";
-import RoleManager from "@/components/connect/RoleManager";
-import { RoleTag } from "@/components/connect/RoleManager";
+import ConnectSplash from "@/components/connect/ConnectSplash";
 import { ThemeProvider } from "@/contexts/ThemeContext";
 
 const VoiceScreenShare = dynamic(() => import("@/components/voice/VoiceScreenShare"), { ssr: false });
@@ -36,7 +35,6 @@ interface Group {
   icon: string | null;
   description: string;
   ownerId: string;
-  isMain?: boolean;
   _count: { members: number; channels: number };
 }
 
@@ -46,15 +44,12 @@ interface Channel {
   type: string;
   icon: string | null;
   groupId: string;
-  serviceId?: string | null;
-  isRestricted?: boolean;
   _count: { members: number; messages: number };
 }
 
 interface GroupMember {
   id: string;
   role: string;
-  tags?: { role: { id: string; name: string; color: string } }[];
   user: { id: string; name: string; username: string; avatar: string | null; role: string; lastSeen?: string | null; avatarGlowEnabled?: boolean; avatarGlowColors?: string | null };
 }
 
@@ -62,7 +57,6 @@ interface GroupDetail extends Group {
   myRole: string;
   rules: string;
   rulesAccepted: boolean;
-  isMain?: boolean;
   createdAt: string;
   owner: { id: string; name: string; username: string };
   channels: Channel[];
@@ -235,9 +229,6 @@ function CreateChannelModal({ groupId, onClose, onCreated }: { groupId: string; 
           </button>
           <button onClick={() => setType("VOICE")} className={`flex-1 px-3 py-2 rounded-xl text-sm transition-all ${type === "VOICE" ? "bg-emerald-50 dark:bg-emerald-400/20 text-emerald-600 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-400/30" : "bg-neutral-50 dark:bg-neutral-700 text-neutral-500 dark:text-gray-400 border border-neutral-200 dark:border-white/5"}`}>
             Голосовой
-          </button>
-          <button onClick={() => setType("NEWS")} className={`flex-1 px-3 py-2 rounded-xl text-sm transition-all ${type === "NEWS" ? "bg-amber-50 dark:bg-amber-400/20 text-amber-600 dark:text-amber-400 border border-amber-200 dark:border-amber-400/30" : "bg-neutral-50 dark:bg-neutral-700 text-neutral-500 dark:text-gray-400 border border-neutral-200 dark:border-white/5"}`}>
-            Новости
           </button>
         </div>
         <div className="flex gap-2 pt-1">
@@ -433,28 +424,6 @@ function GroupInfoPanel({ group, canManage, onUpdateRules }: { group: GroupDetai
         </div>
       ) : null}
 
-      {/* Roles section */}
-      <div className="mt-6 border border-neutral-200 dark:border-white/10 rounded-xl p-4">
-        <RoleManager groupId={group.id} canManage={canManage} />
-      </div>
-
-      {/* Service sync for main community */}
-      {group.isMain && canManage && (
-        <div className="mt-6 border border-neutral-200 dark:border-white/10 rounded-xl p-4">
-          <h4 className="text-sm font-semibold text-neutral-900 dark:text-white mb-2">Синхронизация услуг</h4>
-          <p className="text-xs text-neutral-400 mb-3">Обновить каналы услуг из админки</p>
-          <button
-            onClick={async () => {
-              await fetch("/api/groups/main-community", { method: "PUT" });
-              window.location.reload();
-            }}
-            className="px-4 py-2 bg-gradient-to-r from-violet-600 to-indigo-600 dark:from-cyan-500 dark:to-cyan-400 text-white dark:text-neutral-900 rounded-xl text-sm font-medium hover:shadow-lg transition-all"
-          >
-            Синхронизировать
-          </button>
-        </div>
-      )}
-
       <p className="text-center text-neutral-400 text-xs mt-6">Выберите канал для общения</p>
     </div>
   );
@@ -584,7 +553,7 @@ function GroupSettingsModal({ group, onClose, onUpdated, onDelete }: { group: Gr
               <button onClick={handleSaveGeneral} disabled={saving || !name.trim()} className="flex-1 px-4 py-2 bg-gradient-to-r from-violet-600 to-indigo-600 dark:from-cyan-500 dark:to-cyan-400 text-white dark:text-neutral-900 rounded-xl text-sm font-medium disabled:opacity-50">
                 {saving ? "..." : "Сохранить"}
               </button>
-              {isOwner && !group.isMain && (
+              {isOwner && (
                 <button onClick={onDelete} className="px-4 py-2 bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 border border-red-200 dark:border-red-500/30 rounded-xl text-sm font-medium hover:bg-red-100 dark:hover:bg-red-900/40 transition-colors">
                   Удалить
                 </button>
@@ -652,17 +621,12 @@ function MembersPanel({ group, onClose }: { group: GroupDetail; onClose: () => v
             <div className="relative flex-shrink-0">
               <GlowAvatar user={m.user} size={28} onlineColor={isOnline(m.user.lastSeen) ? "green" : "gray"} />
             </div>
-            <div className="min-w-0 flex-1">
+            <div className="min-w-0">
               <div className="text-sm text-neutral-900 dark:text-white truncate">{m.user.name}</div>
               <div className="text-[10px] text-neutral-400 truncate">
                 @{m.user.username}
                 {!isOnline(m.user.lastSeen) && m.user.lastSeen && <span className="text-neutral-400/70"> &middot; {timeAgo(m.user.lastSeen)}</span>}
               </div>
-              {m.tags && m.tags.length > 0 && (
-                <div className="flex flex-wrap gap-0.5 mt-0.5">
-                  {m.tags.map((t) => <RoleTag key={t.role.id} name={t.role.name} color={t.role.color} />)}
-                </div>
-              )}
             </div>
             {m.role === "OWNER" && <span className="text-[10px] text-amber-500 ml-auto flex-shrink-0" aria-label="Owner">{"\ud83d\udc51"}</span>}
             {m.role === "MODERATOR" && <span className="text-[10px] text-violet-500 ml-auto flex-shrink-0" aria-label="Moderator">{"\u2699\ufe0f"}</span>}
@@ -690,6 +654,17 @@ export default function ConnectPage() {
 
 function ConnectPageInner() {
   const { data: session, status } = useSession();
+
+  /* ── Splash screen — once per session ── */
+  const [splashDone, setSplashDone] = useState(() => {
+    if (typeof window === "undefined") return true;
+    return sessionStorage.getItem("tz-connect-splash") === "1";
+  });
+  const handleSplashDone = () => {
+    sessionStorage.setItem("tz-connect-splash", "1");
+    setSplashDone(true);
+  };
+
   const [groups, setGroups] = useState<Group[]>([]);
   const [selectedGroup, setSelectedGroup] = useState<string | null>(null);
   const [groupDetail, setGroupDetail] = useState<GroupDetail | null>(null);
@@ -712,21 +687,10 @@ function ConnectPageInner() {
   const canManage = groupDetail?.myRole === "OWNER" || groupDetail?.myRole === "MODERATOR";
 
   const fetchGroups = useCallback(() => {
-    fetch("/api/groups")
-      .then((r) => { if (!r.ok) throw new Error("fetch failed"); return r.json(); })
-      .then((data) => { if (Array.isArray(data)) setGroups(data); })
-      .catch(() => {});
+    fetch("/api/groups").then((r) => r.json()).then((data) => {
+      if (Array.isArray(data)) setGroups(data);
+    });
   }, []);
-
-  const handleReorderGroups = useCallback((groupIds: string[]) => {
-    const reordered = groupIds.map((id) => groups.find((g) => g.id === id)).filter(Boolean) as typeof groups;
-    setGroups(reordered);
-    fetch("/api/groups/reorder", {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ groupIds }),
-    }).catch(() => {});
-  }, [groups]);
 
   const fetchGroupDetail = useCallback(async (groupId: string) => {
     const res = await fetch(`/api/groups/${groupId}`);
@@ -734,7 +698,7 @@ function ConnectPageInner() {
   }, []);
 
   const fetchUnread = useCallback(() => {
-    fetch("/api/channels/unread").then((r) => { if (!r.ok) throw new Error("fetch failed"); return r.json(); }).then((data) => {
+    fetch("/api/channels/unread").then((r) => r.json()).then((data) => {
       if (data.unread) setUnreadCounts(data.unread);
     }).catch(() => {});
   }, []);
@@ -762,7 +726,7 @@ function ConnectPageInner() {
   useEffect(() => {
     if (session?.user) {
       fetch("/api/profile/me")
-        .then((r) => { if (!r.ok) throw new Error("fetch failed"); return r.json(); })
+        .then((r) => r.json())
         .then((d) => setMyGlowSettings({ avatarGlowEnabled: d.avatarGlowEnabled ?? false, avatarGlowColors: d.avatarGlowColors ?? null, avatar: d.avatar ?? null }))
         .catch(() => {});
     }
@@ -830,7 +794,7 @@ function ConnectPageInner() {
   };
 
   const deleteGroup = async () => {
-    if (!selectedGroup || groupDetail?.isMain || !confirm("Удалить группу? Это действие нельзя отменить.")) return;
+    if (!selectedGroup || !confirm("Удалить группу? Это действие нельзя отменить.")) return;
     const res = await fetch(`/api/groups/${selectedGroup}`, { method: "DELETE" });
     if (res.ok) {
       setSelectedGroup(null);
@@ -866,25 +830,17 @@ function ConnectPageInner() {
   const userRole = (session.user as { role?: string }).role ?? "USER";
 
   return (
+    <>
+    {!splashDone && <ConnectSplash onDone={handleSplashDone} />}
     <div className="cn-main flex h-[calc(100vh-64px)] overflow-hidden">
-      {/* Root: 3 columns — NavRail (68px) | Context panel (240px) | Chat (flex) */}
 
       {/* ── COL 1: NavRail (desktop only) ── */}
       <NavRail
         activeSection={activeSection}
         onChangeSection={(section) => {
-          if (section === activeSection) {
-            // Repeat click on active section — reset deeper selection
-            if (section === "communities") {
-              setSelectedGroup(null);
-              setGroupDetail(null);
-              setSelectedChannel(null);
-            }
-            if (section === "dm") setDmFriendId(null);
-            return;
-          }
           setActiveSection(section);
           if (section !== "dm") setDmFriendId(null);
+          // reset channel selection when switching top-level sections
           if (section !== "communities") setSelectedChannel(null);
         }}
         myProfileUser={myProfileUser}
@@ -978,7 +934,6 @@ function ConnectPageInner() {
                   onSelectGroup={handleSelectGroup}
                   onCreateGroup={() => setShowCreateGroup(true)}
                   onJoinGroup={() => setShowJoinGroup(true)}
-                  onReorder={handleReorderGroups}
                 />
               )}
             </div>
@@ -1118,6 +1073,6 @@ function ConnectPageInner() {
         )}
       </AnimatePresence>
     </div>
-
+    </>
   );
 }
