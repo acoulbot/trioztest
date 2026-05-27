@@ -65,7 +65,8 @@ export default function GlowAvatar({ user, size = 32, onlineColor, speed = 3 }: 
   const gradient = useMemo(() => buildGradient(colors), [colors]);
   const shadow   = useMemo(() => buildShadow(colors),   [colors]);
 
-  const totalSize = glowActive ? size + RING * 2 : size;
+  const GLOW_PAD = glowActive ? 6 : 0;
+  const totalSize = glowActive ? size + RING * 2 + GLOW_PAD * 2 : size;
   const initial   = user.name.charAt(0).toUpperCase();
 
   const spinStyle: React.CSSProperties = {
@@ -82,77 +83,86 @@ export default function GlowAvatar({ user, size = 32, onlineColor, speed = 3 }: 
         width: totalSize,
         height: totalSize,
         flexShrink: 0,
-        boxShadow: glowActive ? shadow : undefined,
-        borderRadius: "50%",
       }}
     >
-      {glowActive && (
-        <>
-          {/* Diffuse outer glow */}
-          <div
-            style={{
-              position: "absolute",
-              inset: -5,
-              borderRadius: "50%",
-              background: gradient,
-              filter: "blur(9px)",
-              opacity: 0.6,
-              ...spinStyle,
-            }}
-          />
-          {/* Sharp ring */}
-          <div
-            style={{
-              position: "absolute",
-              inset: 0,
-              borderRadius: "50%",
-              background: gradient,
-              ...spinStyle,
-            }}
-          />
-        </>
-      )}
-
-      {/* Avatar — sibling of ring layers, NOT a child, so it doesn't spin */}
+      {/* Glow container — overflow hidden prevents bleed */}
       <div
         style={{
           position: "absolute",
-          inset: glowActive ? RING : 0,
+          inset: 0,
           borderRadius: "50%",
           overflow: "hidden",
-          zIndex: 1,
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          background: "linear-gradient(135deg, rgba(139,92,246,0.25), rgba(99,102,241,0.25))",
-          fontSize: Math.round(size * 0.4),
-          fontWeight: 700,
         }}
       >
-        {user.avatar && !imgError ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img
-            src={user.avatar}
-            alt={user.name}
-            style={{ width: "100%", height: "100%", objectFit: "cover" }}
-            onError={() => setImgError(true)}
-          />
-        ) : (
-          <span style={{ lineHeight: 1 }}>{initial}</span>
+        {glowActive && (
+          <>
+            {/* Diffuse outer glow */}
+            <div
+              style={{
+                position: "absolute",
+                inset: 0,
+                borderRadius: "50%",
+                background: gradient,
+                filter: "blur(8px)",
+                opacity: 0.55,
+                transform: "scale(1.1)",
+                ...spinStyle,
+              }}
+            />
+            {/* Sharp ring */}
+            <div
+              style={{
+                position: "absolute",
+                inset: GLOW_PAD,
+                borderRadius: "50%",
+                background: gradient,
+                ...spinStyle,
+              }}
+            />
+          </>
         )}
+
+        {/* Avatar */}
+        <div
+          style={{
+            position: "absolute",
+            inset: glowActive ? RING + GLOW_PAD : 0,
+            borderRadius: "50%",
+            overflow: "hidden",
+            zIndex: 1,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            background: "linear-gradient(135deg, rgba(139,92,246,0.25), rgba(99,102,241,0.25))",
+            fontSize: Math.round(size * 0.4),
+            fontWeight: 700,
+          }}
+        >
+          {user.avatar && !imgError ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={user.avatar}
+              alt={user.name}
+              style={{ width: "100%", height: "100%", objectFit: "cover" }}
+              onError={() => setImgError(true)}
+            />
+          ) : (
+            <span style={{ lineHeight: 1 }}>{initial}</span>
+          )}
+        </div>
       </div>
 
-      {/* Online indicator */}
+      {/* Online indicator — outside overflow container */}
       {onlineColor && (
         <span
           style={{
             position: "absolute",
-            bottom: glowActive ? RING - 1 : 0,
-            right: glowActive ? RING - 1 : 0,
+            bottom: glowActive ? RING + GLOW_PAD - 1 : 0,
+            right: glowActive ? RING + GLOW_PAD - 1 : 0,
             width: Math.max(8, Math.round(size * 0.28)),
             height: Math.max(8, Math.round(size * 0.28)),
             borderRadius: "50%",
-            zIndex: 2,
+            zIndex: 3,
           }}
         >
           {/* Pulse ring for online */}
