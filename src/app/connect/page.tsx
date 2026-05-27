@@ -932,11 +932,8 @@ function ConnectPageInner() {
             channelId={selectedChannel}
             channelName={selectedChannelData.name}
             channelIcon={selectedChannelData.icon}
-            channelType={selectedChannelData.type}
-            isRestricted={selectedChannelData.isRestricted}
             currentUserId={userId}
             currentUserRole={userRole}
-            groupRole={groupDetail?.myRole}
             isBanned={!!isBanned}
             onBack={() => setMobileView("channels")}
           />
@@ -995,11 +992,8 @@ function ConnectPageInner() {
                   channelId={selectedChannel}
                   channelName={selectedChannelData.name}
                   channelIcon={selectedChannelData.icon}
-                  channelType={selectedChannelData.type}
-                  isRestricted={selectedChannelData.isRestricted}
                   currentUserId={userId}
                   currentUserRole={userRole}
-                  groupRole={groupDetail?.myRole}
                   isBanned={!!isBanned}
                 />
               ) : selectedGroup && groupDetail ? (
