@@ -355,14 +355,6 @@ export default function MessageArea({
     try { return JSON.parse(raw); } catch { return []; }
   };
 
-  const typingText = (() => {
-    const names = Array.from(typingUsers.values()).filter((n) => n);
-    if (names.length === 0) return null;
-    if (names.length === 1) return `${names[0]} печатает...`;
-    if (names.length <= 3) return `${names.join(", ")} печатают...`;
-    return "Несколько человек печатают...";
-  })();
-
   if (loading) {
     return (
       <div className="flex-1 flex items-center justify-center">
