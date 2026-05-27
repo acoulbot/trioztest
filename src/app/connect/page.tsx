@@ -840,9 +840,13 @@ function ConnectPageInner() {
       <NavRail
         activeSection={activeSection}
         onChangeSection={(section) => {
+          if (section === activeSection && section === "communities") {
+            setSelectedGroup(null);
+            setSelectedChannel(null);
+            setMobileView("groups");
+          }
           setActiveSection(section);
           if (section !== "dm") setDmFriendId(null);
-          // reset channel selection when switching top-level sections
           if (section !== "communities") setSelectedChannel(null);
         }}
         myProfileUser={myProfileUser}

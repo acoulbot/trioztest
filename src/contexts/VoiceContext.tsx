@@ -177,7 +177,15 @@ export function VoiceProvider({ children }: { children: React.ReactNode }) {
     const pc = new RTCPeerConnection(iceConfigRef.current);
     peersRef.current.set(remoteSocketId, pc);
 
-    localStreamRef.current?.getTracks().forEach(t => pc.addTrack(t, localStreamRef.current!));
+    localStreamRef.current?.getTracks().forEach(t => {
+      const sender = pc.addTrack(t, localStreamRef.current!);
+      if (t.kind === "audio") {
+        const params = sender.getParameters();
+        if (!params.encodings?.length) params.encodings = [{}];
+        params.encodings[0].maxBitrate = 128_000;
+        sender.setParameters(params).catch(() => {});
+      }
+    });
 
     if (screenStreamRef.current) {
       screenStreamRef.current.getVideoTracks().forEach(t => {
@@ -380,7 +388,13 @@ export function VoiceProvider({ children }: { children: React.ReactNode }) {
     try {
       try {
         rawStream = await navigator.mediaDevices.getUserMedia({
-          audio: { echoCancellation: true, noiseSuppression: false, autoGainControl: true, sampleRate: 48000 },
+          audio: {
+            echoCancellation: true,
+            noiseSuppression: true,
+            autoGainControl: true,
+            channelCount: 1,
+            sampleRate: 48000,
+          },
         });
       } catch {
         rawStream = await navigator.mediaDevices.getUserMedia({ audio: true });
