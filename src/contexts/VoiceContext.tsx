@@ -136,6 +136,7 @@ export function VoiceProvider({ children }: { children: React.ReactNode }) {
   const analyserRef         = useRef<AnalyserNode | null>(null);
   const speakingIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const remoteAudiosRef     = useRef<Map<string, HTMLAudioElement>>(new Map());
+  const iceCandidateBufferRef = useRef<Map<string, RTCIceCandidateInit[]>>(new Map());
   const noiseSuppRef        = useRef<NoiseSuppressor | null>(null);
   const connectionSfxRef    = useRef<HTMLAudioElement | null>(null);
   const disconnectionSfxRef = useRef<HTMLAudioElement | null>(null);
@@ -197,6 +198,9 @@ export function VoiceProvider({ children }: { children: React.ReactNode }) {
 
   /* ── Create peer connection ── */
   const createPeerConnection = useCallback((remoteSocketId: string, isInitiator: boolean) => {
+    const existing = peersRef.current.get(remoteSocketId);
+    if (existing) return existing;
+
     const pc = new RTCPeerConnection(iceConfigRef.current);
     peersRef.current.set(remoteSocketId, pc);
 
@@ -517,18 +521,35 @@ export function VoiceProvider({ children }: { children: React.ReactNode }) {
         let pc = peersRef.current.get(from);
         if (!pc) pc = createPeerConnection(from, false);
         await pc.setRemoteDescription(new RTCSessionDescription(offer));
+        // Flush buffered ICE candidates
+        const buffered = iceCandidateBufferRef.current.get(from) ?? [];
+        iceCandidateBufferRef.current.delete(from);
+        for (const c of buffered) await pc.addIceCandidate(new RTCIceCandidate(c)).catch(() => {});
         const answer = await patchedAnswer(pc);
         socket.emit("voice-answer", { to: from, answer });
       });
 
       socket.on("voice-answer", async ({ from, answer }: { from: string; answer: RTCSessionDescriptionInit }) => {
         const pc = peersRef.current.get(from);
-        if (pc) await pc.setRemoteDescription(new RTCSessionDescription(answer));
+        if (pc) {
+          await pc.setRemoteDescription(new RTCSessionDescription(answer));
+          // Flush buffered ICE candidates
+          const buffered = iceCandidateBufferRef.current.get(from) ?? [];
+          iceCandidateBufferRef.current.delete(from);
+          for (const c of buffered) await pc.addIceCandidate(new RTCIceCandidate(c)).catch(() => {});
+        }
       });
 
       socket.on("ice-candidate", async ({ from, candidate }: { from: string; candidate: RTCIceCandidateInit }) => {
         const pc = peersRef.current.get(from);
-        if (pc) await pc.addIceCandidate(new RTCIceCandidate(candidate));
+        if (!pc) return;
+        if (!pc.remoteDescription) {
+          const buf = iceCandidateBufferRef.current.get(from) ?? [];
+          buf.push(candidate);
+          iceCandidateBufferRef.current.set(from, buf);
+          return;
+        }
+        await pc.addIceCandidate(new RTCIceCandidate(candidate)).catch(() => {});
       });
 
       socket.on("user-muted", ({ socketId, muted }: { socketId: string; muted: boolean }) =>
