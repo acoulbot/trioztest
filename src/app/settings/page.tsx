@@ -124,6 +124,7 @@ export default function SettingsPage() {
   const [savingNotify, setSavingNotify] = useState(false);
   const [deletingAccount, setDeletingAccount] = useState(false);
   const [uploadingAvatar, setUploadingAvatar] = useState(false);
+  const [avatarError, setAvatarError] = useState(false);
 
   useEffect(() => {
     if (status === "unauthenticated") router.push("/auth/signin?callbackUrl=/settings");
@@ -174,6 +175,7 @@ export default function SettingsPage() {
     const data = await res.json();
     setUploadingAvatar(false);
     if (!res.ok) { showToast(data.error || "Ошибка загрузки", "error"); return; }
+    setAvatarError(false);
     setProfile((p) => p ? { ...p, avatar: data.avatar } : p);
     showToast("Аватарка обновлена!", "success");
   };
@@ -261,8 +263,8 @@ export default function SettingsPage() {
                 onClick={() => fileRef.current?.click()}
                 title="Нажмите для смены аватарки"
               >
-                {profile.avatar ? (
-                  <Image src={profile.avatar} alt="avatar" width={80} height={80} className="object-cover w-full h-full" />
+                {profile.avatar && !avatarError ? (
+                  <Image src={profile.avatar} alt="avatar" width={80} height={80} className="object-cover w-full h-full" onError={() => setAvatarError(true)} />
                 ) : (
                   <span className="text-white text-3xl font-bold">{profile.name.charAt(0).toUpperCase()}</span>
                 )}

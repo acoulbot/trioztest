@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { motion } from "framer-motion";
 
 /* ─── Presets ─── */
@@ -47,6 +47,7 @@ function buildShadow(colors: string[]): string {
 }
 
 export default function GlowAvatar({ user, size = 32, onlineColor, speed = 3 }: GlowAvatarProps) {
+  const [imgError, setImgError] = useState(false);
   const RING = Math.max(2, Math.round(size * 0.1));
 
   const glowActive = user.role === "ADMIN" && !!user.avatarGlowEnabled;
@@ -128,12 +129,13 @@ export default function GlowAvatar({ user, size = 32, onlineColor, speed = 3 }: 
           fontWeight: 700,
         }}
       >
-        {user.avatar ? (
+        {user.avatar && !imgError ? (
           // eslint-disable-next-line @next/next/no-img-element
           <img
             src={user.avatar}
             alt={user.name}
             style={{ width: "100%", height: "100%", objectFit: "cover" }}
+            onError={() => setImgError(true)}
           />
         ) : (
           <span style={{ lineHeight: 1 }}>{initial}</span>
