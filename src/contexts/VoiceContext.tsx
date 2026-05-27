@@ -190,13 +190,12 @@ export function VoiceProvider({ children }: { children: React.ReactNode }) {
       if (track.kind === "audio") {
         let audio = remoteAudiosRef.current.get(remoteSocketId);
         if (!audio) {
-          audio = Object.assign(new Audio(), { autoplay: true });
+          audio = new Audio();
+          audio.autoplay = true;
           remoteAudiosRef.current.set(remoteSocketId, audio);
         }
         audio.srcObject = stream;
-        // Apply saved volume
-        const vol = userVolumes.get(remoteSocketId);
-        if (vol !== undefined) audio.volume = vol / 100;
+        audio.play().catch(() => {});
       } else if (track.kind === "video") {
         remoteScreenRef.current.set(remoteSocketId, stream);
         setScreenSharerId(remoteSocketId);
@@ -229,7 +228,7 @@ export function VoiceProvider({ children }: { children: React.ReactNode }) {
     }
 
     return pc;
-  }, [cleanupPeer, setScreenVideo, userVolumes]);
+  }, [cleanupPeer, setScreenVideo]);
 
   /* ── Speaking detection ── */
   const startSpeakingDetection = useCallback(() => {
@@ -401,13 +400,23 @@ export function VoiceProvider({ children }: { children: React.ReactNode }) {
       socketRef.current = socket;
 
       socket.on("connect", () => {
-        socket.emit("join-voice", { channelId: chId, userId: session.user.id, userName: session.user.name || "Пользователь" });
+        const userName = session.user.name || "Пользователь";
+        socket.emit("join-voice", { channelId: chId, userId: session.user.id, userName });
         setIsConnected(true);
         playSound(connectionSfxRef);
+
+        // Add self to user list immediately
+        const self: VoiceUser = { socketId: socket.id!, userId: session.user.id, userName, muted: false };
+        setUsers(prev => [...prev.filter(u => u.socketId !== socket.id), self]);
       });
 
       socket.on("voice-users", (existing: VoiceUser[]) => {
-        setUsers(existing);
+        // Merge existing users with self
+        setUsers(prev => {
+          const selfUser = prev.find(u => u.socketId === socket.id);
+          const merged = selfUser ? [...existing.filter(u => u.socketId !== socket.id), selfUser] : existing;
+          return merged;
+        });
         existing.forEach(u => createPeerConnection(u.socketId, true));
       });
 
