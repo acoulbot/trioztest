@@ -249,6 +249,32 @@ app.prepare().then(() => {
     if (ok) console.log("[Redis] Connected successfully");
   });
 
+  // Scheduled file cleanup: every 6 hours, remove large files older than 14 days
+  // Skips NEWS channels and admin content
+  const CLEANUP_INTERVAL = 6 * 60 * 60 * 1000; // 6 hours
+  setInterval(async () => {
+    try {
+      const { cleanupExpiredFiles } = await import("./src/lib/fileCleanup");
+      const result = await cleanupExpiredFiles();
+      if (result.filesDeleted > 0 || result.dmFilesDeleted > 0) {
+        console.log("[Cleanup] Auto:", result);
+      }
+    } catch (err) {
+      console.error("[Cleanup] Scheduled error:", err);
+    }
+  }, CLEANUP_INTERVAL);
+
+  // Run initial cleanup 60 seconds after startup
+  setTimeout(async () => {
+    try {
+      const { cleanupExpiredFiles } = await import("./src/lib/fileCleanup");
+      const result = await cleanupExpiredFiles();
+      console.log("[Cleanup] Initial run:", result);
+    } catch (err) {
+      console.error("[Cleanup] Initial error:", err);
+    }
+  }, 60_000);
+
   httpServer.listen(port, () => {
     console.log(`> Ready on http://${hostname}:${port}`);
   });
