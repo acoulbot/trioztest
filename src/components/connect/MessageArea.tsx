@@ -8,7 +8,7 @@ import GlowAvatar from "@/components/ui/GlowAvatar";
 import TypingIndicator from "@/components/ui/TypingIndicator";
 import VoiceRecorder from "@/components/ui/VoiceRecorder";
 import VoicePlayer from "@/components/ui/VoicePlayer";
-import EmojiPicker from "@/components/connect/EmojiPicker";
+import DayNightBackground from "@/components/connect/DayNightBackground";
 
 interface MessageUser {
   id: string;
@@ -26,7 +26,6 @@ interface Attachment {
   size: number;
   type: string;
   isImage: boolean;
-  isVideo?: boolean;
   isVoice?: boolean;
   duration?: number;
 }
@@ -62,17 +61,14 @@ interface MessageAreaProps {
   channelId: string;
   channelName: string;
   channelIcon: string | null;
-  channelType?: string;
-  isRestricted?: boolean;
   currentUserId: string;
   currentUserRole: string;
-  groupRole?: string;
   isBanned: boolean;
   onBack?: () => void;
 }
 
 export default function MessageArea({
-  channelId, channelName, channelIcon, channelType, isRestricted, currentUserId, currentUserRole, groupRole, isBanned, onBack,
+  channelId, channelName, channelIcon, currentUserId, currentUserRole, isBanned, onBack,
 }: MessageAreaProps) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [newMessage, setNewMessage] = useState("");
@@ -88,12 +84,30 @@ export default function MessageArea({
   const [sending, setSending] = useState(false);
   const [recordingVoice, setRecordingVoice] = useState(false);
   const [showScrollBtn, setShowScrollBtn] = useState(false);
-  const [showInputEmoji, setShowInputEmoji] = useState(false);
 
-  const isNewsChannel = channelType === "NEWS";
-  const isAdmin = groupRole === "OWNER" || groupRole === "ADMIN" || groupRole === "MODERATOR";
-  const canPostInNews = isAdmin;
-  const canSend = !isBanned && (!isNewsChannel || canPostInNews) && (!isRestricted || isAdmin);
+  // Day-Night background (optional, controlled via profile settings)
+  const [dayNightEnabled, setDayNightEnabled] = useState<boolean>(() => {
+    if (typeof window !== "undefined") {
+      return localStorage.getItem("tz-connect-daynight") === "true";
+    }
+    return false;
+  });
+  const [dayNightOpacity, setDayNightOpacity] = useState<number>(() => {
+    if (typeof window !== "undefined") {
+      return parseInt(localStorage.getItem("tz-connect-daynight-opacity") ?? "15", 10);
+    }
+    return 15;
+  });
+
+  useEffect(() => {
+    function handleDayNightChange(e: Event) {
+      const detail = (e as CustomEvent<{ enabled: boolean; opacity: number }>).detail;
+      setDayNightEnabled(detail.enabled);
+      setDayNightOpacity(detail.opacity);
+    }
+    window.addEventListener("tz-daynight-change", handleDayNightChange);
+    return () => window.removeEventListener("tz-daynight-change", handleDayNightChange);
+  }, []);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
@@ -341,6 +355,14 @@ export default function MessageArea({
     try { return JSON.parse(raw); } catch { return []; }
   };
 
+  const typingText = (() => {
+    const names = Array.from(typingUsers.values()).filter((n) => n);
+    if (names.length === 0) return null;
+    if (names.length === 1) return `${names[0]} печатает...`;
+    if (names.length <= 3) return `${names.join(", ")} печатают...`;
+    return "Несколько человек печатают...";
+  })();
+
   if (loading) {
     return (
       <div className="flex-1 flex items-center justify-center">
@@ -351,8 +373,12 @@ export default function MessageArea({
 
   return (
     <div className="flex-1 flex flex-col h-full min-w-0 relative">
+      {/* Day-Night atmospheric background (optional) */}
+      {dayNightEnabled && (
+        <DayNightBackground opacity={dayNightOpacity / 100} />
+      )}
       {/* Header */}
-      <header className="h-12 border-b bg-[var(--cn-main)]/80 backdrop-blur-sm flex items-center px-4 gap-2 flex-shrink-0">
+      <header className="h-12 border-b bg-[var(--cn-main)]/80 backdrop-blur-sm flex items-center px-4 gap-2 backdrop-blur-sm flex-shrink-0">
         {onBack && (
           <button onClick={onBack} className="md:hidden p-1 text-neutral-400 hover:text-neutral-600 dark:hover:text-white" aria-label="Back to channels">
             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -360,18 +386,8 @@ export default function MessageArea({
             </svg>
           </button>
         )}
-        <span aria-hidden="true">{channelIcon || (isNewsChannel ? "\uD83D\uDCE2" : "\uD83D\uDCAC")}</span>
+        <span aria-hidden="true">{channelIcon || "\uD83D\uDCAC"}</span>
         <span className="font-medium text-neutral-900 dark:text-white text-sm">{channelName}</span>
-        {isRestricted && (
-          <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-red-100 dark:bg-red-400/10 text-red-500 dark:text-red-400 font-medium">
-            Временно не работает
-          </span>
-        )}
-        {isNewsChannel && (
-          <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-amber-100 dark:bg-amber-400/10 text-amber-600 dark:text-amber-400 font-medium">
-            Новости
-          </span>
-        )}
       </header>
 
       {/* Messages */}
@@ -458,16 +474,6 @@ export default function MessageArea({
                       att.isVoice ? (
                         <div key={i} className="mt-1.5">
                           <VoicePlayer url={att.url} duration={att.duration} />
-                        </div>
-                      ) : att.isVideo ? (
-                        <div key={i} className="mt-2 max-w-md">
-                          <video
-                            src={att.url}
-                            controls
-                            preload="metadata"
-                            className="rounded-lg max-h-72 w-full"
-                          />
-                          <div className="text-[10px] text-neutral-400 mt-0.5">{att.name} ({Math.round(att.size / 1024 / 1024 * 10) / 10}MB)</div>
                         </div>
                       ) : att.isImage ? (
                         <div key={i} className="mt-2 max-w-xs">
@@ -591,34 +597,12 @@ export default function MessageArea({
       )}
 
       {/* Input */}
-      {canSend ? (
+      {!isBanned ? (
         <div className="p-3 border-t border-[var(--cn-border)]">
           {recordingVoice ? (
             <VoiceRecorder onRecorded={handleVoiceRecorded} />
           ) : (
             <form onSubmit={sendMessage} className="flex gap-2">
-              {/* Emoji picker button */}
-              <div className="relative">
-                <button
-                  type="button"
-                  onClick={() => setShowInputEmoji(!showInputEmoji)}
-                  className="p-2.5 text-neutral-400 hover:text-violet-500 dark:hover:text-cyan-400 transition-colors"
-                  aria-label="Emojis"
-                >
-                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <circle cx="12" cy="12" r="10" strokeWidth={2} />
-                    <path strokeLinecap="round" strokeWidth={2} d="M8 14s1.5 2 4 2 4-2 4-2" />
-                    <circle cx="9" cy="9" r="1" fill="currentColor" stroke="none" />
-                    <circle cx="15" cy="9" r="1" fill="currentColor" stroke="none" />
-                  </svg>
-                </button>
-                {showInputEmoji && (
-                  <EmojiPicker
-                    onSelect={(emoji) => setNewMessage((prev) => prev + emoji)}
-                    onClose={() => setShowInputEmoji(false)}
-                  />
-                )}
-              </div>
               <button
                 type="button"
                 onClick={() => fileInputRef.current?.click()}
@@ -634,12 +618,12 @@ export default function MessageArea({
                   </svg>
                 )}
               </button>
-              <input ref={fileInputRef} type="file" className="hidden" onChange={handleFileUpload} accept="image/*,video/mp4,video/webm,video/quicktime,.pdf,.doc,.docx,.txt" />
+              <input ref={fileInputRef} type="file" className="hidden" onChange={handleFileUpload} accept="image/*,.pdf,.doc,.docx,.txt" />
               <input
                 type="text"
                 value={newMessage}
                 onChange={(e) => { setNewMessage(e.target.value); emitTyping(); }}
-                placeholder={isNewsChannel ? `Новость в #${channelName}...` : `Написать в #${channelName}...`}
+                placeholder={`Написать в #${channelName}...`}
                 className="input-field flex-1 !py-2.5"
                 aria-label={`Message ${channelName}`}
               />
@@ -656,8 +640,8 @@ export default function MessageArea({
           )}
         </div>
       ) : (
-        <div className="p-3 border-t border-[var(--cn-border)] text-center text-neutral-400/60 text-sm">
-          {isRestricted ? "Услуга временно не работает" : isNewsChannel ? "Только администраторы могут публиковать новости" : "Отправка сообщений ограничена"}
+        <div className="p-3 border-t border-[var(--cn-border)] text-center text-red-400/60 text-sm">
+          Отправка сообщений ограничена
         </div>
       )}
     </div>
