@@ -76,6 +76,8 @@ export default function GlowAvatar({ user, size = 32, onlineColor, speed = 3 }: 
     animationIterationCount: "infinite",
   };
 
+  const offset = glowActive ? RING + GLOW_PAD : 0;
+
   return (
     <div
       style={{
@@ -83,6 +85,7 @@ export default function GlowAvatar({ user, size = 32, onlineColor, speed = 3 }: 
         width: totalSize,
         height: totalSize,
         flexShrink: 0,
+        margin: glowActive ? -offset : 0,
       }}
     >
       {/* Glow container — overflow hidden prevents bleed */}
