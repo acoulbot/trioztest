@@ -7,6 +7,7 @@ interface Group {
   name: string;
   icon: string | null;
   description: string;
+  isMain?: boolean;
   _count: { members: number; channels: number };
 }
 
@@ -18,11 +19,15 @@ interface GroupListPanelProps {
   onJoinGroup: () => void;
 }
 
-function GroupAvatar({ icon, name }: { icon: string | null; name: string }) {
+function GroupAvatar({ icon, name, isMain }: { icon: string | null; name: string; isMain?: boolean }) {
+  const size = isMain ? "w-12 h-12" : "w-10 h-10";
+  const imgSize = isMain ? 48 : 40;
+  const textSize = isMain ? "text-base" : "text-sm";
+
   if (icon?.startsWith("/")) {
     return (
-      <div className="w-10 h-10 rounded-xl overflow-hidden flex-shrink-0">
-        <Image src={icon} alt={name} width={40} height={40} className="object-cover w-full h-full" />
+      <div className={`${size} rounded-xl overflow-hidden flex-shrink-0${isMain ? " ring-2 ring-violet-500/50 dark:ring-cyan-400/50" : ""}`}>
+        <Image src={icon} alt={name} width={imgSize} height={imgSize} className="object-cover w-full h-full" />
       </div>
     );
   }
@@ -34,7 +39,7 @@ function GroupAvatar({ icon, name }: { icon: string | null; name: string }) {
     .toUpperCase();
   return (
     <div
-      className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 text-sm font-bold"
+      className={`${size} rounded-xl flex items-center justify-center flex-shrink-0 ${textSize} font-bold${isMain ? " ring-2 ring-violet-500/50 dark:ring-cyan-400/50" : ""}`}
       style={{
         background: "var(--cn-accent-dim)",
         color: "var(--cn-accent-text)",
@@ -100,7 +105,7 @@ export default function GroupListPanel({
                     : {}
                 }
               >
-                <GroupAvatar icon={g.icon} name={g.name} />
+                <GroupAvatar icon={g.icon} name={g.name} isMain={g.isMain} />
                 <div className="min-w-0 flex-1 text-left">
                   <div
                     className="text-sm font-semibold truncate"
