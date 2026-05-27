@@ -43,6 +43,12 @@ function isTextElement(el: HTMLElement): boolean {
   if (el.closest("input, textarea, select, [contenteditable=true]")) return false;
   if (el.closest("nav") && el.tagName !== "A" && el.tagName !== "SPAN") return false;
 
+  // Skip compound elements (have child elements with text — editing them causes duplication)
+  const hasChildElementsWithText = Array.from(el.children).some(
+    child => child.textContent?.trim()
+  );
+  if (hasChildElementsWithText) return false;
+
   const text = el.textContent?.trim() || "";
   if (text.length < 1 || text.length > 2000) return false;
 
