@@ -138,10 +138,12 @@ export default function VoiceChannel({ channelId, channelName, onClose }: VoiceC
       if (track.kind === "audio") {
         let audio = remoteAudiosRef.current.get(remoteSocketId);
         if (!audio) {
-          audio = Object.assign(new Audio(), { autoplay: true });
+          audio = new Audio();
+          audio.autoplay = true;
           remoteAudiosRef.current.set(remoteSocketId, audio);
         }
         audio.srcObject = stream;
+        audio.play().catch(() => {});
       } else if (track.kind === "video") {
         remoteScreenRef.current.set(remoteSocketId, stream);
         setScreenSharerId(remoteSocketId);
@@ -304,17 +306,25 @@ export default function VoiceChannel({ channelId, channelName, onClose }: VoiceC
       socketRef.current = socket;
 
       socket.on("connect", () => {
+        const userName = session.user.name || "Пользователь";
         socket.emit("join-voice", {
           channelId,
           userId:   session.user.id,
-          userName: session.user.name || "Пользователь",
+          userName,
         });
         setIsConnected(true);
         playSound(connectionSfxRef);
+
+        // Add self to user list
+        const self: VoiceUser = { socketId: socket.id!, userId: session.user.id, userName, muted: false };
+        setUsers(prev => [...prev.filter(u => u.socketId !== socket.id), self]);
       });
 
       socket.on("voice-users", (existing: VoiceUser[]) => {
-        setUsers(existing);
+        setUsers(prev => {
+          const selfUser = prev.find(u => u.socketId === socket.id);
+          return selfUser ? [...existing.filter(u => u.socketId !== socket.id), selfUser] : existing;
+        });
         existing.forEach(u => createPeerConnection(u.socketId, true));
       });
 

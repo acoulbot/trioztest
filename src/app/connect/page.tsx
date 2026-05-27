@@ -25,7 +25,7 @@ const VoiceScreenShare = dynamic(() => import("@/components/voice/VoiceScreenSha
 const FriendsPanel = dynamic(() => import("@/components/friends/FriendsPanel"), { ssr: false });
 const DMPanel = dynamic(() => import("@/components/dm/DMPanel"), { ssr: false });
 const AiChatPanel = dynamic(() => import("@/components/ai/AiChatPanel"), { ssr: false });
-import { VoiceProvider, useVoice } from "@/contexts/VoiceContext";
+import { useVoice } from "@/contexts/VoiceContext";
 
 /* ─── Types ─── */
 
@@ -647,9 +647,7 @@ type MobileView = "groups" | "channels" | "chat";
 export default function ConnectPage() {
   return (
     <ThemeProvider>
-      <VoiceProvider>
-        <ConnectPageInner />
-      </VoiceProvider>
+      <ConnectPageInner />
     </ThemeProvider>
   );
 }
