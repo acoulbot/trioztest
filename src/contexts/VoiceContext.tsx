@@ -137,11 +137,16 @@ export function VoiceProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     fetch("/api/voice/turn").then(r => r.json()).then(data => {
       if (data?.iceServers) {
+        // If TURN is configured, force relay-only to avoid NAT issues
+        const hasTurn = data.iceServers.some((s: { urls: string | string[] }) =>
+          (Array.isArray(s.urls) ? s.urls : [s.urls]).some((u: string) => u.startsWith("turn"))
+        );
         iceConfigRef.current = {
           iceServers: data.iceServers,
-          iceTransportPolicy: "all",
+          iceTransportPolicy: hasTurn ? "relay" : "all",
           iceCandidatePoolSize: 2,
         };
+        console.log(`[Voice] ICE config: ${hasTurn ? "relay (TURN)" : "all (STUN only)"}`, data.iceServers.length, "servers");
       }
     }).catch(() => {});
   }, []);
@@ -239,7 +244,18 @@ export function VoiceProvider({ children }: { children: React.ReactNode }) {
     };
 
     pc.onicecandidate = ({ candidate }) => {
-      if (candidate) socketRef.current?.emit("ice-candidate", { to: remoteSocketId, candidate: candidate.toJSON() });
+      if (candidate) {
+        console.log(`[Voice] ICE candidate: ${candidate.type} ${candidate.protocol} ${candidate.address}:${candidate.port}`);
+        socketRef.current?.emit("ice-candidate", { to: remoteSocketId, candidate: candidate.toJSON() });
+      }
+    };
+
+    pc.onicegatheringstatechange = () => {
+      console.log(`[Voice] ICE gathering: ${pc.iceGatheringState}`);
+    };
+
+    pc.oniceconnectionstatechange = () => {
+      console.log(`[Voice] ICE connection: ${pc.iceConnectionState}`);
     };
 
     pc.onconnectionstatechange = () => {
