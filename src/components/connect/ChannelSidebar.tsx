@@ -81,6 +81,7 @@ interface ChannelSidebarProps {
   onBack?: () => void;
   voiceState?: VoiceState;
   voiceActions?: VoiceActions;
+  onVoiceExpand?: () => void;
 }
 
 /* ── Reusable channel item ── */
@@ -131,7 +132,7 @@ export default function ChannelSidebar({
   myProfileUser, userName, userUsername, userRole,
   onChannelClick, onDeleteChannel, onCreateChannel,
   onInvite, onToggleMembers, onProfileSettings, onOpenSettings, memberCount, onBack,
-  voiceState, voiceActions,
+  voiceState, voiceActions, onVoiceExpand,
 }: ChannelSidebarProps) {
   const textChannels = groupDetail.channels.filter((c) => c.type === "TEXT" || c.type === "NEWS");
   const voiceChannels = groupDetail.channels.filter((c) => c.type === "VOICE");
@@ -344,7 +345,9 @@ export default function ChannelSidebar({
                   <div className="group flex items-center">
                     <button
                       onClick={() => {
-                        if (voiceActions && !isActive) {
+                        if (isActive && onVoiceExpand) {
+                          onVoiceExpand();
+                        } else if (voiceActions && !isActive) {
                           voiceActions.joinVoice(ch.id, ch.name);
                         }
                       }}
@@ -383,7 +386,9 @@ export default function ChannelSidebar({
                           isLocal
                         />
                       )}
-                      {displayUsers.map(u => (
+                      {displayUsers
+                        .filter(u => !(isActive && u.userId === myProfileUser.id))
+                        .map(u => (
                         <div key={u.socketId} className="group/user relative">
                           <VoiceUserRow
                             name={u.userName}

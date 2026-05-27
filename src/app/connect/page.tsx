@@ -22,6 +22,7 @@ import ConnectSplash from "@/components/connect/ConnectSplash";
 import { ThemeProvider } from "@/contexts/ThemeContext";
 
 const VoiceScreenShare = dynamic(() => import("@/components/voice/VoiceScreenShare"), { ssr: false });
+const VoiceExpandedPanel = dynamic(() => import("@/components/voice/VoiceExpandedPanel"), { ssr: false });
 const FriendsPanel = dynamic(() => import("@/components/friends/FriendsPanel"), { ssr: false });
 const DMPanel = dynamic(() => import("@/components/dm/DMPanel"), { ssr: false });
 const AiChatPanel = dynamic(() => import("@/components/ai/AiChatPanel"), { ssr: false });
@@ -682,6 +683,7 @@ function ConnectPageInner() {
   const [myGlowSettings, setMyGlowSettings] = useState<{ avatarGlowEnabled: boolean; avatarGlowColors: string | null; avatar: string | null } | null>(null);
   const [unreadCounts, setUnreadCounts] = useState<Record<string, number>>({});
   const [mobileView, setMobileView] = useState<MobileView>("groups");
+  const [showVoicePanel, setShowVoicePanel] = useState(false);
 
   const isBanned = session?.user?.banned && (!session.user.bannedUntil || new Date(session.user.bannedUntil) > new Date());
   const canManage = groupDetail?.myRole === "OWNER" || groupDetail?.myRole === "MODERATOR";
@@ -882,6 +884,7 @@ function ConnectPageInner() {
             onBack={() => { setSelectedGroup(null); setMobileView("groups"); }}
             voiceState={voiceState}
             voiceActions={voiceActions}
+            onVoiceExpand={() => setShowVoicePanel(true)}
           />
         )}
         {mobileView === "chat" && selectedChannel && selectedChannelData && (
@@ -927,6 +930,7 @@ function ConnectPageInner() {
                   memberCount={groupDetail.members.length}
                   voiceState={voiceState}
                   voiceActions={voiceActions}
+                  onVoiceExpand={() => setShowVoicePanel(true)}
                 />
               ) : (
                 /* Top-level group list */
@@ -1072,6 +1076,9 @@ function ConnectPageInner() {
               setMyGlowSettings((prev) => ({ avatar: prev?.avatar ?? null, ...settings }));
             }}
           />
+        )}
+        {showVoicePanel && voice.isConnected && (
+          <VoiceExpandedPanel onClose={() => setShowVoicePanel(false)} />
         )}
       </AnimatePresence>
     </div>
