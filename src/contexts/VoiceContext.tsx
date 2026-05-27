@@ -65,7 +65,10 @@ const DEFAULT_ICE: RTCConfiguration = {
   iceServers: [
     { urls: "stun:stun.l.google.com:19302" },
     { urls: "stun:stun1.l.google.com:19302" },
+    { urls: "stun:stun.nextcloud.com:443" },
   ],
+  iceTransportPolicy: "all",
+  iceCandidatePoolSize: 2,
 };
 
 const SCREEN_CONSTRAINTS: DisplayMediaStreamOptions = {
@@ -133,7 +136,13 @@ export function VoiceProvider({ children }: { children: React.ReactNode }) {
   /* ── Fetch TURN/ICE config from API ── */
   useEffect(() => {
     fetch("/api/voice/turn").then(r => r.json()).then(data => {
-      if (data?.iceServers) iceConfigRef.current = { iceServers: data.iceServers };
+      if (data?.iceServers) {
+        iceConfigRef.current = {
+          iceServers: data.iceServers,
+          iceTransportPolicy: "all",
+          iceCandidatePoolSize: 2,
+        };
+      }
     }).catch(() => {});
   }, []);
 
@@ -200,10 +209,23 @@ export function VoiceProvider({ children }: { children: React.ReactNode }) {
         if (!audio) {
           audio = new Audio();
           audio.autoplay = true;
+          audio.volume = 1.0;
           remoteAudiosRef.current.set(remoteSocketId, audio);
         }
         audio.srcObject = stream;
-        audio.play().catch(() => {});
+
+        const tryPlay = () => {
+          if (!audio) return;
+          audio.play().catch((e) => {
+            console.warn("[Voice] audio.play() failed:", e.name, "- retrying on interaction");
+            const retry = () => { audio?.play().catch(() => {}); document.removeEventListener("click", retry); };
+            document.addEventListener("click", retry, { once: true });
+          });
+        };
+
+        // play() immediately and also on track unmute (media starts flowing after ICE)
+        tryPlay();
+        track.onunmute = tryPlay;
       } else if (track.kind === "video") {
         remoteScreenRef.current.set(remoteSocketId, stream);
         setScreenSharerId(remoteSocketId);
@@ -221,11 +243,30 @@ export function VoiceProvider({ children }: { children: React.ReactNode }) {
     };
 
     pc.onconnectionstatechange = () => {
-      if (pc.connectionState === "failed") {
+      const state = pc.connectionState;
+      console.log(`[Voice] Peer ${remoteSocketId} connection: ${state}`);
+      if (state === "connected") {
+        // Connection established — ensure audio is playing
+        const audio = remoteAudiosRef.current.get(remoteSocketId);
+        if (audio && audio.paused) audio.play().catch(() => {});
+      }
+      if (state === "failed") {
+        console.warn("[Voice] ICE failed, restarting...");
         pc.restartIce();
         patchedOffer(pc).then(offer =>
           socketRef.current?.emit("voice-offer", { to: remoteSocketId, offer })
         ).catch(() => cleanupPeer(remoteSocketId));
+      }
+      if (state === "disconnected") {
+        // Give 5s for reconnect before cleanup
+        setTimeout(() => {
+          if (pc.connectionState === "disconnected") {
+            pc.restartIce();
+            patchedOffer(pc).then(offer =>
+              socketRef.current?.emit("voice-offer", { to: remoteSocketId, offer })
+            ).catch(() => {});
+          }
+        }, 5000);
       }
     };
 
