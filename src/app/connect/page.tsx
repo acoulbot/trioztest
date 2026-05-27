@@ -19,6 +19,7 @@ import MessageArea from "@/components/connect/MessageArea";
 import MobileGroupList from "@/components/connect/MobileGroupList";
 import ModalBackdrop from "@/components/connect/ModalBackdrop";
 import ConnectSplash from "@/components/connect/ConnectSplash";
+import DayNightBackground from "@/components/connect/DayNightBackground";
 import { ThemeProvider } from "@/contexts/ThemeContext";
 
 const VoiceScreenShare = dynamic(() => import("@/components/voice/VoiceScreenShare"), { ssr: false });
@@ -834,7 +835,8 @@ function ConnectPageInner() {
   return (
     <>
     {!splashDone && <ConnectSplash onDone={handleSplashDone} />}
-    <div className="cn-main flex h-[calc(100vh-64px)] overflow-hidden">
+    <div className="cn-main flex h-[calc(100vh-64px)] overflow-hidden relative">
+      <DayNightBackground opacity={0.12} />
 
       {/* ── COL 1: NavRail (desktop only) ── */}
       <NavRail
