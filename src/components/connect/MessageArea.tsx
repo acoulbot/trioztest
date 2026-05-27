@@ -5,10 +5,10 @@ import { motion, AnimatePresence } from "framer-motion";
 import { io, Socket } from "socket.io-client";
 import Image from "next/image";
 import GlowAvatar from "@/components/ui/GlowAvatar";
-import MiniProfile from "@/components/ui/MiniProfile";
 import TypingIndicator from "@/components/ui/TypingIndicator";
 import VoiceRecorder from "@/components/ui/VoiceRecorder";
 import VoicePlayer from "@/components/ui/VoicePlayer";
+import DayNightBackground from "@/components/connect/DayNightBackground";
 
 interface MessageUser {
   id: string;
@@ -65,11 +65,10 @@ interface MessageAreaProps {
   currentUserRole: string;
   isBanned: boolean;
   onBack?: () => void;
-  onMessageUser?: (userId: string) => void;
 }
 
 export default function MessageArea({
-  channelId, channelName, channelIcon, currentUserId, currentUserRole, isBanned, onBack, onMessageUser,
+  channelId, channelName, channelIcon, currentUserId, currentUserRole, isBanned, onBack,
 }: MessageAreaProps) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [newMessage, setNewMessage] = useState("");
@@ -85,6 +84,30 @@ export default function MessageArea({
   const [sending, setSending] = useState(false);
   const [recordingVoice, setRecordingVoice] = useState(false);
   const [showScrollBtn, setShowScrollBtn] = useState(false);
+
+  // Day-Night background (optional, controlled via profile settings)
+  const [dayNightEnabled, setDayNightEnabled] = useState<boolean>(() => {
+    if (typeof window !== "undefined") {
+      return localStorage.getItem("tz-connect-daynight") === "true";
+    }
+    return false;
+  });
+  const [dayNightOpacity, setDayNightOpacity] = useState<number>(() => {
+    if (typeof window !== "undefined") {
+      return parseInt(localStorage.getItem("tz-connect-daynight-opacity") ?? "15", 10);
+    }
+    return 15;
+  });
+
+  useEffect(() => {
+    function handleDayNightChange(e: Event) {
+      const detail = (e as CustomEvent<{ enabled: boolean; opacity: number }>).detail;
+      setDayNightEnabled(detail.enabled);
+      setDayNightOpacity(detail.opacity);
+    }
+    window.addEventListener("tz-daynight-change", handleDayNightChange);
+    return () => window.removeEventListener("tz-daynight-change", handleDayNightChange);
+  }, []);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
@@ -350,6 +373,10 @@ export default function MessageArea({
 
   return (
     <div className="flex-1 flex flex-col h-full min-w-0 relative">
+      {/* Day-Night atmospheric background (optional) */}
+      {dayNightEnabled && (
+        <DayNightBackground opacity={dayNightOpacity / 100} />
+      )}
       {/* Header */}
       <header className="h-12 border-b bg-[var(--cn-main)]/80 backdrop-blur-sm flex items-center px-4 gap-2 backdrop-blur-sm flex-shrink-0">
         {onBack && (
@@ -393,9 +420,7 @@ export default function MessageArea({
               animate={{ opacity: 1, y: 0 }}
               transition={{ type: "spring", stiffness: 380, damping: 28 }}
               className={`flex gap-3 group ${msg.pinned ? "bg-amber-50/50 dark:bg-amber-400/5 -mx-2 px-2 py-1 rounded-lg" : ""}`}>
-              <MiniProfile user={msg.user} onMessageClick={onMessageUser} side="right">
-                <GlowAvatar user={msg.user} size={36} />
-              </MiniProfile>
+              <GlowAvatar user={msg.user} size={36} />
               <div className="flex-1 min-w-0">
                 {/* Pin indicator */}
                 {msg.pinned && (
@@ -405,19 +430,11 @@ export default function MessageArea({
                   </div>
                 )}
 
-                {/* Reply reference — accented quote */}
+                {/* Reply reference */}
                 {msg.replyTo && (
-                  <div className="flex items-start gap-2 mb-1.5">
-                    {/* Reply arrow */}
-                    <svg className="w-3.5 h-3.5 text-neutral-300 dark:text-neutral-600 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6" />
-                    </svg>
-                    <div className="flex items-center gap-1.5 border-l-[3px] border-violet-400 dark:border-cyan-400 pl-2 py-0.5 rounded-sm bg-violet-50/50 dark:bg-cyan-400/[0.04] min-w-0">
-                      <span className="text-[11px] font-semibold text-violet-600 dark:text-cyan-400 flex-shrink-0 italic">
-                        {msg.replyTo.user.name}
-                      </span>
-                      <span className="text-[11px] text-neutral-400 truncate max-w-[220px]">{msg.replyTo.content}</span>
-                    </div>
+                  <div className="flex items-center gap-1 text-[11px] text-neutral-400 mb-0.5 border-l-2 border-violet-400 dark:border-cyan-400 pl-2">
+                    <span className="font-medium">{msg.replyTo.user.name}:</span>
+                    <span className="truncate max-w-[200px]">{msg.replyTo.content}</span>
                   </div>
                 )}
 
