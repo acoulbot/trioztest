@@ -32,16 +32,35 @@ export default function VoiceMiniWidget() {
         {expanded ? (
           <div className="bg-neutral-900/95 backdrop-blur-md border border-white/10 rounded-2xl shadow-2xl overflow-hidden">
             {/* Header */}
-            <div className="flex items-center justify-between px-3 py-2 border-b border-white/10 bg-green-600/20">
+            <div className={`flex items-center justify-between px-3 py-2 border-b border-white/10 ${
+              voice.voiceStatus === "connected" ? "bg-green-600/20" :
+              voice.voiceStatus === "connecting" ? "bg-yellow-600/20" :
+              voice.voiceStatus === "reconnecting" ? "bg-orange-600/20" :
+              "bg-red-600/20"
+            }`}>
               <div className="flex items-center gap-2 min-w-0">
-                <span className="w-2 h-2 rounded-full bg-green-400 animate-pulse flex-shrink-0" />
-                <span className="text-xs font-medium text-green-400 truncate">
-                  {voice.channelName || "Голосовой"}
+                <span className={`w-2 h-2 rounded-full flex-shrink-0 animate-pulse ${
+                  voice.voiceStatus === "connected" ? "bg-green-400" :
+                  voice.voiceStatus === "connecting" ? "bg-yellow-400" :
+                  voice.voiceStatus === "reconnecting" ? "bg-orange-400" :
+                  "bg-red-400"
+                }`} />
+                <span className={`text-xs font-medium truncate ${
+                  voice.voiceStatus === "connected" ? "text-green-400" :
+                  voice.voiceStatus === "connecting" ? "text-yellow-400" :
+                  voice.voiceStatus === "reconnecting" ? "text-orange-400" :
+                  "text-red-400"
+                }`}>
+                  {voice.voiceStatus === "connecting" ? "Подключение..." :
+                   voice.voiceStatus === "reconnecting" ? "Переподключение..." :
+                   voice.channelName || "Голосовой"}
                 </span>
-                <span className="text-[10px] text-neutral-400">
-                  {voice.users.length}
-                </span>
-                {voice.localPing !== null && (
+                {voice.voiceStatus === "connected" && (
+                  <span className="text-[10px] text-neutral-400">
+                    {voice.users.length}
+                  </span>
+                )}
+                {voice.localPing !== null && voice.voiceStatus === "connected" && (
                   <span className={`text-[9px] ${voice.localPing < 150 ? "text-green-400" : voice.localPing < 400 ? "text-yellow-400" : "text-red-400"}`}>
                     {Math.round(voice.localPing)}ms
                   </span>

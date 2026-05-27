@@ -35,6 +35,7 @@ interface GroupDetail {
 
 interface VoiceState {
   isConnected: boolean;
+  voiceStatus: "idle" | "connecting" | "connected" | "reconnecting" | "error";
   channelId: string | null;
   channelName: string | null;
   isMuted: boolean;
@@ -375,6 +376,24 @@ export default function ChannelSidebar({
                       </button>
                     )}
                   </div>
+
+                  {/* Connection status indicator */}
+                  {isActive && voiceState && voiceState.voiceStatus === "connecting" && (
+                    <div className="ml-5 pl-2.5 border-l-2 border-yellow-400/30 py-1">
+                      <span className="text-[11px] text-yellow-400 animate-pulse flex items-center gap-1.5">
+                        <span className="w-2 h-2 rounded-full bg-yellow-400 animate-pulse" />
+                        Подключение к серверу...
+                      </span>
+                    </div>
+                  )}
+                  {isActive && voiceState && voiceState.voiceStatus === "reconnecting" && (
+                    <div className="ml-5 pl-2.5 border-l-2 border-orange-400/30 py-1">
+                      <span className="text-[11px] text-orange-400 animate-pulse flex items-center gap-1.5">
+                        <span className="w-2 h-2 rounded-full bg-orange-400 animate-pulse" />
+                        Переподключение...
+                      </span>
+                    </div>
+                  )}
 
                   {/* Users in voice channel (Discord style: vertical list under channel) */}
                   {displayUsers.length > 0 && (
