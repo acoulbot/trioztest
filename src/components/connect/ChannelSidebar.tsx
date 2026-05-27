@@ -399,14 +399,18 @@ export default function ChannelSidebar({
                   {displayUsers.length > 0 && (
                     <div className="ml-5 pl-2.5 border-l-2 border-neutral-200 dark:border-white/10 space-y-0.5 mb-1">
                       {/* Local user shown first if connected */}
-                      {isActive && voiceState && (
-                        <VoiceUserRow
-                          name={userName}
-                          muted={voiceState.isMuted}
-                          speaking={voiceState.localSpeaking && !voiceState.isMuted}
-                          isLocal
-                        />
-                      )}
+                      {isActive && voiceState && (() => {
+                        const localSocketId = voiceState.users.find(u => u.userId === myProfileUser.id)?.socketId;
+                        return (
+                          <VoiceUserRow
+                            name={userName}
+                            muted={voiceState.isMuted}
+                            speaking={voiceState.localSpeaking && !voiceState.isMuted}
+                            isLocal
+                            quality={localSocketId ? voiceState.connectionQuality.get(localSocketId) : undefined}
+                          />
+                        );
+                      })()}
                       {displayUsers
                         .filter(u => !(isActive && u.userId === myProfileUser.id))
                         .map(u => (
