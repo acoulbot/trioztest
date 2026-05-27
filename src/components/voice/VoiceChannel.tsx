@@ -123,9 +123,15 @@ export default function VoiceChannel({ channelId, channelName, onClose }: VoiceC
     peersRef.current.set(remoteSocketId, pc);
 
     // Add local audio (processed stream)
-    localStreamRef.current?.getTracks().forEach(t =>
-      pc.addTrack(t, localStreamRef.current!)
-    );
+    localStreamRef.current?.getTracks().forEach(t => {
+      const sender = pc.addTrack(t, localStreamRef.current!);
+      if (t.kind === "audio") {
+        const params = sender.getParameters();
+        if (!params.encodings?.length) params.encodings = [{}];
+        params.encodings[0].maxBitrate = 128_000;
+        sender.setParameters(params).catch(() => {});
+      }
+    });
     // Add screen video if already sharing
     if (screenStreamRef.current) {
       screenStreamRef.current.getVideoTracks().forEach(t => {
@@ -281,8 +287,9 @@ export default function VoiceChannel({ channelId, channelName, onClose }: VoiceC
         rawStream = await navigator.mediaDevices.getUserMedia({
           audio: {
             echoCancellation:  true,
-            noiseSuppression:  false,  // We handle this ourselves with RNNoise
+            noiseSuppression:  true,
             autoGainControl:   true,
+            channelCount:      1,
             sampleRate:        48000,
           },
         });
