@@ -62,9 +62,11 @@ export async function rateLimit(
 
   const cacheKey = `rl:${key}:${ip}`;
 
-  const exceeded =
-    (await rateLimitRedis(cacheKey, limit, windowMs)) ||
-    rateLimitMemory(cacheKey, limit, windowMs);
+  const redisResult = await rateLimitRedis(cacheKey, limit, windowMs);
+  // Use Redis if available (returned a definitive answer), otherwise fall back to in-memory
+  const exceeded = redis.status === "ready"
+    ? redisResult
+    : rateLimitMemory(cacheKey, limit, windowMs);
 
   return exceeded ? buildResponse(limit, windowMs) : null;
 }

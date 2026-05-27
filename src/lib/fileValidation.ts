@@ -17,9 +17,17 @@ export function validateImageMagicBytes(buffer: Buffer, declaredType: string): b
   const signatures = MAGIC_BYTES[declaredType];
   if (!signatures) return false;
 
-  return signatures.some((sig) =>
+  const basicMatch = signatures.some((sig) =>
     sig.every((byte, i) => buffer.length > i && buffer[i] === byte)
   );
+
+  // Extra check for WebP: RIFF header is shared with WAV/AVI — verify "WEBP" at offset 8
+  if (basicMatch && declaredType === "image/webp") {
+    if (buffer.length < 12) return false;
+    return buffer[8] === 0x57 && buffer[9] === 0x45 && buffer[10] === 0x42 && buffer[11] === 0x50;
+  }
+
+  return basicMatch;
 }
 
 /**

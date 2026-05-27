@@ -3,12 +3,19 @@ import fs from "fs";
 import path from "path";
 
 // Copy @jitsi/rnnoise-wasm assets to public/ at build time
-const rnnoiseWasm = path.resolve("node_modules/@jitsi/rnnoise-wasm/dist/rnnoise.wasm");
-const rnnoiseSync = path.resolve("node_modules/@jitsi/rnnoise-wasm/dist/rnnoise-sync.js");
-if (fs.existsSync(rnnoiseWasm))
-  fs.copyFileSync(rnnoiseWasm, path.resolve("public/rnnoise.wasm"));
-if (fs.existsSync(rnnoiseSync))
-  fs.copyFileSync(rnnoiseSync, path.resolve("public/worklets/rnnoise-sync.js"));
+try {
+  const rnnoiseWasm = path.resolve("node_modules/@jitsi/rnnoise-wasm/dist/rnnoise.wasm");
+  const rnnoiseSync = path.resolve("node_modules/@jitsi/rnnoise-wasm/dist/rnnoise-sync.js");
+  if (fs.existsSync(rnnoiseWasm))
+    fs.copyFileSync(rnnoiseWasm, path.resolve("public/rnnoise.wasm"));
+  if (fs.existsSync(rnnoiseSync)) {
+    const workletsDir = path.resolve("public/worklets");
+    if (!fs.existsSync(workletsDir)) fs.mkdirSync(workletsDir, { recursive: true });
+    fs.copyFileSync(rnnoiseSync, path.resolve("public/worklets/rnnoise-sync.js"));
+  }
+} catch (err) {
+  console.warn("[next.config] rnnoise copy skipped:", err.message);
+}
 
 const securityHeaders = [
   {
@@ -35,7 +42,7 @@ const securityHeaders = [
     key: "Content-Security-Policy",
     value: [
       "default-src 'self'",
-      "script-src 'self' 'unsafe-inline' 'unsafe-eval' blob:",
+      "script-src 'self' 'unsafe-inline' blob:",
       "worker-src 'self' blob:",
       "style-src 'self' 'unsafe-inline'",
       "img-src 'self' data: blob: https:",
@@ -43,7 +50,6 @@ const securityHeaders = [
       "connect-src 'self' ws: wss: https://api.openai.com https://api.anthropic.com",
       "media-src 'self' blob:",
       "style-src-elem 'self' 'unsafe-inline' https://fonts.googleapis.com",
-      "frame-ancestors 'none'",
     ].join("; "),
   },
 ];
