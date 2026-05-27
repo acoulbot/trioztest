@@ -33,8 +33,14 @@ const allowedOrigins = process.env.ALLOWED_ORIGINS
   : [`http://localhost:${port}`, `http://0.0.0.0:${port}`];
 
 app.prepare().then(() => {
-  const httpServer = createServer((req, res) => {
-    handle(req, res);
+  const httpServer = createServer(async (req, res) => {
+    try {
+      await handle(req, res);
+    } catch (err) {
+      console.error("[HTTP] Request handler error:", err);
+      res.statusCode = 500;
+      res.end("Internal Server Error");
+    }
   });
 
   const io = new SocketIOServer(httpServer, {
@@ -47,7 +53,9 @@ app.prepare().then(() => {
   });
 
   // Export io globally so API routes can emit events
+  // Set BEFORE any request can be processed (prepare() is already done)
   (globalThis as Record<string, unknown>).__socketio = io;
+  (globalThis as Record<string, unknown>).__socketioReady = true;
 
   io.use(async (socket, next) => {
     try {
@@ -160,15 +168,15 @@ app.prepare().then(() => {
       socket.emit("all-voice-users", result);
     });
 
-    socket.on("voice-offer", ({ to, offer }: { to: string; offer: RTCSessionDescriptionInit }) => {
+    socket.on("voice-offer", ({ to, offer }: { to: string; offer: unknown }) => {
       io.to(to).emit("voice-offer", { from: socket.id, offer });
     });
 
-    socket.on("voice-answer", ({ to, answer }: { to: string; answer: RTCSessionDescriptionInit }) => {
+    socket.on("voice-answer", ({ to, answer }: { to: string; answer: unknown }) => {
       io.to(to).emit("voice-answer", { from: socket.id, answer });
     });
 
-    socket.on("ice-candidate", ({ to, candidate }: { to: string; candidate: RTCIceCandidateInit }) => {
+    socket.on("ice-candidate", ({ to, candidate }: { to: string; candidate: unknown }) => {
       io.to(to).emit("ice-candidate", { from: socket.id, candidate });
     });
 
@@ -209,11 +217,12 @@ app.prepare().then(() => {
       }
 
       authenticatedSockets.delete(socket.id);
-      voiceRooms.forEach((room, channelId) => {
-        if (room.has(socket.id)) {
-          leaveVoiceChannel(socket, channelId);
-        }
-      });
+      const channelsToLeave = Array.from(voiceRooms.entries())
+        .filter(([, room]) => room.has(socket.id))
+        .map(([channelId]) => channelId);
+      for (const channelId of channelsToLeave) {
+        leaveVoiceChannel(socket, channelId);
+      }
     });
 
     function broadcastVoiceChannelUsers(channelId: string) {

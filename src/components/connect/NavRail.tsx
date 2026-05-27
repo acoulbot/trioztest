@@ -189,25 +189,6 @@ export default function NavRail({
           </button>
         )}
 
-        {/* Settings */}
-        <button
-          onClick={onProfileSettings}
-          className="w-8 h-8 rounded-lg flex items-center justify-center transition-all duration-200"
-          style={{
-            background: "var(--cn-accent-dim)",
-            color: "var(--cn-muted)",
-            border: "none",
-          }}
-          onMouseEnter={e => { (e.currentTarget as HTMLElement).style.color = "var(--cn-accent-text)"; }}
-          onMouseLeave={e => { (e.currentTarget as HTMLElement).style.color = "var(--cn-muted)"; }}
-          title="Настройки профиля"
-        >
-          <SettingsIcon />
-        </button>
-
-        {/* ── Divider ── */}
-        <div style={{ width: 32, height: 1, borderRadius: 1, background: "var(--cn-border)" }} />
-
         {/* User avatar */}
         <button
           onClick={onProfileSettings}

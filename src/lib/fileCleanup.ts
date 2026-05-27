@@ -22,7 +22,12 @@ function parseAttachments(raw: string | null): AttachmentData[] {
 
 async function deleteFileFromDisk(fileUrl: string): Promise<boolean> {
   try {
-    const filePath = path.join(process.cwd(), "public", fileUrl);
+    const publicDir = path.resolve(process.cwd(), "public");
+    const filePath = path.resolve(publicDir, fileUrl.replace(/^\/+/, ""));
+    if (!filePath.startsWith(publicDir + path.sep)) {
+      console.warn("[Cleanup] Path traversal blocked:", fileUrl);
+      return false;
+    }
     await unlink(filePath);
     return true;
   } catch {
@@ -80,7 +85,7 @@ export async function cleanupExpiredFiles(): Promise<{
         where: { id: msg.id },
         data: {
           attachments: remaining.length > 0 ? JSON.stringify(remaining) : null,
-          content: remaining.length === 0 && !msg.attachments
+          content: remaining.length === 0
             ? "[Файл удалён автоматически]"
             : undefined,
         },
@@ -123,6 +128,9 @@ export async function cleanupExpiredFiles(): Promise<{
         where: { id: dm.id },
         data: {
           attachments: remaining.length > 0 ? JSON.stringify(remaining) : null,
+          content: remaining.length === 0
+            ? "[Файл удалён автоматически]"
+            : undefined,
         },
       });
       dmProcessed++;
