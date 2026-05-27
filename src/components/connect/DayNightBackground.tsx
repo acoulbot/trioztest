@@ -125,49 +125,68 @@ function getSkyBodyPos(progress: number) {
 
 /* ─── types ───────────────────────────────────────────────── */
 
-interface Star { x: number; y: number; r: number; phase: number; speed: number }
+interface Star { x: number; y: number; r: number; phase: number; speed: number; drift: number }
 
 interface Cloud { x: number; y: number; w: number; h: number; speed: number; opacity: number }
 
+interface Bird { x: number; y: number; speed: number; wingPhase: number; size: number }
+
+type BuildingType = "pyramid" | "terrace" | "crystal" | "box" | "spire" | "antenna";
+
 interface BuildingDef {
   x: number; w: number; h: number; layer: number;
-  antenna?: boolean; spire?: boolean;
+  type: BuildingType;
   windowSeed: number;
 }
 
-/* ─── generate buildings (seeded) ─────────────────────────── */
+/* ─── generate buildings (seeded, futuristic) ────────────── */
 
 function generateBuildings(seed: number): BuildingDef[] {
   const rng = mulberry32(seed);
   const buildings: BuildingDef[] = [];
+  const fgTypes: BuildingType[] = ["pyramid", "terrace", "crystal", "box", "spire", "antenna"];
 
-  // Layer 0 — background (shorter, wider, fills gaps)
-  const count0 = 12 + Math.floor(rng() * 4);
+  // Layer 0 — background (shorter, fills gaps) — reduced 20%
+  const count0 = 9 + Math.floor(rng() * 3);
   for (let i = 0; i < count0; i++) {
     buildings.push({
       x: (i / count0) + (rng() - 0.5) * 0.03,
       w: 0.04 + rng() * 0.04,
-      h: 0.25 + rng() * 0.2,
+      h: 0.2 + rng() * 0.18,
       layer: 0,
+      type: "box",
       windowSeed: rng() * 10000,
     });
   }
 
-  // Layer 1 — foreground (taller, with details)
-  const count1 = 10 + Math.floor(rng() * 5);
+  // Layer 1 — foreground (futuristic types) — reduced 20%
+  const count1 = 8 + Math.floor(rng() * 4);
   for (let i = 0; i < count1; i++) {
+    const type = fgTypes[Math.floor(rng() * fgTypes.length)];
     buildings.push({
       x: (i / count1) + (rng() - 0.5) * 0.04,
       w: 0.045 + rng() * 0.05,
       h: 0.5 + rng() * 0.35,
       layer: 1,
-      antenna: rng() > 0.65,
-      spire: rng() > 0.7,
+      type,
       windowSeed: rng() * 10000,
     });
   }
 
   return buildings;
+}
+
+/* ─── generate birds ──────────────────────────────────────── */
+
+function generateBirds(seed: number): Bird[] {
+  const rng = mulberry32(seed + 777);
+  return Array.from({ length: 5 }, () => ({
+    x: rng(),
+    y: 0.1 + rng() * 0.3,
+    speed: 0.0001 + rng() * 0.00015,
+    wingPhase: rng() * Math.PI * 2,
+    size: 3 + rng() * 4,
+  }));
 }
 
 /* ─── generate clouds ─────────────────────────────────────── */
@@ -195,6 +214,7 @@ function drawScene(
   stars: Star[],
   buildings: BuildingDef[],
   clouds: Cloud[],
+  birds: Bird[],
 ) {
   const sky = getSky(progress);
   const { sunX, sunY, moonX, moonY } = getSkyBodyPos(progress);
@@ -209,14 +229,34 @@ function drawScene(
   ctx.fillStyle = grad;
   ctx.fillRect(0, 0, w, h);
 
-  /* stars */
+  /* stars — moving slowly */
   if (sky.starsOpacity > 0) {
     stars.forEach(s => {
       const twinkle = 0.5 + 0.5 * Math.sin(s.phase + frame * s.speed);
+      const driftX = ((s.x + frame * s.drift) % 1.05) - 0.025;
       ctx.beginPath();
-      ctx.arc(s.x * w, s.y * h * 0.6, s.r, 0, Math.PI * 2);
+      ctx.arc(driftX * w, s.y * h * 0.6, s.r, 0, Math.PI * 2);
       ctx.fillStyle = `rgba(200,220,255,${sky.starsOpacity * (0.3 + 0.7 * twinkle)})`;
       ctx.fill();
+    });
+  }
+
+  /* birds — daytime only */
+  if (sky.phase === "day" || sky.phase === "morning" || sky.phase === "golden") {
+    const birdAlpha = sky.phase === "day" ? 0.6 : 0.35;
+    ctx.strokeStyle = `rgba(30,30,50,${birdAlpha})`;
+    ctx.lineWidth = 1.2;
+    birds.forEach(bird => {
+      const bx = ((bird.x + frame * bird.speed) % 1.3) - 0.15;
+      const by = bird.y;
+      const px = bx * w;
+      const py = by * h;
+      const wing = Math.sin(bird.wingPhase + frame * 0.06) * bird.size * 0.5;
+      ctx.beginPath();
+      ctx.moveTo(px - bird.size, py + wing);
+      ctx.quadraticCurveTo(px - bird.size * 0.3, py - Math.abs(wing) * 0.3, px, py);
+      ctx.quadraticCurveTo(px + bird.size * 0.3, py - Math.abs(wing) * 0.3, px + bird.size, py + wing);
+      ctx.stroke();
     });
   }
 
@@ -320,20 +360,59 @@ function drawScene(
     const by = baseY - bh;
     const layerAlpha = b.layer === 0 ? sky.cityAlpha * 0.55 : sky.cityAlpha;
 
-    /* building body */
-    const bGrad = ctx.createLinearGradient(0, by, 0, baseY);
-    if (isNight) {
-      bGrad.addColorStop(0, `rgba(${b.layer === 1 ? "13,32,64" : "10,26,53"},${layerAlpha})`);
-      bGrad.addColorStop(1, `rgba(${b.layer === 1 ? "5,16,26" : "5,13,20"},${layerAlpha})`);
-    } else {
-      bGrad.addColorStop(0, `rgba(26,42,80,${layerAlpha})`);
-      bGrad.addColorStop(1, `rgba(10,22,40,${layerAlpha})`);
-    }
-    ctx.fillStyle = bGrad;
-    ctx.fillRect(bx, by, bw, bh);
+    /* building body — shape depends on type */
+    const bColor = isNight
+      ? (b.layer === 1 ? `rgba(13,32,64,${layerAlpha})` : `rgba(10,26,53,${layerAlpha})`)
+      : `rgba(26,42,80,${layerAlpha})`;
+    ctx.fillStyle = bColor;
 
-    /* windows grid */
-    if (sky.windowGlow > 0.02) {
+    switch (b.type) {
+      case "pyramid":
+        ctx.beginPath();
+        ctx.moveTo(bx + bw / 2, by);
+        ctx.lineTo(bx - bw * 0.08, baseY);
+        ctx.lineTo(bx + bw * 1.08, baseY);
+        ctx.closePath();
+        ctx.fill();
+        break;
+      case "terrace": {
+        const steps = 4;
+        for (let s = 0; s < steps; s++) {
+          const stepH = bh / steps;
+          const shrink = s * bw * 0.08;
+          ctx.fillRect(bx + shrink, by + s * stepH, bw - shrink * 2, stepH + 1);
+        }
+        break;
+      }
+      case "crystal":
+        ctx.beginPath();
+        ctx.moveTo(bx + bw * 0.3, by);
+        ctx.lineTo(bx, by + bh * 0.35);
+        ctx.lineTo(bx, baseY);
+        ctx.lineTo(bx + bw, baseY);
+        ctx.lineTo(bx + bw, by + bh * 0.25);
+        ctx.lineTo(bx + bw * 0.7, by);
+        ctx.closePath();
+        ctx.fill();
+        break;
+      case "spire":
+        ctx.fillRect(bx, by, bw, bh);
+        ctx.beginPath();
+        ctx.moveTo(bx + bw / 2, by - bh * 0.12);
+        ctx.lineTo(bx + bw * 0.3, by);
+        ctx.lineTo(bx + bw * 0.7, by);
+        ctx.closePath();
+        ctx.fill();
+        break;
+      case "antenna":
+        ctx.fillRect(bx, by, bw, bh);
+        break;
+      default: // box
+        ctx.fillRect(bx, by, bw, bh);
+    }
+
+    /* windows grid (for all types except pyramid) */
+    if (sky.windowGlow > 0.02 && b.type !== "pyramid") {
       const winW = 3, winH = 4, gapX = 7, gapY = 7, padX = 3, padT = 5;
       const cols = Math.floor((bw - padX * 2) / gapX);
       const rows = Math.floor((bh - padT) / gapY);
@@ -341,10 +420,14 @@ function drawScene(
         for (let col = 0; col < cols; col++) {
           const wx = bx + padX + col * gapX;
           const wy = by + padT + row * gapY;
-          // deterministic pseudo-random per window
           const seed = (Math.sin(b.windowSeed + wx * 127 + wy * 311) + 1) / 2;
-          // more windows off at night (random pattern)
           if (seed < 0.35) continue;
+          // For terrace/crystal: skip windows outside shape
+          if (b.type === "terrace") {
+            const relRow = row / rows;
+            const shrink = relRow * bw * 0.08 * 4;
+            if (wx < bx + shrink || wx > bx + bw - shrink) continue;
+          }
           const warmCool = seed > 0.55;
           const alpha = sky.windowGlow * (0.5 + seed * 0.5);
           ctx.fillStyle = isNight || sky.phase === "dusk" || sky.phase === "golden"
@@ -357,46 +440,33 @@ function drawScene(
       }
     }
 
-    /* antenna */
-    if (b.antenna && b.layer === 1) {
+    /* antenna with beacon */
+    if (b.type === "antenna" && b.layer === 1) {
       const ax = bx + bw / 2;
       ctx.strokeStyle = isNight ? "rgba(0,180,220,0.6)" : "rgba(74,128,255,0.3)";
       ctx.lineWidth = 1;
       ctx.beginPath();
       ctx.moveTo(ax, by);
-      ctx.lineTo(ax, by - 12);
+      ctx.lineTo(ax, by - 14);
       ctx.stroke();
-
-      /* blinking beacon — slower */
       const blink = Math.sin(frame * 0.02) > 0.3;
       ctx.fillStyle = blink
         ? (isNight ? "rgba(255,50,50,0.9)" : "rgba(255,100,100,0.4)")
         : "rgba(255,50,50,0.05)";
       ctx.beginPath();
-      ctx.arc(ax, by - 12, 2, 0, Math.PI * 2);
+      ctx.arc(ax, by - 14, 2, 0, Math.PI * 2);
       ctx.fill();
     }
 
-    /* spire */
-    if (b.spire && b.layer === 1) {
-      ctx.fillStyle = isNight ? `rgba(13,32,64,${layerAlpha})` : `rgba(26,46,85,${layerAlpha})`;
-      ctx.beginPath();
-      ctx.moveTo(bx + bw / 2, by - 15);
-      ctx.lineTo(bx + 4, by);
-      ctx.lineTo(bx + bw - 4, by);
-      ctx.closePath();
-      ctx.fill();
-    }
-
-    /* subtle neon edge lines — reduced brightness */
-    if (isNight && b.layer === 1) {
+    /* subtle neon edge lines (night, foreground only) */
+    if (isNight && b.layer === 1 && b.type !== "pyramid") {
       ctx.strokeStyle = "rgba(0,180,220,0.12)";
       ctx.lineWidth = 0.6;
       ctx.beginPath();
       ctx.moveTo(bx, by); ctx.lineTo(bx, baseY); ctx.stroke();
       ctx.beginPath();
       ctx.moveTo(bx + bw, by); ctx.lineTo(bx + bw, baseY); ctx.stroke();
-      ctx.strokeStyle = "rgba(0,180,220,0.2)";
+      ctx.strokeStyle = "rgba(0,180,220,0.18)";
       ctx.beginPath();
       ctx.moveTo(bx, by); ctx.lineTo(bx + bw, by); ctx.stroke();
     }
@@ -432,6 +502,7 @@ export default function DayNightBackground({ opacity = 0.15 }: DayNightBackgroun
   const starsRef = useRef<Star[]>([]);
   const buildingsRef = useRef<BuildingDef[]>([]);
   const cloudsRef = useRef<Cloud[]>([]);
+  const birdsRef = useRef<Bird[]>([]);
   const frameRef = useRef(0);
   const rafRef = useRef<number>(0);
 
@@ -443,9 +514,11 @@ export default function DayNightBackground({ opacity = 0.15 }: DayNightBackgroun
       r: Math.random() * 1.0 + 0.3,
       phase: Math.random() * Math.PI * 2,
       speed: 0.005 + Math.random() * 0.012,
+      drift: 0.000015 + Math.random() * 0.000025,
     }));
     buildingsRef.current = generateBuildings(sessionSeed);
     cloudsRef.current = generateClouds(sessionSeed);
+    birdsRef.current = generateBirds(sessionSeed);
   }, []);
 
   useEffect(() => {
@@ -479,7 +552,7 @@ export default function DayNightBackground({ opacity = 0.15 }: DayNightBackgroun
       drawScene(
         ctx!, canvas!.offsetWidth, canvas!.offsetHeight,
         progress, frameRef.current,
-        starsRef.current, buildingsRef.current, cloudsRef.current,
+        starsRef.current, buildingsRef.current, cloudsRef.current, birdsRef.current,
       );
       frameRef.current++;
       rafRef.current = requestAnimationFrame(loop);
@@ -511,6 +584,7 @@ export function DayNightMiniPreview({ opacity }: { opacity: number }) {
   const starsRef = useRef<Star[]>([]);
   const buildingsRef = useRef<BuildingDef[]>([]);
   const cloudsRef = useRef<Cloud[]>([]);
+  const birdsRef = useRef<Bird[]>([]);
   const frameRef = useRef(0);
   const rafRef = useRef<number>(0);
 
@@ -520,9 +594,11 @@ export function DayNightMiniPreview({ opacity }: { opacity: number }) {
       r: Math.random() * 0.8 + 0.2,
       phase: Math.random() * Math.PI * 2,
       speed: 0.008 + Math.random() * 0.015,
+      drift: 0.00002 + Math.random() * 0.00003,
     }));
     buildingsRef.current = generateBuildings(42);
     cloudsRef.current = generateClouds(42);
+    birdsRef.current = generateBirds(42);
   }, []);
 
   useEffect(() => {
@@ -545,7 +621,7 @@ export function DayNightMiniPreview({ opacity }: { opacity: number }) {
       const h = canvas!.offsetHeight;
       canvas!.width = w;
       canvas!.height = h;
-      drawScene(ctx!, w, h, progress, frameRef.current, starsRef.current, buildingsRef.current, cloudsRef.current);
+      drawScene(ctx!, w, h, progress, frameRef.current, starsRef.current, buildingsRef.current, cloudsRef.current, birdsRef.current);
       frameRef.current++;
       rafRef.current = requestAnimationFrame(loop);
     }
