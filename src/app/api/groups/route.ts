@@ -4,6 +4,7 @@ import { authOptions } from "@/lib/auth";
 import prisma from "@/lib/prisma";
 import { checkBan } from "@/lib/banCheck";
 import { rateLimit } from "@/lib/rateLimit";
+import { ensureMainCommunity, autoJoinMainCommunity } from "@/lib/mainCommunity";
 
 export async function GET() {
   const session = await getServerSession(authOptions);
@@ -11,18 +12,37 @@ export async function GET() {
     return NextResponse.json([]);
   }
 
-  const groups = await prisma.group.findMany({
-    where: {
-      members: { some: { userId: session.user.id } },
-    },
-    include: {
-      _count: { select: { members: true, channels: true } },
-      owner: { select: { id: true, name: true, username: true } },
-    },
-    orderBy: { createdAt: "asc" },
-  });
+  try {
+    // Auto-create main community if it doesn't exist yet
+    await ensureMainCommunity();
+    // Auto-join current user to main community if not already a member
+    await autoJoinMainCommunity(session.user.id);
 
-  return NextResponse.json(groups);
+    const memberships = await prisma.groupMember.findMany({
+      where: { userId: session.user.id },
+      select: {
+        sortOrder: true,
+        group: {
+          include: {
+            _count: { select: { members: true, channels: true } },
+            owner: { select: { id: true, name: true, username: true } },
+          },
+        },
+      },
+    });
+
+    const groups = memberships
+      .map((m) => ({ ...m.group, sortOrder: m.sortOrder }))
+      .sort((a, b) => {
+        if (a.isMain !== b.isMain) return a.isMain ? -1 : 1;
+        if (a.sortOrder !== b.sortOrder) return a.sortOrder - b.sortOrder;
+        return new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
+      });
+
+    return NextResponse.json(groups);
+  } catch {
+    return NextResponse.json([], { status: 200 });
+  }
 }
 
 export async function POST(req: NextRequest) {

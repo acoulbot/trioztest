@@ -76,24 +76,28 @@ model Group {
   icon        String?
   description String        @default("")
   rules       String        @default("") @db.Text
+  isMain      Boolean       @default(false)
   ownerId     String
   owner       User          @relation("GroupOwner", fields: [ownerId], references: [id], onDelete: Cascade)
   channels    Channel[]
   members     GroupMember[]
   invites     Invite[]
+  roles       GroupRole[]
   createdAt   DateTime      @default(now())
   updatedAt   DateTime      @updatedAt
 }
 
 model GroupMember {
-  id            String   @id @default(cuid())
+  id            String              @id @default(cuid())
   userId        String
   groupId       String
-  role          String   @default("MEMBER")
-  rulesAccepted Boolean  @default(false)
-  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  group         Group    @relation(fields: [groupId], references: [id], onDelete: Cascade)
-  joinedAt      DateTime @default(now())
+  role          String              @default("MEMBER")
+  rulesAccepted Boolean             @default(false)
+  sortOrder     Int                 @default(0)
+  user          User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  group         Group               @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  tags          GroupMemberRole[]
+  joinedAt      DateTime            @default(now())
 
   @@unique([userId, groupId])
 }
@@ -112,18 +116,22 @@ model Invite {
 }
 
 model Channel {
-  id        String          @id @default(cuid())
-  name      String
-  type      String          @default("TEXT")
-  icon      String?
-  groupId   String
-  group     Group           @relation(fields: [groupId], references: [id], onDelete: Cascade)
-  members   ChannelMember[]
-  messages  Message[]
-  createdAt DateTime        @default(now())
-  updatedAt DateTime        @updatedAt
+  id             String               @id @default(cuid())
+  name           String
+  type           String               @default("TEXT")
+  icon           String?
+  groupId        String
+  isRestricted   Boolean              @default(false)
+  serviceId      String?
+  group          Group                @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  members        ChannelMember[]
+  messages       Message[]
+  allowedRoles   ChannelRoleAccess[]
+  createdAt      DateTime             @default(now())
+  updatedAt      DateTime             @updatedAt
 
   @@index([groupId])
+  @@index([serviceId])
 }
 
 model ChannelMember {
@@ -269,6 +277,45 @@ model Service {
   icon        String?
   order       Int     @default(0)
   active      Boolean @default(true)
+}
+
+// Custom roles (tags) for groups — no admin/mod powers, just labels
+model GroupRole {
+  id        String              @id @default(cuid())
+  name      String
+  color     String              @default("#808080")
+  groupId   String
+  group     Group               @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  members   GroupMemberRole[]
+  channels  ChannelRoleAccess[]
+  createdAt DateTime            @default(now())
+
+  @@unique([groupId, name])
+  @@index([groupId])
+}
+
+// Many-to-many: which members have which tags
+model GroupMemberRole {
+  id        String      @id @default(cuid())
+  memberId  String
+  roleId    String
+  member    GroupMember  @relation(fields: [memberId], references: [id], onDelete: Cascade)
+  role      GroupRole    @relation(fields: [roleId], references: [id], onDelete: Cascade)
+
+  @@unique([memberId, roleId])
+  @@index([roleId])
+}
+
+// Which roles can see a restricted channel
+model ChannelRoleAccess {
+  id        String    @id @default(cuid())
+  channelId String
+  roleId    String
+  channel   Channel   @relation(fields: [channelId], references: [id], onDelete: Cascade)
+  role      GroupRole @relation(fields: [roleId], references: [id], onDelete: Cascade)
+
+  @@unique([channelId, roleId])
+  @@index([channelId])
 }
 
 model EcosystemItem {

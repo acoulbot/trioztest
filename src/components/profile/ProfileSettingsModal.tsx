@@ -3,6 +3,34 @@
 import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import GlowAvatar, { GLOW_PRESETS, GlowAvatarUser } from "@/components/ui/GlowAvatar";
+import { getDMSoundEnabled, setDMSoundEnabled, playDMNotification } from "@/lib/dmSound";
+
+function DMSoundToggle() {
+  const [on, setOn] = useState(true);
+  useEffect(() => { setOn(getDMSoundEnabled()); }, []);
+  const toggle = () => {
+    const next = !on;
+    setOn(next);
+    setDMSoundEnabled(next);
+    if (next) playDMNotification(); // preview sound on enable
+  };
+  return (
+    <div className="flex items-center justify-between">
+      <div>
+        <p className="text-sm font-medium text-neutral-900 dark:text-white">Звук сообщений</p>
+        <p className="text-xs text-neutral-400 mt-0.5">Уведомление при получении личного сообщения</p>
+      </div>
+      <button
+        onClick={toggle}
+        className={`relative w-11 h-6 rounded-full transition-colors ${
+          on ? "bg-violet-600" : "bg-neutral-300 dark:bg-neutral-600"
+        }`}
+      >
+        <span className={`absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform ${on ? "translate-x-5" : "translate-x-0"}`} />
+      </button>
+    </div>
+  );
+}
 
 interface ProfileSettings {
   avatarGlowEnabled: boolean;
@@ -133,7 +161,7 @@ export default function ProfileSettingsModal({ user, onClose, onSaved }: Profile
             </div>
           </div>
 
-          {/* Enable toggle */}
+          {/* Enable glow toggle */}
           <div className="flex items-center justify-between">
             <div>
               <p className="text-sm font-medium text-neutral-900 dark:text-white">Свечение аватара</p>
@@ -152,6 +180,9 @@ export default function ProfileSettingsModal({ user, onClose, onSaved }: Profile
               />
             </button>
           </div>
+
+          {/* DM sound toggle */}
+          <DMSoundToggle />
 
           <AnimatePresence>
             {glowEnabled && (

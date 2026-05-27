@@ -1,10 +1,14 @@
 "use client";
 
 import { useState, useEffect, useRef, useCallback } from "react";
-import { motion } from "framer-motion";
+import { motion, AnimatePresence } from "framer-motion";
 import { io, Socket } from "socket.io-client";
 import Image from "next/image";
 import GlowAvatar from "@/components/ui/GlowAvatar";
+import MiniProfile from "@/components/ui/MiniProfile";
+import TypingIndicator from "@/components/ui/TypingIndicator";
+import VoiceRecorder from "@/components/ui/VoiceRecorder";
+import VoicePlayer from "@/components/ui/VoicePlayer";
 
 interface MessageUser {
   id: string;
@@ -22,6 +26,8 @@ interface Attachment {
   size: number;
   type: string;
   isImage: boolean;
+  isVoice?: boolean;
+  duration?: number;
 }
 
 interface Reaction {
@@ -59,10 +65,11 @@ interface MessageAreaProps {
   currentUserRole: string;
   isBanned: boolean;
   onBack?: () => void;
+  onMessageUser?: (userId: string) => void;
 }
 
 export default function MessageArea({
-  channelId, channelName, channelIcon, currentUserId, currentUserRole, isBanned, onBack,
+  channelId, channelName, channelIcon, currentUserId, currentUserRole, isBanned, onBack, onMessageUser,
 }: MessageAreaProps) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [newMessage, setNewMessage] = useState("");
@@ -76,6 +83,8 @@ export default function MessageArea({
   const [nextCursor, setNextCursor] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
   const [sending, setSending] = useState(false);
+  const [recordingVoice, setRecordingVoice] = useState(false);
+  const [showScrollBtn, setShowScrollBtn] = useState(false);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
@@ -178,7 +187,9 @@ export default function MessageArea({
   const handleScroll = () => {
     const el = scrollContainerRef.current;
     if (!el) return;
-    isAtBottomRef.current = el.scrollHeight - el.scrollTop - el.clientHeight < 100;
+    const distFromBottom = el.scrollHeight - el.scrollTop - el.clientHeight;
+    isAtBottomRef.current = distFromBottom < 100;
+    setShowScrollBtn(distFromBottom > 300);
     if (el.scrollTop === 0 && hasMore && nextCursor) {
       fetchMessages(nextCursor);
     }
@@ -271,6 +282,26 @@ export default function MessageArea({
     }
   };
 
+  const handleVoiceRecorded = async (blob: Blob, duration: number) => {
+    setRecordingVoice(false);
+    setUploading(true);
+    try {
+      const fd = new FormData();
+      fd.append("file", blob, "voice.webm");
+      fd.append("duration", String(duration));
+      const uploadRes = await fetch("/api/messages/upload", { method: "POST", body: fd });
+      if (!uploadRes.ok) return;
+      const attachment = await uploadRes.json();
+      await fetch("/api/messages", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ content: "", channelId, attachments: [attachment] }),
+      });
+    } finally {
+      setUploading(false);
+    }
+  };
+
   const startEdit = (msg: Message) => {
     setEditingId(msg.id);
     setEditContent(msg.content);
@@ -318,9 +349,9 @@ export default function MessageArea({
   }
 
   return (
-    <div className="flex-1 flex flex-col h-full min-w-0">
+    <div className="flex-1 flex flex-col h-full min-w-0 relative">
       {/* Header */}
-      <header className="h-12 bg-white/50 dark:bg-neutral-900/50 border-b border-neutral-200 dark:border-white/5 flex items-center px-4 gap-2 backdrop-blur-sm flex-shrink-0">
+      <header className="h-12 border-b bg-[var(--cn-main)]/80 backdrop-blur-sm flex items-center px-4 gap-2 backdrop-blur-sm flex-shrink-0">
         {onBack && (
           <button onClick={onBack} className="md:hidden p-1 text-neutral-400 hover:text-neutral-600 dark:hover:text-white" aria-label="Back to channels">
             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -357,8 +388,14 @@ export default function MessageArea({
           </div>
         ) : (
           messages.map((msg) => (
-            <motion.div key={msg.id} initial={{ opacity: 0, y: 5 }} animate={{ opacity: 1, y: 0 }} className={`flex gap-3 group ${msg.pinned ? "bg-amber-50/50 dark:bg-amber-400/5 -mx-2 px-2 py-1 rounded-lg" : ""}`}>
-              <GlowAvatar user={msg.user} size={36} />
+            <motion.div key={msg.id}
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ type: "spring", stiffness: 380, damping: 28 }}
+              className={`flex gap-3 group ${msg.pinned ? "bg-amber-50/50 dark:bg-amber-400/5 -mx-2 px-2 py-1 rounded-lg" : ""}`}>
+              <MiniProfile user={msg.user} onMessageClick={onMessageUser} side="right">
+                <GlowAvatar user={msg.user} size={36} />
+              </MiniProfile>
               <div className="flex-1 min-w-0">
                 {/* Pin indicator */}
                 {msg.pinned && (
@@ -368,11 +405,19 @@ export default function MessageArea({
                   </div>
                 )}
 
-                {/* Reply reference */}
+                {/* Reply reference — accented quote */}
                 {msg.replyTo && (
-                  <div className="flex items-center gap-1 text-[11px] text-neutral-400 mb-0.5 border-l-2 border-violet-400 dark:border-cyan-400 pl-2">
-                    <span className="font-medium">{msg.replyTo.user.name}:</span>
-                    <span className="truncate max-w-[200px]">{msg.replyTo.content}</span>
+                  <div className="flex items-start gap-2 mb-1.5">
+                    {/* Reply arrow */}
+                    <svg className="w-3.5 h-3.5 text-neutral-300 dark:text-neutral-600 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6" />
+                    </svg>
+                    <div className="flex items-center gap-1.5 border-l-[3px] border-violet-400 dark:border-cyan-400 pl-2 py-0.5 rounded-sm bg-violet-50/50 dark:bg-cyan-400/[0.04] min-w-0">
+                      <span className="text-[11px] font-semibold text-violet-600 dark:text-cyan-400 flex-shrink-0 italic">
+                        {msg.replyTo.user.name}
+                      </span>
+                      <span className="text-[11px] text-neutral-400 truncate max-w-[220px]">{msg.replyTo.content}</span>
+                    </div>
                   </div>
                 )}
 
@@ -397,7 +442,7 @@ export default function MessageArea({
                         if (e.key === "Enter") saveEdit();
                         if (e.key === "Escape") cancelEdit();
                       }}
-                      className="w-full bg-neutral-50 dark:bg-neutral-700 border border-neutral-200 dark:border-white/10 rounded-lg px-3 py-1.5 text-sm text-neutral-900 dark:text-white"
+                      className="w-full bg-[var(--cn-accent-dim)] border border-[var(--cn-border)] rounded-lg px-3 py-1.5 text-sm text-neutral-900 dark:text-white"
                       autoFocus
                     />
                     <div className="flex gap-1">
@@ -409,7 +454,11 @@ export default function MessageArea({
                   <>
                     {msg.content && <p className="text-neutral-700 dark:text-gray-300 text-sm mt-0.5 break-words">{msg.content}</p>}
                     {parseAttachments(msg.attachments).map((att, i) => (
-                      att.isImage ? (
+                      att.isVoice ? (
+                        <div key={i} className="mt-1.5">
+                          <VoicePlayer url={att.url} duration={att.duration} />
+                        </div>
+                      ) : att.isImage ? (
                         <div key={i} className="mt-2 max-w-xs">
                           <Image src={att.url} alt={att.name} width={320} height={240} className="rounded-lg" unoptimized />
                         </div>
@@ -440,7 +489,7 @@ export default function MessageArea({
                         className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs border transition-colors ${
                           data.userReacted
                             ? "bg-violet-50 dark:bg-cyan-400/10 border-violet-200 dark:border-cyan-400/30 text-violet-600 dark:text-cyan-400"
-                            : "bg-neutral-50 dark:bg-white/5 border-neutral-200 dark:border-white/10 text-neutral-500 hover:bg-neutral-100 dark:hover:bg-white/10"
+                            : "bg-[var(--cn-accent-dim)] border-[var(--cn-border)] text-neutral-500 hover:bg-[var(--cn-hover)]"
                         }`}
                       >
                         <span>{emoji}</span>
@@ -463,9 +512,9 @@ export default function MessageArea({
                         Реакция
                       </button>
                       {showEmojiPicker === msg.id && (
-                        <div className="absolute bottom-full left-0 mb-1 bg-white dark:bg-neutral-800 border border-neutral-200 dark:border-white/10 rounded-lg p-1.5 flex gap-0.5 shadow-lg z-10">
+                        <div className="absolute bottom-full left-0 mb-1 bg-[var(--cn-sidebar)] border border-[var(--cn-border)] rounded-lg p-1.5 flex gap-0.5 shadow-lg z-10">
                           {["👍", "❤️", "😂", "😮", "😢", "🔥", "👏", "🎉"].map((e) => (
-                            <button key={e} onClick={() => toggleReaction(msg.id, e)} className="w-7 h-7 text-lg hover:bg-neutral-100 dark:hover:bg-white/10 rounded">{e}</button>
+                            <button key={e} onClick={() => toggleReaction(msg.id, e)} className="w-7 h-7 text-lg hover:bg-[var(--cn-hover)] rounded">{e}</button>
                           ))}
                         </div>
                       )}
@@ -497,16 +546,31 @@ export default function MessageArea({
         <div ref={messagesEndRef} />
       </div>
 
+      {/* Scroll to bottom button */}
+      <AnimatePresence>
+        {showScrollBtn && (
+          <motion.button
+            key="scroll-btn"
+            initial={{ opacity: 0, scale: 0.8, y: 8 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            exit={{ opacity: 0, scale: 0.8, y: 8 }}
+            onClick={() => messagesEndRef.current?.scrollIntoView({ behavior: "smooth" })}
+            className="absolute bottom-24 right-6 z-10 w-9 h-9 rounded-full bg-violet-500 dark:bg-cyan-500 text-white shadow-lg flex items-center justify-center hover:scale-110 transition-transform"
+            aria-label="Прокрутить вниз"
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M19 9l-7 7-7-7" />
+            </svg>
+          </motion.button>
+        )}
+      </AnimatePresence>
+
       {/* Typing indicator */}
-      {typingText && (
-        <div className="px-4 py-1 text-xs text-neutral-400 dark:text-gray-500 animate-pulse">
-          {typingText}
-        </div>
-      )}
+      <TypingIndicator names={Array.from(typingUsers.values()).filter(Boolean)} />
 
       {/* Reply indicator */}
       {replyTo && (
-        <div className="px-4 py-2 border-t border-neutral-200 dark:border-white/5 flex items-center gap-2 text-xs text-neutral-500 dark:text-gray-400 bg-violet-50/50 dark:bg-cyan-400/5">
+        <div className="px-4 py-2 border-t border-[var(--cn-border)] flex items-center gap-2 text-xs text-neutral-500 dark:text-gray-400 bg-[var(--cn-accent-dim)]">
           <div className="w-0.5 h-4 bg-violet-400 dark:bg-cyan-400 rounded-full" />
           <span>Ответ для <strong className="text-neutral-700 dark:text-gray-300">{replyTo.name}</strong>: {replyTo.content}</span>
           <button onClick={() => setReplyTo(null)} className="ml-auto text-neutral-400 hover:text-neutral-600 dark:hover:text-white">
@@ -517,41 +581,49 @@ export default function MessageArea({
 
       {/* Input */}
       {!isBanned ? (
-        <form onSubmit={sendMessage} className="p-3 border-t border-neutral-200 dark:border-white/5">
-          <div className="flex gap-2">
-            <button
-              type="button"
-              onClick={() => fileInputRef.current?.click()}
-              disabled={uploading}
-              className="p-2.5 text-neutral-400 hover:text-violet-500 dark:hover:text-cyan-400 transition-colors disabled:opacity-50"
-              aria-label="Attach file"
-            >
-              {uploading ? (
-                <div className="w-5 h-5 border-2 border-current border-t-transparent rounded-full animate-spin" />
+        <div className="p-3 border-t border-[var(--cn-border)]">
+          {recordingVoice ? (
+            <VoiceRecorder onRecorded={handleVoiceRecorded} />
+          ) : (
+            <form onSubmit={sendMessage} className="flex gap-2">
+              <button
+                type="button"
+                onClick={() => fileInputRef.current?.click()}
+                disabled={uploading}
+                className="p-2.5 text-neutral-400 hover:text-violet-500 dark:hover:text-cyan-400 transition-colors disabled:opacity-50"
+                aria-label="Attach file"
+              >
+                {uploading ? (
+                  <div className="w-5 h-5 border-2 border-current border-t-transparent rounded-full animate-spin" />
+                ) : (
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" />
+                  </svg>
+                )}
+              </button>
+              <input ref={fileInputRef} type="file" className="hidden" onChange={handleFileUpload} accept="image/*,.pdf,.doc,.docx,.txt" />
+              <input
+                type="text"
+                value={newMessage}
+                onChange={(e) => { setNewMessage(e.target.value); emitTyping(); }}
+                placeholder={`Написать в #${channelName}...`}
+                className="input-field flex-1 !py-2.5"
+                aria-label={`Message ${channelName}`}
+              />
+              {newMessage.trim() ? (
+                <button type="submit" className="btn-primary !px-4 !py-2.5" aria-label="Send message">
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
+                  </svg>
+                </button>
               ) : (
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" />
-                </svg>
+                <VoiceRecorder onRecorded={handleVoiceRecorded} disabled={uploading} />
               )}
-            </button>
-            <input ref={fileInputRef} type="file" className="hidden" onChange={handleFileUpload} accept="image/*,.pdf,.doc,.docx,.txt" />
-            <input
-              type="text"
-              value={newMessage}
-              onChange={(e) => { setNewMessage(e.target.value); emitTyping(); }}
-              placeholder={`Написать в #${channelName}...`}
-              className="input-field flex-1 !py-2.5"
-              aria-label={`Message ${channelName}`}
-            />
-            <button type="submit" className="btn-primary !px-4 !py-2.5" aria-label="Send message">
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
-              </svg>
-            </button>
-          </div>
-        </form>
+            </form>
+          )}
+        </div>
       ) : (
-        <div className="p-3 border-t border-neutral-200 dark:border-white/5 text-center text-red-400/60 text-sm">
+        <div className="p-3 border-t border-[var(--cn-border)] text-center text-red-400/60 text-sm">
           Отправка сообщений ограничена
         </div>
       )}
