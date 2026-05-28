@@ -55,7 +55,7 @@ export default function LibraryPage() {
     : articles);
 
   return (
-    <div className="min-h-screen bg-dark-900 py-12 px-4">
+    <div className="min-h-screen bg-dark-900 py-12 px-4 max-md:px-0 max-md:py-6">
       <div className="fixed inset-0 pointer-events-none">
         <div className="absolute top-0 right-0 w-[500px] h-[500px] bg-fantasy-emerald/5 rounded-full blur-[150px]" />
       </div>
@@ -133,7 +133,7 @@ export default function LibraryPage() {
               transition={{ delay: i * 0.1 }}
             >
               <Link href={`/library/${article.slug}`}>
-                <div className="glass-card-hover p-6 group">
+                <div className="glass-card-hover p-6 max-md:p-4 max-md:rounded-none max-md:border-x-0 group">
                   <div className="flex items-start justify-between gap-4">
                     <div className="flex-1">
                       <div className="flex items-center gap-2 mb-2">

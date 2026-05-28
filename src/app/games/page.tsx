@@ -18,7 +18,7 @@ const games = [
 
 export default function GamesPage() {
   return (
-    <div className="min-h-screen bg-neutral-50 dark:bg-neutral-950 py-12 px-4">
+    <div className="min-h-screen bg-neutral-50 dark:bg-neutral-950 py-12 max-md:py-6 px-4 max-md:px-3">
       <div className="fixed inset-0 pointer-events-none">
         <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[800px] h-[800px] bg-red-500/5 dark:bg-red-900/10 rounded-full blur-[200px]" />
         <div className="absolute bottom-0 right-0 w-[600px] h-[600px] bg-amber-500/5 dark:bg-amber-900/10 rounded-full blur-[150px]" />

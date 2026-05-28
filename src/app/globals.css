@@ -239,6 +239,25 @@ body {
   .text-balance { text-wrap: balance; }
 }
 
+/* ── Mobile-specific ─────────────────────────────────────────────────── */
+@media (max-width: 768px) {
+  /* Prevent body scroll when bottom sheets / modals are open */
+  .overflow-y-auto,
+  .overflow-y-scroll {
+    overscroll-behavior: contain;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  /* Replace hover effects with active on touch */
+  .hover\:scale-105:active { transform: scale(1.02); }
+
+  /* Safe area awareness */
+  body {
+    padding-left: env(safe-area-inset-left, 0px);
+    padding-right: env(safe-area-inset-right, 0px);
+  }
+}
+
 @keyframes particle-float {
   0%, 100% { transform: translateY(0) translateX(0); opacity: 0; }
   10% { opacity: 1; }

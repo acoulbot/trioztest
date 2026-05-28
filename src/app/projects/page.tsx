@@ -31,7 +31,7 @@ const projects = [
 
 export default function ProjectsPage() {
   return (
-    <div className="min-h-screen bg-neutral-50 dark:bg-dark-900 py-20 px-4">
+    <div className="min-h-screen bg-neutral-50 dark:bg-dark-900 py-20 max-md:py-6 px-4 max-md:px-3">
       {/* Ambient */}
       <div className="fixed inset-0 pointer-events-none overflow-hidden">
         <div className="absolute -top-32 -left-32 w-[600px] h-[600px] bg-fantasy-red/[0.04] dark:bg-fantasy-red/[0.06] rounded-full blur-[120px]" />

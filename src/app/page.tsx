@@ -112,13 +112,13 @@ function WindowCard({ window, index }: { window: WindowData; index: number }) {
       initial={{ opacity: 0, scale: 0.9 }}
       animate={{ opacity: 1, scale: 1 }}
       transition={{ duration: 0.8, delay: index * 0.15, ease: [0.25, 0.1, 0.25, 1] }}
-      className="relative"
+      className="relative h-full"
       style={{ perspective: 800 }}
     >
-      <Link href={window.href}>
+      <Link href={window.href} className="block h-full">
         <motion.div
           ref={cardRef}
-          className="relative w-full h-full overflow-hidden cursor-pointer group"
+          className="relative w-full h-full min-h-[200px] overflow-hidden cursor-pointer group"
           style={{
             ...bgStyle,
             transformStyle: "preserve-3d",
@@ -445,10 +445,12 @@ export default function HomePage() {
         <UserMenu />
       </div>
 
-      {/* 4 Windows Grid */}
-      <div className="absolute inset-0 grid grid-cols-2 grid-rows-2 gap-[1px]" style={{ backgroundColor: "rgba(255,255,255,0.03)" }}>
+      {/* 4 Windows Grid — 2×2 on desktop, vertical stack on mobile */}
+      <div className="absolute inset-0 grid grid-cols-1 md:grid-cols-2 md:grid-rows-2 gap-[1px] max-md:overflow-y-auto max-md:pb-[env(safe-area-inset-bottom,0px)]" style={{ backgroundColor: "rgba(255,255,255,0.03)" }}>
         {windows.map((win, i) => (
-          <WindowCard key={win.id} window={win} index={i} />
+          <div key={win.id} className="max-md:min-h-[50vh]">
+            <WindowCard window={win} index={i} />
+          </div>
         ))}
       </div>
 

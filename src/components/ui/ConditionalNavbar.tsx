@@ -11,9 +11,9 @@ export default function ConditionalNavbar() {
   }
 
   return (
-    <>
+    <div className="max-md:hidden">
       <Navbar />
       <div className="pt-16" />
-    </>
+    </div>
   );
 }

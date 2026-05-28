@@ -240,7 +240,7 @@ export default function SettingsPage() {
   const friendCount = profile._count.friendsSent + profile._count.friendsReceived;
 
   return (
-    <div className="min-h-screen bg-neutral-50 dark:bg-neutral-950 pt-20 pb-12 px-4">
+    <div className="min-h-screen bg-neutral-50 dark:bg-neutral-950 pt-20 max-md:pt-4 pb-12 px-4 max-md:px-3">
       <div className="max-w-2xl mx-auto space-y-6">
 
         {/* Header */}
