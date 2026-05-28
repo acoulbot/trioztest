@@ -13,6 +13,8 @@ import ProfileSettingsModal from "@/components/profile/ProfileSettingsModal";
 
 import NavRail from "@/components/connect/NavRail";
 import { NavSection } from "@/components/connect/NavRail";
+import SwipeBackWrapper from "@/components/mobile/SwipeBackWrapper";
+import BottomSheet from "@/components/mobile/BottomSheet";
 import GroupListPanel from "@/components/connect/GroupListPanel";
 import ChannelSidebar from "@/components/connect/ChannelSidebar";
 import MessageArea from "@/components/connect/MessageArea";
@@ -859,7 +861,7 @@ function ConnectPageInner() {
   return (
     <>
     {!splashDone && <ConnectSplash onDone={handleSplashDone} />}
-    <div className="cn-main flex h-[calc(100vh-64px)] overflow-hidden">
+    <div className="cn-main flex h-[calc(100vh-64px)] max-md:h-[calc(100vh-calc(56px+env(safe-area-inset-bottom,0px)))] overflow-hidden">
 
       {/* ── COL 1: NavRail (desktop only) ── */}
       <NavRail
@@ -881,52 +883,125 @@ function ConnectPageInner() {
       />
 
       {/* ── Mobile view (full width, stacked) ── */}
-      <div className="md:hidden flex-1 flex flex-col h-full">
+      <div className="md:hidden flex-1 flex flex-col h-full overflow-hidden">
+        {/* Mobile content area */}
+        <div className="flex-1 flex flex-col overflow-hidden">
+          {activeSection === "communities" && (
+            <>
+              {mobileView === "groups" && (
+                <MobileGroupList
+                  groups={groups}
+                  onSelectGroup={handleSelectGroup}
+                  onCreateGroup={() => setShowCreateGroup(true)}
+                  onJoinGroup={() => setShowJoinGroup(true)}
+                  onToggleFriends={() => setActiveSection("friends")}
+                />
+              )}
+              {mobileView === "channels" && selectedGroup && groupDetail && (
+                <SwipeBackWrapper onSwipeBack={() => { setSelectedGroup(null); setMobileView("groups"); }} className="flex-1 flex flex-col h-full overflow-hidden">
+                  <ChannelSidebar
+                    groupDetail={groupDetail}
+                    selectedChannel={selectedChannel}
+                    unreadCounts={unreadCounts}
+                    canManage={!!canManage}
+                    isMainCommunity={!!groupDetail.isMain}
+                    myProfileUser={myProfileUser}
+                    userName={session.user.name ?? ""}
+                    userUsername={session.user.username ?? ""}
+                    userRole={userRole}
+                    onChannelClick={handleChannelClick}
+                    onDeleteChannel={deleteChannel}
+                    onCreateChannel={() => setShowCreateChannel(true)}
+                    onInvite={() => setShowInvite(true)}
+                    onToggleMembers={() => setShowMembers(!showMembers)}
+                    onProfileSettings={() => setShowProfileSettings(true)}
+                    onOpenSettings={() => setShowGroupSettings(true)}
+                    memberCount={groupDetail.members.length}
+                    onBack={() => { setSelectedGroup(null); setMobileView("groups"); }}
+                    voiceState={voiceState}
+                    voiceActions={voiceActions}
+                    onVoiceExpand={() => setShowVoicePanel(true)}
+                  />
+                </SwipeBackWrapper>
+              )}
+              {mobileView === "chat" && selectedChannel && selectedChannelData && (
+                <SwipeBackWrapper onSwipeBack={() => setMobileView("channels")} className="flex-1 flex flex-col h-full overflow-hidden">
+                  <MessageArea
+                    channelId={selectedChannel}
+                    channelName={selectedChannelData.name}
+                    channelIcon={selectedChannelData.icon}
+                    currentUserId={userId}
+                    currentUserRole={userRole}
+                    isBanned={!!isBanned}
+                    onBack={() => setMobileView("channels")}
+                  />
+                </SwipeBackWrapper>
+              )}
+            </>
+          )}
+
+          {activeSection === "friends" && (
+            <div className="flex-1 flex flex-col h-full overflow-hidden">
+              <FriendsPanel onMessageFriend={(friendId) => { handleMessageFriend(friendId); }} />
+            </div>
+          )}
+
+          {activeSection === "dm" && (
+            <div className="flex-1 flex flex-col h-full overflow-hidden">
+              <DMPanel
+                currentUserId={userId}
+                onClose={() => { setActiveSection("communities"); setDmFriendId(null); }}
+                initialFriendId={dmFriendId}
+              />
+            </div>
+          )}
+        </div>
+
+        {/* Mobile Connect bottom bar — only when not in deep navigation */}
         {mobileView === "groups" && (
-          <MobileGroupList
-            groups={groups}
-            onSelectGroup={handleSelectGroup}
-            onCreateGroup={() => setShowCreateGroup(true)}
-            onJoinGroup={() => setShowJoinGroup(true)}
-            onToggleFriends={() => setActiveSection(activeSection === "friends" ? "communities" : "friends")}
-          />
+          <div className="flex-shrink-0 flex items-center border-t border-neutral-200 dark:border-white/5 bg-white/95 dark:bg-neutral-950/95 backdrop-blur-lg"
+            style={{ height: 48 }}>
+            {([
+              { key: "communities" as NavSection, label: "Сообщества", icon: <svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round"><rect x="2" y="12" width="4" height="10" rx="0.5" /><rect x="18" y="12" width="4" height="10" rx="0.5" /><rect x="8" y="8" width="8" height="14" rx="0.5" /><path d="M8 8l1.5-3h5L16 8" /><rect x="10.5" y="15" width="3" height="7" rx="0.5" /></svg> },
+              { key: "friends" as NavSection, label: "Друзья", icon: <svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="7" r="3" /><path d="M12 13c-3.31 0-6 1.79-6 4v1h12v-1c0-2.21-2.69-4-6-4z" /><circle cx="4.5" cy="9" r="2" /><path d="M4.5 13C2.57 13 1 14.34 1 16v1h4" /><circle cx="19.5" cy="9" r="2" /><path d="M19.5 13c1.93 0 3.5 1.34 3.5 3v1h-4" /></svg> },
+              { key: "dm" as NavSection, label: "Сообщения", icon: <svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" /></svg> },
+            ]).map(({ key, label, icon }) => (
+              <button
+                key={key}
+                onClick={() => {
+                  setActiveSection(key);
+                  if (key !== "dm") setDmFriendId(null);
+                  if (key !== "communities") { setSelectedChannel(null); }
+                  if (key === "communities") { setSelectedGroup(null); setMobileView("groups"); }
+                }}
+                className={`flex-1 flex flex-col items-center justify-center gap-0.5 h-full transition-colors active:scale-95
+                  ${activeSection === key ? "text-violet-600 dark:text-cyan-400" : "text-neutral-400 dark:text-neutral-500"}`}
+              >
+                {icon}
+                <span className="text-[10px] font-medium">{label}</span>
+              </button>
+            ))}
+          </div>
         )}
-        {mobileView === "channels" && selectedGroup && groupDetail && (
-          <ChannelSidebar
-            groupDetail={groupDetail}
-            selectedChannel={selectedChannel}
-            unreadCounts={unreadCounts}
-            canManage={!!canManage}
-            isMainCommunity={!!groupDetail.isMain}
-            myProfileUser={myProfileUser}
-            userName={session.user.name ?? ""}
-            userUsername={session.user.username ?? ""}
-            userRole={userRole}
-            onChannelClick={handleChannelClick}
-            onDeleteChannel={deleteChannel}
-            onCreateChannel={() => setShowCreateChannel(true)}
-            onInvite={() => setShowInvite(true)}
-            onToggleMembers={() => setShowMembers(!showMembers)}
-            onProfileSettings={() => setShowProfileSettings(true)}
-            onOpenSettings={() => setShowGroupSettings(true)}
-            memberCount={groupDetail.members.length}
-            onBack={() => { setSelectedGroup(null); setMobileView("groups"); }}
-            voiceState={voiceState}
-            voiceActions={voiceActions}
-            onVoiceExpand={() => setShowVoicePanel(true)}
-          />
-        )}
-        {mobileView === "chat" && selectedChannel && selectedChannelData && (
-          <MessageArea
-            channelId={selectedChannel}
-            channelName={selectedChannelData.name}
-            channelIcon={selectedChannelData.icon}
-            currentUserId={userId}
-            currentUserRole={userRole}
-            isBanned={!!isBanned}
-            onBack={() => setMobileView("channels")}
-          />
-        )}
+
+        {/* Mobile Members bottom sheet */}
+        <BottomSheet open={showMembers && !!groupDetail} onClose={() => setShowMembers(false)} height="70%" title={`Участники — ${groupDetail?.members.length ?? 0}`}>
+          {groupDetail && (
+            <div className="p-3 space-y-0.5">
+              {groupDetail.members.map((m) => (
+                <div key={m.user.id} className="flex items-center gap-2 px-2 py-2 rounded-lg active:bg-neutral-100 dark:active:bg-white/5 transition-colors">
+                  <GlowAvatar user={m.user} size={32} onlineColor={isOnline(m.user.lastSeen) ? "green" : "gray"} />
+                  <div className="min-w-0 flex-1">
+                    <div className="text-sm text-neutral-900 dark:text-white truncate">{m.user.name}</div>
+                    <div className="text-[10px] text-neutral-400">@{m.user.username}</div>
+                  </div>
+                  {m.role === "OWNER" && <span className="text-xs">👑</span>}
+                  {m.role === "MODERATOR" && <span className="text-xs">⚙️</span>}
+                </div>
+              ))}
+            </div>
+          )}
+        </BottomSheet>
       </div>
 
       {/* ── Desktop: COL 2 + COL 3 ── */}

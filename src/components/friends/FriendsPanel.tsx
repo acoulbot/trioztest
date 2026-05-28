@@ -113,7 +113,7 @@ export default function FriendsPanel({ onMessageFriend }: FriendsPanelProps) {
   ];
 
   return (
-    <div className="w-60 cn-sidebar flex flex-col h-full flex-shrink-0">
+    <div className="w-60 max-md:w-full cn-sidebar flex flex-col h-full flex-shrink-0">
       {/* Header */}
       <div className="p-3 border-b border-neutral-200 dark:border-white/5 flex items-center justify-between flex-shrink-0">
         <span className="text-sm font-semibold text-neutral-900 dark:text-white">Друзья</span>

@@ -29,7 +29,7 @@ const items = [
 
 export default function PeroPage() {
   return (
-    <div className="min-h-screen bg-neutral-50 dark:bg-dark-900 py-20 px-4">
+    <div className="min-h-screen bg-neutral-50 dark:bg-dark-900 py-20 max-md:py-6 px-4 max-md:px-3">
       {/* Ambient */}
       <div className="fixed inset-0 pointer-events-none overflow-hidden">
         <div className="absolute -top-32 right-0 w-[500px] h-[500px] bg-fantasy-purple/[0.05] dark:bg-fantasy-purple/[0.07] rounded-full blur-[120px]" />

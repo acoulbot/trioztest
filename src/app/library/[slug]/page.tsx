@@ -39,7 +39,7 @@ export default function ArticlePage() {
   }
 
   return (
-    <div className="min-h-screen bg-dark-900 py-12 px-4">
+    <div className="min-h-screen bg-dark-900 py-12 px-4 max-md:px-3 max-md:py-4">
       <div className="max-w-3xl mx-auto">
         <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}>
           <Link href="/library" className="inline-flex items-center gap-2 text-cyan-400 hover:text-cyan-300 mb-8 text-sm transition-colors">
@@ -58,7 +58,7 @@ export default function ArticlePage() {
             </span>
           </div>
 
-          <div className="glass-card p-8 md:p-12">
+          <div className="glass-card p-8 md:p-12 max-md:p-4 max-md:text-base">
             <MarkdownRenderer content={article.content} />
           </div>
 

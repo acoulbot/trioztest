@@ -3,6 +3,7 @@ import { Inter, Playfair_Display } from "next/font/google";
 import "./globals.css";
 import Providers from "@/components/Providers";
 import ConditionalNavbar from "@/components/ui/ConditionalNavbar";
+import BottomNav from "@/components/mobile/BottomNav";
 
 const inter = Inter({
   subsets: ["latin", "cyrillic"],
@@ -36,6 +37,7 @@ export default function RootLayout({
   return (
     <html lang="ru" className="dark" suppressHydrationWarning>
       <head>
+        <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
         {/* Anti-flash: apply saved theme before first paint */}
         <script dangerouslySetInnerHTML={{ __html: `
           (function(){
@@ -49,7 +51,8 @@ export default function RootLayout({
         bg-white dark:bg-neutral-950 text-neutral-900 dark:text-neutral-100 min-h-screen transition-colors duration-300`}>
         <Providers>
           <ConditionalNavbar />
-          <main>{children}</main>
+          <main className="max-md:pb-[calc(56px+env(safe-area-inset-bottom,0px))]">{children}</main>
+          <BottomNav />
         </Providers>
       </body>
     </html>
