@@ -84,16 +84,16 @@ export async function PUT(req: Request, { params }: { params: Promise<{ id: stri
   const targetRank = ROLE_RANK[targetUser.role] || 0;
   const isSelf = session.user.id === id;
 
-  // Cannot modify a user with equal or higher rank (unless self)
-  if (!isSelf && targetRank >= myRank) {
-    return NextResponse.json({ error: "Cannot modify a user with equal or higher rank" }, { status: 403 });
+  // Cannot modify a user with higher rank (unless self)
+  if (!isSelf && targetRank > myRank) {
+    return NextResponse.json({ error: "Cannot modify a user with higher rank" }, { status: 403 });
   }
 
-  // Cannot promote someone to a rank equal to or higher than your own
+  // Cannot promote someone to a rank higher than your own
   if (role !== undefined && !isSelf) {
     const newRank = ROLE_RANK[role as string] || 0;
-    if (newRank >= myRank) {
-      return NextResponse.json({ error: "Cannot assign a role equal to or higher than your own" }, { status: 403 });
+    if (newRank > myRank) {
+      return NextResponse.json({ error: "Cannot assign a role higher than your own" }, { status: 403 });
     }
   }
 
