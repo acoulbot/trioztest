@@ -1,15 +1,23 @@
 import nodemailer from "nodemailer";
 
-const transporter = nodemailer.createTransport({
+const smtpUser = process.env.SMTP_USER || "";
+const smtpPass = process.env.SMTP_PASS || "";
+
+const transportConfig: nodemailer.TransportOptions = {
   host: process.env.SMTP_HOST || "localhost",
-  port: parseInt(process.env.SMTP_PORT || "587"),
+  port: parseInt(process.env.SMTP_PORT || "25"),
   secure: process.env.SMTP_SECURE === "true",
-  auth: {
-    user: process.env.SMTP_USER || "",
-    pass: process.env.SMTP_PASS || "",
-  },
   tls: { rejectUnauthorized: false },
-});
+} as nodemailer.TransportOptions;
+
+if (smtpUser) {
+  (transportConfig as Record<string, unknown>).auth = {
+    user: smtpUser,
+    pass: smtpPass,
+  };
+}
+
+const transporter = nodemailer.createTransport(transportConfig);
 
 export function generateCode(): string {
   return Math.floor(100000 + Math.random() * 900000).toString();
