@@ -3,7 +3,6 @@ import { Inter, Playfair_Display } from "next/font/google";
 import "./globals.css";
 import Providers from "@/components/Providers";
 import ConditionalNavbar from "@/components/ui/ConditionalNavbar";
-import AiChatPanel from "@/components/ai/AiChatPanel";
 
 const inter = Inter({
   subsets: ["latin", "cyrillic"],
@@ -19,6 +18,14 @@ const playfair = Playfair_Display({
 export const metadata: Metadata = {
   title: "TrioZ — Экосистема проектов",
   description: "T.Р.И.О.Z — масштабная экосистема проектов. Игры, книги, коммуникации, IT-услуги для бизнеса.",
+  icons: {
+    icon: [
+      { url: "/favicon.ico", sizes: "48x48" },
+      { url: "/favicon-32x32.png", sizes: "32x32", type: "image/png" },
+      { url: "/favicon-16x16.png", sizes: "16x16", type: "image/png" },
+    ],
+    apple: "/apple-touch-icon.png",
+  },
 };
 
 export default function RootLayout({
@@ -43,7 +50,6 @@ export default function RootLayout({
         <Providers>
           <ConditionalNavbar />
           <main>{children}</main>
-          <AiChatPanel />
         </Providers>
       </body>
     </html>

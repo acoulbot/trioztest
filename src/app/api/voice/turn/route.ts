@@ -18,11 +18,15 @@ export async function GET() {
   ];
 
   if (turnUrl && turnUsername && turnCredential) {
-    iceServers.push({
-      urls: turnUrl,
-      username: turnUsername,
-      credential: turnCredential,
-    });
+    // Parse host:port from TURN URL (e.g. "turn:host:3478" → "host:3478")
+    const hostPort = turnUrl.replace(/^(turn|turns):/, "").replace(/^\/\//, "");
+
+    // Add TURN with multiple transports for maximum connectivity
+    iceServers.push(
+      { urls: `turn:${hostPort}?transport=udp`, username: turnUsername, credential: turnCredential },
+      { urls: `turn:${hostPort}?transport=tcp`, username: turnUsername, credential: turnCredential },
+      { urls: `turns:${hostPort}?transport=tcp`, username: turnUsername, credential: turnCredential },
+    );
   }
 
   return NextResponse.json({ iceServers });

@@ -17,6 +17,22 @@ export async function GET() {
   return NextResponse.json(result);
 }
 
+export async function DELETE(req: Request) {
+  const session = await getServerSession(authOptions);
+  if (!session?.user || session.user.role !== "ADMIN") {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
+
+  const { key } = await req.json();
+  if (key) {
+    await prisma.siteConfig.deleteMany({ where: { key: `content:${key}` } });
+  } else {
+    await prisma.siteConfig.deleteMany({ where: { key: { startsWith: "content:" } } });
+  }
+
+  return NextResponse.json({ ok: true });
+}
+
 export async function POST(req: Request) {
   const session = await getServerSession(authOptions);
   if (!session?.user || session.user.role !== "ADMIN") {

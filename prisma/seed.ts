@@ -11,67 +11,73 @@ async function main() {
 
   const admin = await prisma.user.upsert({
     where: { email: "admin@trioz.ru" },
-    update: { password: adminPassword },
+    update: { password: adminPassword, emailVerified: true },
     create: {
       email: "admin@trioz.ru",
       username: "admin",
       name: "Администратор",
       password: adminPassword,
       role: "ADMIN",
+      emailVerified: true,
     },
   });
 
   const user = await prisma.user.upsert({
     where: { email: "user@trioz.ru" },
-    update: { password: userPassword },
+    update: { password: userPassword, emailVerified: true },
     create: {
       email: "user@trioz.ru",
       username: "user",
       name: "Пользователь",
       password: userPassword,
       role: "USER",
+      emailVerified: true,
     },
   });
 
   await prisma.user.upsert({
     where: { email: "acoulbot@trioz.ru" },
-    update: { password: acoulbotPassword },
+    update: { password: acoulbotPassword, emailVerified: true },
     create: {
       email: "acoulbot@trioz.ru",
       username: "acoulbot",
       name: "acoulbot",
       password: acoulbotPassword,
       role: "ADMIN",
+      emailVerified: true,
     },
   });
 
-  // Create default group
-  const defaultGroup = await prisma.group.upsert({
+  // Create main community group (TZ Connect)
+  const mainGroup = await prisma.group.upsert({
     where: { id: "trioz-main" },
-    update: {},
+    update: { isMain: true, name: "TZ Connect", description: "Главное сообщество TZ Connect" },
     create: {
       id: "trioz-main",
-      name: "TrioZ Community",
-      icon: "🌐",
-      description: "Официальное сообщество TrioZ",
+      name: "TZ Connect",
+      icon: "🏰",
+      description: "Главное сообщество TZ Connect",
+      isMain: true,
       ownerId: admin.id,
     },
   });
 
-  // Add admin and user as members
-  await prisma.groupMember.upsert({
-    where: { userId_groupId: { userId: admin.id, groupId: defaultGroup.id } },
-    update: {},
-    create: { userId: admin.id, groupId: defaultGroup.id, role: "OWNER" },
-  });
+  // All admins are OWNER, all other users are MEMBER
+  const allUsers = await prisma.user.findMany({ select: { id: true, role: true } });
+  for (const u of allUsers) {
+    await prisma.groupMember.upsert({
+      where: { userId_groupId: { userId: u.id, groupId: mainGroup.id } },
+      update: { role: u.role === "ADMIN" ? "OWNER" : "MEMBER" },
+      create: {
+        userId: u.id,
+        groupId: mainGroup.id,
+        role: u.role === "ADMIN" ? "OWNER" : "MEMBER",
+        rulesAccepted: true,
+      },
+    });
+  }
 
-  await prisma.groupMember.upsert({
-    where: { userId_groupId: { userId: user.id, groupId: defaultGroup.id } },
-    update: {},
-    create: { userId: user.id, groupId: defaultGroup.id, role: "MEMBER" },
-  });
-
-  // Create channels in the default group
+  // Create default channels for the main community
   const generalChannel = await prisma.channel.upsert({
     where: { id: "general" },
     update: {},
@@ -80,33 +86,36 @@ async function main() {
       name: "Общий",
       type: "TEXT",
       icon: "💬",
-      groupId: defaultGroup.id,
-    },
-  });
-
-  await prisma.channel.upsert({
-    where: { id: "voice-main" },
-    update: {},
-    create: {
-      id: "voice-main",
-      name: "Голосовой канал",
-      type: "VOICE",
-      icon: "🎙️",
-      groupId: defaultGroup.id,
+      groupId: mainGroup.id,
     },
   });
 
   await prisma.channel.upsert({
     where: { id: "news" },
-    update: {},
+    update: { type: "NEWS" },
     create: {
       id: "news",
-      name: "Новости",
-      type: "TEXT",
+      name: "Объявления",
+      type: "NEWS",
       icon: "📢",
-      groupId: defaultGroup.id,
+      groupId: mainGroup.id,
     },
   });
+
+  // 4 voice channels
+  for (let i = 1; i <= 4; i++) {
+    await prisma.channel.upsert({
+      where: { id: `voice-${i}` },
+      update: {},
+      create: {
+        id: `voice-${i}`,
+        name: `Голосовой ${i}`,
+        type: "VOICE",
+        icon: "🎙️",
+        groupId: mainGroup.id,
+      },
+    });
+  }
 
   await prisma.channelMember.upsert({
     where: { userId_channelId: { userId: admin.id, channelId: generalChannel.id } },
@@ -124,7 +133,7 @@ async function main() {
     update: {},
     create: {
       code: "trioz-welcome",
-      groupId: defaultGroup.id,
+      groupId: mainGroup.id,
       createdBy: admin.id,
       maxUses: 0,
     },

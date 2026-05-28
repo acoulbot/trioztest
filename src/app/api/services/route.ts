@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import prisma from "@/lib/prisma";
+import { syncServicesToMainCommunity } from "@/lib/mainCommunity";
 
 export async function GET(req: Request) {
   const session = await getServerSession(authOptions);
@@ -33,6 +34,9 @@ export async function POST(req: Request) {
     data: { title, description, icon, order: order || 0 },
   });
 
+  // Sync to main community
+  syncServicesToMainCommunity().catch(() => {});
+
   return NextResponse.json(service);
 }
 
@@ -58,6 +62,9 @@ export async function PUT(req: Request) {
     },
   });
 
+  // Sync to main community
+  syncServicesToMainCommunity().catch(() => {});
+
   return NextResponse.json(service);
 }
 
@@ -71,5 +78,9 @@ export async function DELETE(req: Request) {
   if (!id) return NextResponse.json({ error: "ID required" }, { status: 400 });
 
   await prisma.service.delete({ where: { id } });
+
+  // Sync to main community (removes orphaned channels)
+  syncServicesToMainCommunity().catch(() => {});
+
   return NextResponse.json({ success: true });
 }

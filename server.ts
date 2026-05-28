@@ -33,8 +33,14 @@ const allowedOrigins = process.env.ALLOWED_ORIGINS
   : [`http://localhost:${port}`, `http://0.0.0.0:${port}`];
 
 app.prepare().then(() => {
-  const httpServer = createServer((req, res) => {
-    handle(req, res);
+  const httpServer = createServer(async (req, res) => {
+    try {
+      await handle(req, res);
+    } catch (err) {
+      console.error("[HTTP] Request handler error:", err);
+      res.statusCode = 500;
+      res.end("Internal Server Error");
+    }
   });
 
   const io = new SocketIOServer(httpServer, {
@@ -47,7 +53,9 @@ app.prepare().then(() => {
   });
 
   // Export io globally so API routes can emit events
+  // Set BEFORE any request can be processed (prepare() is already done)
   (globalThis as Record<string, unknown>).__socketio = io;
+  (globalThis as Record<string, unknown>).__socketioReady = true;
 
   io.use(async (socket, next) => {
     try {
@@ -93,7 +101,35 @@ app.prepare().then(() => {
     // ── DM room ───────────────────────────────────────────────────────
     socket.join(`dm-${authData.userId}`);
 
-    // ── Text channel rooms ──────────────────────────────────────────
+    // DM typing indicators — relay to the other participant via their dm room
+    socket.on("dm-typing", ({ convId }: { convId: string }) => {
+      // Emit to all sockets of the user except the sender
+      // convId used to look up the other participant would require a DB call;
+      // instead we broadcast to the dm-* room of the other user.
+      // The server stores convId→participantIds mapping would be ideal; for now
+      // we relay to the conversation room so the other participant sees it.
+      socket.to(`dm-conv-${convId}`).emit("dm-typing", {
+        userId: authData.userId,
+        userName: authData.userName,
+      });
+    });
+
+    socket.on("dm-stop-typing", ({ convId }: { convId: string }) => {
+      socket.to(`dm-conv-${convId}`).emit("dm-stop-typing", {
+        userId: authData.userId,
+      });
+    });
+
+    // Join a DM conversation room so typing events are scoped to participants
+    socket.on("join-dm-conv", ({ convId }: { convId: string }) => {
+      socket.join(`dm-conv-${convId}`);
+    });
+
+    socket.on("leave-dm-conv", ({ convId }: { convId: string }) => {
+      socket.leave(`dm-conv-${convId}`);
+    });
+
+    // ── Voice channels ──────────────────────────────────────────────
     socket.on("join-channel", ({ channelId }: { channelId: string }) => {
       socket.join(`channel-${channelId}`);
     });
@@ -117,7 +153,8 @@ app.prepare().then(() => {
       });
     });
 
-    // ── Voice channels ──────────────────────────────────────────────
+    // ── DM room ───────────────────────────────────────────────────────
+    socket.join(`dm-${authData.userId}`);
     socket.on("join-voice", ({ channelId }: { channelId: string }) => {
       const user: VoiceUser = { socketId: socket.id, userId: authData.userId, userName: authData.userName, muted: false };
 
@@ -134,6 +171,9 @@ app.prepare().then(() => {
 
       socket.to(`voice-${channelId}`).emit("user-joined", user);
 
+      // Broadcast updated user list for sidebar previews
+      broadcastVoiceChannelUsers(channelId);
+
       console.log(`[Voice] ${authData.userName} joined channel ${channelId}. Users: ${room.size}`);
     });
 
@@ -141,15 +181,31 @@ app.prepare().then(() => {
       leaveVoiceChannel(socket, channelId);
     });
 
-    socket.on("voice-offer", ({ to, offer }: { to: string; offer: RTCSessionDescriptionInit }) => {
+    // Query who is in a voice channel (without joining)
+    socket.on("get-voice-channel-users", ({ channelId }: { channelId: string }) => {
+      const room = voiceRooms.get(channelId);
+      const users = room ? Array.from(room.values()) : [];
+      socket.emit("voice-channel-users", { channelId, users });
+    });
+
+    // Query all voice channels at once
+    socket.on("get-all-voice-users", () => {
+      const result: Record<string, VoiceUser[]> = {};
+      voiceRooms.forEach((room, chId) => {
+        result[chId] = Array.from(room.values());
+      });
+      socket.emit("all-voice-users", result);
+    });
+
+    socket.on("voice-offer", ({ to, offer }: { to: string; offer: unknown }) => {
       io.to(to).emit("voice-offer", { from: socket.id, offer });
     });
 
-    socket.on("voice-answer", ({ to, answer }: { to: string; answer: RTCSessionDescriptionInit }) => {
+    socket.on("voice-answer", ({ to, answer }: { to: string; answer: unknown }) => {
       io.to(to).emit("voice-answer", { from: socket.id, answer });
     });
 
-    socket.on("ice-candidate", ({ to, candidate }: { to: string; candidate: RTCIceCandidateInit }) => {
+    socket.on("ice-candidate", ({ to, candidate }: { to: string; candidate: unknown }) => {
       io.to(to).emit("ice-candidate", { from: socket.id, candidate });
     });
 
@@ -168,6 +224,14 @@ app.prepare().then(() => {
       socket.to(`voice-${channelId}`).emit("user-speaking", { socketId: socket.id, speaking });
     });
 
+    socket.on("screen-share-started", ({ channelId }: { channelId: string }) => {
+      socket.to(`voice-${channelId}`).emit("screen-share-started", { socketId: socket.id });
+    });
+
+    socket.on("screen-share-stopped", ({ channelId }: { channelId: string }) => {
+      socket.to(`voice-${channelId}`).emit("screen-share-stopped", { socketId: socket.id });
+    });
+
     // ── Disconnect ──────────────────────────────────────────────────
     socket.on("disconnect", () => {
       console.log(`[Socket] Disconnected: ${socket.id}`);
@@ -182,12 +246,19 @@ app.prepare().then(() => {
       }
 
       authenticatedSockets.delete(socket.id);
-      voiceRooms.forEach((room, channelId) => {
-        if (room.has(socket.id)) {
-          leaveVoiceChannel(socket, channelId);
-        }
-      });
+      const channelsToLeave = Array.from(voiceRooms.entries())
+        .filter(([, room]) => room.has(socket.id))
+        .map(([channelId]) => channelId);
+      for (const channelId of channelsToLeave) {
+        leaveVoiceChannel(socket, channelId);
+      }
     });
+
+    function broadcastVoiceChannelUsers(channelId: string) {
+      const room = voiceRooms.get(channelId);
+      const users = room ? Array.from(room.values()) : [];
+      io.emit("voice-channel-users", { channelId, users });
+    }
 
     function leaveVoiceChannel(sock: typeof socket, channelId: string) {
       const room = voiceRooms.get(channelId);
@@ -201,6 +272,9 @@ app.prepare().then(() => {
           voiceRooms.delete(channelId);
         }
 
+        // Broadcast updated user list for sidebar previews
+        broadcastVoiceChannelUsers(channelId);
+
         if (user) {
           console.log(`[Voice] ${user.userName} left channel ${channelId}. Users: ${room.size}`);
         }
@@ -212,6 +286,32 @@ app.prepare().then(() => {
   connectRedis().then((ok) => {
     if (ok) console.log("[Redis] Connected successfully");
   });
+
+  // Scheduled file cleanup: every 6 hours, remove large files older than 14 days
+  // Skips NEWS channels and admin content
+  const CLEANUP_INTERVAL = 6 * 60 * 60 * 1000; // 6 hours
+  setInterval(async () => {
+    try {
+      const { cleanupExpiredFiles } = await import("./src/lib/fileCleanup");
+      const result = await cleanupExpiredFiles();
+      if (result.filesDeleted > 0 || result.dmFilesDeleted > 0) {
+        console.log("[Cleanup] Auto:", result);
+      }
+    } catch (err) {
+      console.error("[Cleanup] Scheduled error:", err);
+    }
+  }, CLEANUP_INTERVAL);
+
+  // Run initial cleanup 60 seconds after startup
+  setTimeout(async () => {
+    try {
+      const { cleanupExpiredFiles } = await import("./src/lib/fileCleanup");
+      const result = await cleanupExpiredFiles();
+      console.log("[Cleanup] Initial run:", result);
+    } catch (err) {
+      console.error("[Cleanup] Initial error:", err);
+    }
+  }, 60_000);
 
   httpServer.listen(port, () => {
     console.log(`> Ready on http://${hostname}:${port}`);

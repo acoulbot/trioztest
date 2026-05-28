@@ -11,15 +11,22 @@ import GlowAvatar, { GlowAvatarUser } from "@/components/ui/GlowAvatar";
 import { isOnline, timeAgo } from "@/lib/timeAgo";
 import ProfileSettingsModal from "@/components/profile/ProfileSettingsModal";
 
-import GroupSidebar from "@/components/connect/GroupSidebar";
+import NavRail from "@/components/connect/NavRail";
+import { NavSection } from "@/components/connect/NavRail";
+import GroupListPanel from "@/components/connect/GroupListPanel";
 import ChannelSidebar from "@/components/connect/ChannelSidebar";
 import MessageArea from "@/components/connect/MessageArea";
 import MobileGroupList from "@/components/connect/MobileGroupList";
 import ModalBackdrop from "@/components/connect/ModalBackdrop";
+import ConnectSplash from "@/components/connect/ConnectSplash";
+import { ThemeProvider } from "@/contexts/ThemeContext";
 
-const VoiceChannel = dynamic(() => import("@/components/voice/VoiceChannel"), { ssr: false });
+const VoiceScreenShare = dynamic(() => import("@/components/voice/VoiceScreenShare"), { ssr: false });
+const VoiceExpandedPanel = dynamic(() => import("@/components/voice/VoiceExpandedPanel"), { ssr: false });
 const FriendsPanel = dynamic(() => import("@/components/friends/FriendsPanel"), { ssr: false });
 const DMPanel = dynamic(() => import("@/components/dm/DMPanel"), { ssr: false });
+const AiChatPanel = dynamic(() => import("@/components/ai/AiChatPanel"), { ssr: false });
+import { useVoice } from "@/contexts/VoiceContext";
 
 /* ─── Types ─── */
 
@@ -29,6 +36,7 @@ interface Group {
   icon: string | null;
   description: string;
   ownerId: string;
+  isMain?: boolean;
   _count: { members: number; channels: number };
 }
 
@@ -38,6 +46,7 @@ interface Channel {
   type: string;
   icon: string | null;
   groupId: string;
+  serviceId?: string | null;
   _count: { members: number; messages: number };
 }
 
@@ -199,14 +208,24 @@ function JoinGroupModal({ onClose, onJoined }: { onClose: () => void; onJoined: 
 function CreateChannelModal({ groupId, onClose, onCreated }: { groupId: string; onClose: () => void; onCreated: () => void }) {
   const [name, setName] = useState("");
   const [type, setType] = useState("TEXT");
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
 
   const handleCreate = async () => {
     if (!name.trim()) return;
-    await fetch("/api/channels", {
+    setLoading(true);
+    setError("");
+    const res = await fetch("/api/channels", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ name, type, groupId }),
+      body: JSON.stringify({ name: name.trim(), type, groupId }),
     });
+    setLoading(false);
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      setError(data.error || "Ошибка создания канала");
+      return;
+    }
     onCreated();
     onClose();
   };
@@ -225,9 +244,10 @@ function CreateChannelModal({ groupId, onClose, onCreated }: { groupId: string; 
             Голосовой
           </button>
         </div>
+        {error && <p className="text-xs text-red-500 dark:text-red-400">{error}</p>}
         <div className="flex gap-2 pt-1">
-          <button onClick={handleCreate} className="flex-1 px-4 py-2.5 bg-gradient-to-r from-violet-600 to-indigo-600 dark:from-cyan-500 dark:to-cyan-400 text-white dark:text-neutral-900 rounded-xl hover:shadow-lg transition-all text-sm font-medium">
-            Создать
+          <button onClick={handleCreate} disabled={loading || !name.trim()} className="flex-1 px-4 py-2.5 bg-gradient-to-r from-violet-600 to-indigo-600 dark:from-cyan-500 dark:to-cyan-400 text-white dark:text-neutral-900 rounded-xl hover:shadow-lg transition-all text-sm font-medium disabled:opacity-50">
+            {loading ? "Создание..." : "Создать"}
           </button>
           <button onClick={onClose} className="flex-1 px-4 py-2.5 bg-neutral-100 dark:bg-neutral-700 text-neutral-600 dark:text-gray-400 rounded-xl hover:bg-neutral-200 dark:hover:bg-neutral-600 transition-all text-sm">
             Отмена
@@ -241,13 +261,16 @@ function CreateChannelModal({ groupId, onClose, onCreated }: { groupId: string; 
 function InviteModal({ groupId, onClose }: { groupId: string; onClose: () => void }) {
   const [inviteCode, setInviteCode] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
 
   const createInvite = async () => {
     setLoading(true);
+    setError("");
     const res = await fetch("/api/invites", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ groupId }) });
-    const data = await res.json();
-    setInviteCode(data.code);
+    const data = await res.json().catch(() => ({}));
     setLoading(false);
+    if (!res.ok) { setError(data.error || "Ошибка создания приглашения"); return; }
+    setInviteCode(data.code);
   };
 
   return (
@@ -269,6 +292,7 @@ function InviteModal({ groupId, onClose }: { groupId: string; onClose: () => voi
             {loading ? "..." : "Создать приглашение"}
           </button>
         )}
+        {error && <p className="text-xs text-red-500 dark:text-red-400">{error}</p>}
         <button onClick={onClose} className="w-full px-4 py-2.5 bg-neutral-100 dark:bg-neutral-700 text-neutral-600 dark:text-gray-400 rounded-xl hover:bg-neutral-200 dark:hover:bg-neutral-600 transition-all text-sm">
           Закрыть
         </button>
@@ -301,7 +325,14 @@ function GroupRulesGate({ group, onAccept }: { group: GroupDetail; onAccept: () 
         <p className="text-sm text-neutral-700 dark:text-gray-300 whitespace-pre-wrap leading-relaxed">{group.rules}</p>
       </div>
       <button
-        onClick={async () => { setLoading(true); await onAccept(); setLoading(false); }}
+        onClick={async () => {
+          setLoading(true);
+          try {
+            await onAccept();
+          } finally {
+            setLoading(false);
+          }
+        }}
         disabled={loading}
         className="w-full px-4 py-2.5 bg-gradient-to-r from-violet-600 to-indigo-600 dark:from-cyan-500 dark:to-cyan-400 text-white dark:text-neutral-900 rounded-xl hover:shadow-lg transition-all text-sm font-medium disabled:opacity-50"
       >
@@ -637,24 +668,44 @@ type MobileView = "groups" | "channels" | "chat";
 /* ─── Main Page ─── */
 
 export default function ConnectPage() {
+  return (
+    <ThemeProvider>
+      <ConnectPageInner />
+    </ThemeProvider>
+  );
+}
+
+function ConnectPageInner() {
   const { data: session, status } = useSession();
+
+  /* ── Splash screen — once per session ── */
+  const [splashDone, setSplashDone] = useState(() => {
+    if (typeof window === "undefined") return true;
+    return sessionStorage.getItem("tz-connect-splash") === "1";
+  });
+  const handleSplashDone = () => {
+    sessionStorage.setItem("tz-connect-splash", "1");
+    setSplashDone(true);
+  };
+
   const [groups, setGroups] = useState<Group[]>([]);
   const [selectedGroup, setSelectedGroup] = useState<string | null>(null);
   const [groupDetail, setGroupDetail] = useState<GroupDetail | null>(null);
   const [selectedChannel, setSelectedChannel] = useState<string | null>(null);
-  const [activeVoiceChannel, setActiveVoiceChannel] = useState<{ id: string; name: string } | null>(null);
+  const voice = useVoice();
   const [showCreateGroup, setShowCreateGroup] = useState(false);
   const [showJoinGroup, setShowJoinGroup] = useState(false);
   const [showCreateChannel, setShowCreateChannel] = useState(false);
   const [showInvite, setShowInvite] = useState(false);
   const [showMembers, setShowMembers] = useState(false);
-  const [showFriends, setShowFriends] = useState(false);
-  const [showDM, setShowDM] = useState(false);
+  const [activeSection, setActiveSection] = useState<NavSection>("communities");
+  const [dmFriendId, setDmFriendId] = useState<string | null>(null);
   const [showProfileSettings, setShowProfileSettings] = useState(false);
   const [showGroupSettings, setShowGroupSettings] = useState(false);
   const [myGlowSettings, setMyGlowSettings] = useState<{ avatarGlowEnabled: boolean; avatarGlowColors: string | null; avatar: string | null } | null>(null);
   const [unreadCounts, setUnreadCounts] = useState<Record<string, number>>({});
   const [mobileView, setMobileView] = useState<MobileView>("groups");
+  const [showVoicePanel, setShowVoicePanel] = useState(false);
 
   const isBanned = session?.user?.banned && (!session.user.bannedUntil || new Date(session.user.bannedUntil) > new Date());
   const canManage = groupDetail?.myRole === "OWNER" || groupDetail?.myRole === "MODERATOR";
@@ -714,12 +765,48 @@ export default function ConnectPage() {
 
   const handleSelectGroup = (id: string) => {
     setSelectedGroup(id);
+    setActiveSection("communities");
     setMobileView("channels");
+  };
+
+  const handleMessageFriend = (friendId: string) => {
+    setDmFriendId(friendId);
+    setActiveSection("dm");
+  };
+
+  const voiceState = {
+    isConnected: voice.isConnected,
+    voiceStatus: voice.voiceStatus,
+    channelId: voice.channelId,
+    channelName: voice.channelName,
+    isMuted: voice.isMuted,
+    isDeafened: voice.isDeafened,
+    users: voice.users,
+    speakingUsers: voice.speakingUsers,
+    localSpeaking: voice.localSpeaking,
+    nsEnabled: voice.nsEnabled,
+    nsStatus: voice.nsStatus,
+    isSharingScreen: voice.isSharingScreen,
+    screenSharerId: voice.screenSharerId,
+    userVolumes: voice.userVolumes,
+    connectionQuality: voice.connectionQuality,
+    localPing: voice.localPing,
+  };
+
+  const voiceActions = {
+    joinVoice: voice.joinVoice,
+    leaveVoice: voice.leaveVoice,
+    toggleMute: voice.toggleMute,
+    toggleDeafen: voice.toggleDeafen,
+    toggleNS: voice.toggleNS,
+    startScreenShare: voice.startScreenShare,
+    stopScreenShare: voice.stopScreenShare,
+    setUserVolume: voice.setUserVolume,
   };
 
   const handleChannelClick = (channel: Channel) => {
     if (channel.type === "VOICE") {
-      setActiveVoiceChannel({ id: channel.id, name: channel.name });
+      voice.joinVoice(channel.id, channel.name);
     } else {
       setSelectedChannel(channel.id);
       setMobileView("chat");
@@ -770,21 +857,30 @@ export default function ConnectPage() {
   const userRole = (session.user as { role?: string }).role ?? "USER";
 
   return (
-    <div className="min-h-screen bg-neutral-50 dark:bg-neutral-950 flex h-[calc(100vh-64px)]">
-      {/* Desktop: Group sidebar always visible */}
-      <GroupSidebar
-        groups={groups}
-        selectedGroup={selectedGroup}
-        showFriends={showFriends}
-        showDM={showDM}
-        onSelectGroup={handleSelectGroup}
-        onCreateGroup={() => setShowCreateGroup(true)}
-        onJoinGroup={() => setShowJoinGroup(true)}
-        onToggleFriends={() => setShowFriends(!showFriends)}
-        onToggleDM={() => setShowDM(!showDM)}
+    <>
+    {!splashDone && <ConnectSplash onDone={handleSplashDone} />}
+    <div className="cn-main flex h-[calc(100vh-64px)] overflow-hidden">
+
+      {/* ── COL 1: NavRail (desktop only) ── */}
+      <NavRail
+        activeSection={activeSection}
+        onChangeSection={(section) => {
+          if (section === activeSection && section === "communities") {
+            setSelectedGroup(null);
+            setSelectedChannel(null);
+            setMobileView("groups");
+          }
+          setActiveSection(section);
+          if (section !== "dm") setDmFriendId(null);
+          if (section !== "communities") setSelectedChannel(null);
+        }}
+        myProfileUser={myProfileUser}
+        userName={session.user.name ?? ""}
+        userUsername={session.user.username ?? ""}
+        onProfileSettings={() => setShowProfileSettings(true)}
       />
 
-      {/* Mobile: Show group list */}
+      {/* ── Mobile view (full width, stacked) ── */}
       <div className="md:hidden flex-1 flex flex-col h-full">
         {mobileView === "groups" && (
           <MobileGroupList
@@ -792,7 +888,7 @@ export default function ConnectPage() {
             onSelectGroup={handleSelectGroup}
             onCreateGroup={() => setShowCreateGroup(true)}
             onJoinGroup={() => setShowJoinGroup(true)}
-            onToggleFriends={() => setShowFriends(!showFriends)}
+            onToggleFriends={() => setActiveSection(activeSection === "friends" ? "communities" : "friends")}
           />
         )}
         {mobileView === "channels" && selectedGroup && groupDetail && (
@@ -801,6 +897,7 @@ export default function ConnectPage() {
             selectedChannel={selectedChannel}
             unreadCounts={unreadCounts}
             canManage={!!canManage}
+            isMainCommunity={!!groupDetail.isMain}
             myProfileUser={myProfileUser}
             userName={session.user.name ?? ""}
             userUsername={session.user.username ?? ""}
@@ -814,6 +911,9 @@ export default function ConnectPage() {
             onOpenSettings={() => setShowGroupSettings(true)}
             memberCount={groupDetail.members.length}
             onBack={() => { setSelectedGroup(null); setMobileView("groups"); }}
+            voiceState={voiceState}
+            voiceActions={voiceActions}
+            onVoiceExpand={() => setShowVoicePanel(true)}
           />
         )}
         {mobileView === "chat" && selectedChannel && selectedChannelData && (
@@ -829,88 +929,148 @@ export default function ConnectPage() {
         )}
       </div>
 
-      {/* Desktop: Channel sidebar + message area */}
-      <div className="max-md:hidden flex flex-1 h-full">
-        {selectedGroup && groupDetail && (
-          <ChannelSidebar
-            groupDetail={groupDetail}
-            selectedChannel={selectedChannel}
-            unreadCounts={unreadCounts}
-            canManage={!!canManage}
-            myProfileUser={myProfileUser}
-            userName={session.user.name ?? ""}
-            userUsername={session.user.username ?? ""}
-            userRole={userRole}
-            onChannelClick={handleChannelClick}
-            onDeleteChannel={deleteChannel}
-            onCreateChannel={() => setShowCreateChannel(true)}
-            onInvite={() => setShowInvite(true)}
-            onToggleMembers={() => setShowMembers(!showMembers)}
-            onProfileSettings={() => setShowProfileSettings(true)}
-            onOpenSettings={() => setShowGroupSettings(true)}
-            memberCount={groupDetail.members.length}
-          />
+      {/* ── Desktop: COL 2 + COL 3 ── */}
+      <div className="max-md:hidden flex flex-1 h-full overflow-hidden">
+
+        {/* ═══════════ COMMUNITIES ═══════════ */}
+        {activeSection === "communities" && (
+          <>
+            {/* COL 2 — group list OR channel list */}
+            <div className="flex-shrink-0 w-60 flex flex-col h-full" style={{ borderRight: "1px solid var(--cn-border)" }}>
+              {selectedGroup && groupDetail ? (
+                /* Sub-nav: channels inside selected group */
+                <ChannelSidebar
+                  groupDetail={groupDetail}
+                  selectedChannel={selectedChannel}
+                  unreadCounts={unreadCounts}
+                  canManage={!!canManage}
+                  isMainCommunity={!!groupDetail.isMain}
+                  myProfileUser={myProfileUser}
+                  userName={session.user.name ?? ""}
+                  userUsername={session.user.username ?? ""}
+                  userRole={userRole}
+                  onChannelClick={handleChannelClick}
+                  onDeleteChannel={deleteChannel}
+                  onCreateChannel={() => setShowCreateChannel(true)}
+                  onInvite={() => setShowInvite(true)}
+                  onToggleMembers={() => setShowMembers(!showMembers)}
+                  onProfileSettings={() => setShowProfileSettings(true)}
+                  onOpenSettings={() => setShowGroupSettings(true)}
+                  memberCount={groupDetail.members.length}
+                  voiceState={voiceState}
+                  voiceActions={voiceActions}
+                  onVoiceExpand={() => setShowVoicePanel(true)}
+                />
+              ) : (
+                /* Top-level group list */
+                <GroupListPanel
+                  groups={groups}
+                  selectedGroup={selectedGroup}
+                  onSelectGroup={handleSelectGroup}
+                  onCreateGroup={() => setShowCreateGroup(true)}
+                  onJoinGroup={() => setShowJoinGroup(true)}
+                />
+              )}
+            </div>
+
+            {/* COL 3 — chat area */}
+            <div className="flex flex-1 flex-col h-full cn-main overflow-hidden">
+              {voice.isConnected && (voice.isSharingScreen || voice.screenSharerId) ? (
+                <VoiceScreenShare />
+              ) : selectedChannel && selectedChannelData ? (
+                <MessageArea
+                  channelId={selectedChannel}
+                  channelName={selectedChannelData.name}
+                  channelIcon={selectedChannelData.icon}
+                  currentUserId={userId}
+                  currentUserRole={userRole}
+                  isBanned={!!isBanned}
+                />
+              ) : selectedGroup && groupDetail ? (
+                <div className="flex-1 flex items-center justify-center overflow-y-auto">
+                  {groupDetail.rules && !groupDetail.rulesAccepted && groupDetail.myRole === "MEMBER" ? (
+                    <GroupRulesGate group={groupDetail} onAccept={async () => {
+                      await fetch(`/api/groups/${groupDetail.id}/accept-rules`, { method: "POST" });
+                      setGroupDetail({ ...groupDetail, rulesAccepted: true });
+                    }} />
+                  ) : (
+                    <GroupInfoPanel
+                      group={groupDetail}
+                      canManage={groupDetail.myRole === "OWNER" || groupDetail.myRole === "MODERATOR"}
+                      onUpdateRules={async (rules: string) => {
+                        await fetch(`/api/groups/${groupDetail.id}`, {
+                          method: "PUT",
+                          headers: { "Content-Type": "application/json" },
+                          body: JSON.stringify({ rules }),
+                        });
+                        setGroupDetail({ ...groupDetail, rules });
+                      }}
+                    />
+                  )}
+                </div>
+              ) : (
+                /* Empty state — no group selected */
+                <div className="flex-1 flex items-center justify-center">
+                  <div className="text-center max-w-sm px-6">
+                    <span className="text-6xl block mb-4">⚔️</span>
+                    <h2 className="text-xl font-bold mb-2" style={{ color: "var(--cn-text)" }}>TZ.Connect</h2>
+                    <p className="text-sm mb-6" style={{ color: "var(--cn-muted)" }}>
+                      Выберите сообщество слева или создайте новое
+                    </p>
+                    <div className="flex gap-3 justify-center">
+                      <button onClick={() => setShowCreateGroup(true)} className="btn-primary text-sm">Создать</button>
+                      <button onClick={() => setShowJoinGroup(true)} className="btn-secondary text-sm">Присоединиться</button>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {showMembers && groupDetail && (
+              <MembersPanel group={groupDetail} onClose={() => setShowMembers(false)} />
+            )}
+          </>
         )}
 
-        {selectedChannel && selectedChannelData ? (
-          <MessageArea
-            channelId={selectedChannel}
-            channelName={selectedChannelData.name}
-            channelIcon={selectedChannelData.icon}
-            currentUserId={userId}
-            currentUserRole={userRole}
-            isBanned={!!isBanned}
-          />
-        ) : selectedGroup && groupDetail ? (
-          <div className="flex-1 flex items-center justify-center overflow-y-auto">
-            {groupDetail.rules && !groupDetail.rulesAccepted && groupDetail.myRole === "MEMBER" ? (
-              <GroupRulesGate group={groupDetail} onAccept={async () => {
-                await fetch(`/api/groups/${groupDetail.id}/accept-rules`, { method: "POST" });
-                setGroupDetail({ ...groupDetail, rulesAccepted: true });
-              }} />
-            ) : (
-              <GroupInfoPanel group={groupDetail} canManage={groupDetail.myRole === "OWNER" || groupDetail.myRole === "MODERATOR"} onUpdateRules={async (rules: string) => {
-                await fetch(`/api/groups/${groupDetail.id}`, {
-                  method: "PUT",
-                  headers: { "Content-Type": "application/json" },
-                  body: JSON.stringify({ rules }),
-                });
-                setGroupDetail({ ...groupDetail, rules });
-              }} />
-            )}
-          </div>
-        ) : (
-          <div className="flex-1 flex items-center justify-center">
-            <div className="text-center max-w-sm px-6">
-              <span className="text-6xl block mb-4">{"\uD83D\uDCAC"}</span>
-              <h2 className="text-xl font-bold text-neutral-900 dark:text-white mb-2">TZ.Connect</h2>
-              <p className="text-neutral-400 text-sm mb-6">Выберите группу слева или создайте новую</p>
-              <div className="flex gap-3 justify-center">
-                <button onClick={() => setShowCreateGroup(true)} className="btn-primary text-sm">Создать группу</button>
-                <button onClick={() => setShowJoinGroup(true)} className="btn-secondary text-sm">Присоединиться</button>
+        {/* ═══════════ FRIENDS ═══════════ */}
+        {activeSection === "friends" && (
+          <>
+            {/* COL 2 — friends list */}
+            <FriendsPanel onMessageFriend={handleMessageFriend} />
+
+            {/* COL 3 — hint */}
+            <div className="flex-1 flex items-center justify-center cn-main">
+              <div className="text-center">
+                <span className="text-4xl block mb-3">👥</span>
+                <p className="text-sm" style={{ color: "var(--cn-muted)" }}>
+                  Выберите друга чтобы написать
+                </p>
               </div>
             </div>
-          </div>
+          </>
         )}
 
-        {showMembers && groupDetail && (
-          <MembersPanel group={groupDetail} onClose={() => setShowMembers(false)} />
+        {/* ═══════════ MESSAGES (DM) ═══════════ */}
+        {activeSection === "dm" && (
+          /* DMPanel contains both COL 2 (dialog list) and COL 3 (chat) */
+          <DMPanel
+            currentUserId={userId}
+            onClose={() => { setActiveSection("communities"); setDmFriendId(null); }}
+            initialFriendId={dmFriendId}
+          />
         )}
       </div>
 
-      {showFriends && <FriendsPanel onClose={() => setShowFriends(false)} />}
-
-      {showDM && (
-        <div className="fixed inset-0 z-50 bg-white dark:bg-neutral-950 md:relative md:flex-1 md:h-full">
-          <DMPanel currentUserId={userId} onClose={() => setShowDM(false)} />
-        </div>
-      )}
+      {/* AI Assistant */}
+      <AiChatPanel />
 
       {/* Ban notice */}
       {isBanned && (
         <div className="fixed bottom-4 left-1/2 -translate-x-1/2 z-40 px-4 py-2 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-500/30 rounded-xl">
           <p className="text-red-600 dark:text-red-400 text-sm font-medium">
-            Аккаунт ограничен {session.user.bannedUntil ? `до ${new Date(session.user.bannedUntil).toLocaleString("ru-RU")}` : "бессрочно"}
+            Аккаунт ограничен {session.user.bannedUntil
+              ? `до ${new Date(session.user.bannedUntil).toLocaleString("ru-RU")}`
+              : "бессрочно"}
           </p>
         </div>
       )}
@@ -919,8 +1079,16 @@ export default function ConnectPage() {
       <AnimatePresence>
         {showCreateGroup && <CreateGroupModal onClose={() => setShowCreateGroup(false)} onCreated={fetchGroups} />}
         {showJoinGroup && <JoinGroupModal onClose={() => setShowJoinGroup(false)} onJoined={fetchGroups} />}
-        {showCreateChannel && selectedGroup && <CreateChannelModal groupId={selectedGroup} onClose={() => setShowCreateChannel(false)} onCreated={() => { if (selectedGroup) fetchGroupDetail(selectedGroup); }} />}
-        {showInvite && selectedGroup && <InviteModal groupId={selectedGroup} onClose={() => setShowInvite(false)} />}
+        {showCreateChannel && selectedGroup && (
+          <CreateChannelModal
+            groupId={selectedGroup}
+            onClose={() => setShowCreateChannel(false)}
+            onCreated={() => { if (selectedGroup) fetchGroupDetail(selectedGroup); }}
+          />
+        )}
+        {showInvite && selectedGroup && (
+          <InviteModal groupId={selectedGroup} onClose={() => setShowInvite(false)} />
+        )}
         {showGroupSettings && groupDetail && (
           <GroupSettingsModal
             group={groupDetail}
@@ -938,13 +1106,11 @@ export default function ConnectPage() {
             }}
           />
         )}
-      </AnimatePresence>
-
-      <AnimatePresence>
-        {activeVoiceChannel && (
-          <VoiceChannel channelId={activeVoiceChannel.id} channelName={activeVoiceChannel.name} onClose={() => setActiveVoiceChannel(null)} />
+        {showVoicePanel && voice.isConnected && (
+          <VoiceExpandedPanel onClose={() => setShowVoicePanel(false)} />
         )}
       </AnimatePresence>
     </div>
+    </>
   );
 }

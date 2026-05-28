@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import Image from "next/image";
 
 /**
@@ -30,6 +31,7 @@ export default function RainbowAvatar({
 }: RainbowAvatarProps) {
   const hasGlow = GLOW_USERS.has(username);
   const initial = name?.charAt(0)?.toUpperCase() ?? "?";
+  const [imgError, setImgError] = useState(false);
 
   const inner = (
     <div
@@ -50,13 +52,14 @@ export default function RainbowAvatar({
         zIndex: 2,
       }}
     >
-      {avatar ? (
+      {avatar && !imgError ? (
         <Image
           src={avatar}
           alt={name}
           fill
           style={{ objectFit: "cover" }}
           sizes={`${size}px`}
+          onError={() => setImgError(true)}
         />
       ) : (
         initial

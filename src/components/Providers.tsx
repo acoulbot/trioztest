@@ -5,6 +5,8 @@ import { ReactNode, createContext, useContext, useState, useEffect } from "react
 import { InlineEditProvider } from "./InlineEditContext";
 import InlineEditOverlay from "./InlineEditOverlay";
 import { HeartbeatProvider } from "./HeartbeatProvider";
+import { VoiceProvider } from "@/contexts/VoiceContext";
+import VoiceMiniWidget from "@/components/voice/VoiceMiniWidget";
 
 type Theme = "dark" | "light";
 
@@ -47,10 +49,13 @@ export default function Providers({ children }: { children: ReactNode }) {
     <SessionProvider>
       <ThemeProvider>
         <HeartbeatProvider />
-        <InlineEditProvider>
-          {children}
-          <InlineEditOverlay />
-        </InlineEditProvider>
+        <VoiceProvider>
+          <InlineEditProvider>
+            {children}
+            <InlineEditOverlay />
+          </InlineEditProvider>
+          <VoiceMiniWidget />
+        </VoiceProvider>
       </ThemeProvider>
     </SessionProvider>
   );

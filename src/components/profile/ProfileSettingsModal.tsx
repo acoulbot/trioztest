@@ -3,6 +3,35 @@
 import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import GlowAvatar, { GLOW_PRESETS, GlowAvatarUser } from "@/components/ui/GlowAvatar";
+import { DayNightMiniPreview } from "@/components/connect/DayNightBackground";
+import { getDMSoundEnabled, setDMSoundEnabled, playDMNotification } from "@/lib/dmSound";
+
+function DMSoundToggle() {
+  const [on, setOn] = useState(true);
+  useEffect(() => { setOn(getDMSoundEnabled()); }, []);
+  const toggle = () => {
+    const next = !on;
+    setOn(next);
+    setDMSoundEnabled(next);
+    if (next) playDMNotification();
+  };
+  return (
+    <div className="flex items-center justify-between">
+      <div>
+        <p className="text-sm font-medium text-neutral-900 dark:text-white">Звук сообщений</p>
+        <p className="text-xs text-neutral-400 mt-0.5">Уведомление при получении личного сообщения</p>
+      </div>
+      <button
+        onClick={toggle}
+        className={`relative w-11 h-6 rounded-full transition-colors ${
+          on ? "bg-violet-600" : "bg-neutral-300 dark:bg-neutral-600"
+        }`}
+      >
+        <span className={`absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform ${on ? "translate-x-5" : "translate-x-0"}`} />
+      </button>
+    </div>
+  );
+}
 
 interface ProfileSettings {
   avatarGlowEnabled: boolean;
@@ -30,6 +59,18 @@ function detectPreset(colorsJson: string | null): string | null {
 
 export default function ProfileSettingsModal({ user, onClose, onSaved }: ProfileSettingsModalProps) {
   const [glowEnabled, setGlowEnabled] = useState(user.avatarGlowEnabled ?? false);
+  const [dayNightEnabled, setDayNightEnabled] = useState<boolean>(() => {
+    if (typeof window !== "undefined") {
+      return localStorage.getItem("tz-connect-daynight") === "true";
+    }
+    return false;
+  });
+  const [dayNightOpacity, setDayNightOpacity] = useState<number>(() => {
+    if (typeof window !== "undefined") {
+      return parseInt(localStorage.getItem("tz-connect-daynight-opacity") ?? "15", 10);
+    }
+    return 15;
+  });
   const [selectedPreset, setSelectedPreset] = useState<string | null>(detectPreset(user.avatarGlowColors ?? null));
   const [customColors, setCustomColors] = useState<string[]>(() => {
     if (user.avatarGlowColors) {
@@ -55,6 +96,14 @@ export default function ProfileSettingsModal({ user, onClose, onSaved }: Profile
   };
 
   async function save() {
+    // Save day-night locally (no API needed)
+    localStorage.setItem("tz-connect-daynight", String(dayNightEnabled));
+    localStorage.setItem("tz-connect-daynight-opacity", String(dayNightOpacity));
+    // Dispatch event so MessageArea picks up instantly without reload
+    window.dispatchEvent(new CustomEvent("tz-daynight-change", {
+      detail: { enabled: dayNightEnabled, opacity: dayNightOpacity },
+    }));
+
     setSaving(true);
     setError(null);
     try {
@@ -251,6 +300,91 @@ export default function ProfileSettingsModal({ user, onClose, onSaved }: Profile
               </motion.div>
             )}
           </AnimatePresence>
+
+          {/* DM sound toggle */}
+          <DMSoundToggle />
+
+          {/* ── TZ Connect: Day-Night background ── */}
+          <div className="pt-2 border-t border-neutral-100 dark:border-white/5 space-y-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium text-neutral-900 dark:text-white flex items-center gap-1.5">
+                  🌙 Фон дня и ночи
+                </p>
+                <p className="text-xs text-neutral-400 mt-0.5">
+                  Живое небо и цифровой город в окне чата
+                </p>
+              </div>
+              <button
+                onClick={() => setDayNightEnabled(!dayNightEnabled)}
+                className={`relative w-11 h-6 rounded-full transition-colors ${
+                  dayNightEnabled
+                    ? "bg-cyan-500 dark:bg-cyan-500"
+                    : "bg-neutral-300 dark:bg-neutral-600"
+                }`}
+              >
+                <span
+                  className={`absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform ${
+                    dayNightEnabled ? "translate-x-5" : "translate-x-0"
+                  }`}
+                />
+              </button>
+            </div>
+
+            <AnimatePresence>
+              {dayNightEnabled && (
+                <motion.div
+                  initial={{ opacity: 0, height: 0 }}
+                  animate={{ opacity: 1, height: "auto" }}
+                  exit={{ opacity: 0, height: 0 }}
+                  className="overflow-hidden space-y-3"
+                >
+                  {/* Preview strip */}
+                  <div className="relative h-20 rounded-xl overflow-hidden border border-neutral-200 dark:border-white/10">
+                    <DayNightMiniPreview opacity={dayNightOpacity} />
+                    <div className="absolute inset-0 flex items-end p-2">
+                      <span className="text-[10px] text-white/60 font-mono bg-black/30 px-1.5 py-0.5 rounded">
+                        предпросмотр · {new Date().getHours()}:
+                        {String(new Date().getMinutes()).padStart(2, "0")}
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Opacity slider */}
+                  <div className="space-y-1.5">
+                    <div className="flex items-center justify-between">
+                      <p className="text-xs text-neutral-500 dark:text-neutral-400">
+                        Прозрачность фона
+                      </p>
+                      <span className="text-xs font-mono text-cyan-500 dark:text-cyan-400">
+                        {dayNightOpacity}%
+                      </span>
+                    </div>
+                    <input
+                      type="range"
+                      min={5}
+                      max={35}
+                      step={1}
+                      value={dayNightOpacity}
+                      onChange={(e) => setDayNightOpacity(+e.target.value)}
+                      className="w-full accent-cyan-500"
+                    />
+                    <div className="flex justify-between text-[10px] text-neutral-400">
+                      <span>Едва заметно (5%)</span>
+                      <span>Атмосферно (35%)</span>
+                    </div>
+                  </div>
+
+                  {/* Hint */}
+                  <p className="text-[11px] text-neutral-400 dark:text-neutral-500 leading-relaxed">
+                    Фон реагирует на реальное время. Утром — рассвет,
+                    днём — голубое небо, ночью — звёзды и неоновый город.
+                    Текст чата всегда остаётся читаемым.
+                  </p>
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </div>
 
           {error && (
             <p className="text-sm text-red-500 dark:text-red-400">{error}</p>
