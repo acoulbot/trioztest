@@ -3,6 +3,7 @@ import { Inter, Playfair_Display } from "next/font/google";
 import "./globals.css";
 import Providers from "@/components/Providers";
 import ConditionalNavbar from "@/components/ui/ConditionalNavbar";
+import BottomNav from "@/components/mobile/BottomNav";
 
 const inter = Inter({
   subsets: ["latin", "cyrillic"],
@@ -50,6 +51,7 @@ export default function RootLayout({
         <Providers>
           <ConditionalNavbar />
           <main>{children}</main>
+          <BottomNav />
         </Providers>
       </body>
     </html>

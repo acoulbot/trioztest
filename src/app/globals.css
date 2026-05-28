@@ -245,3 +245,16 @@ body {
   90% { opacity: 1; }
   50% { transform: translateY(-100px) translateX(30px); }
 }
+
+/* ── Mobile bottom nav spacing ── */
+/* Pages with scrollable content need bottom padding on mobile so
+   content isn't hidden under the fixed BottomNav bar */
+@media (max-width: 767px) {
+  main > *:not(.no-bottom-inset) {
+    padding-bottom: calc(56px + env(safe-area-inset-bottom, 0px));
+  }
+  /* Connect, home etc. manage their own height — skip padding */
+  .no-bottom-inset {
+    padding-bottom: 0 !important;
+  }
+}

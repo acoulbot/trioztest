@@ -112,7 +112,7 @@ function WindowCard({ window, index }: { window: WindowData; index: number }) {
       initial={{ opacity: 0, scale: 0.9 }}
       animate={{ opacity: 1, scale: 1 }}
       transition={{ duration: 0.8, delay: index * 0.15, ease: [0.25, 0.1, 0.25, 1] }}
-      className="relative"
+      className="absolute inset-0"
       style={{ perspective: 800 }}
     >
       <Link href={window.href}>
@@ -173,13 +173,13 @@ function WindowCard({ window, index }: { window: WindowData; index: number }) {
             transition={{ duration: 0.4 }}
           />
 
-          <div className="relative z-10 flex flex-col justify-end h-full p-4 sm:p-6">
+          <div className="relative z-10 flex flex-col justify-end h-full p-3 sm:p-6">
             <motion.div animate={{ y: hovered ? -3 : 0 }} transition={{ duration: 0.3, ease: "easeOut" }}>
               <EditableText
                 contentKey={`window.${window.windowKey}.title`}
                 defaultValue={window.title}
                 tag="h3"
-                className="text-lg sm:text-xl md:text-2xl font-display font-bold text-white mb-1"
+                className="text-sm sm:text-xl md:text-2xl font-display font-bold text-white mb-0.5 sm:mb-1 leading-tight"
               />
             </motion.div>
 
@@ -445,10 +445,15 @@ export default function HomePage() {
         <UserMenu />
       </div>
 
-      {/* 4 Windows Grid */}
-      <div className="absolute inset-0 grid grid-cols-2 grid-rows-2 gap-[1px]" style={{ backgroundColor: "rgba(255,255,255,0.03)" }}>
+      {/* 4 Windows Grid — 2×2, fills full screen on both desktop and mobile */}
+      <div
+        className="absolute inset-0 grid grid-cols-2 grid-rows-2 gap-[1px]"
+        style={{ backgroundColor: "rgba(255,255,255,0.03)" }}
+      >
         {windows.map((win, i) => (
-          <WindowCard key={win.id} window={win} index={i} />
+          <div key={win.id} className="relative min-h-0 overflow-hidden">
+            <WindowCard window={win} index={i} />
+          </div>
         ))}
       </div>
 
