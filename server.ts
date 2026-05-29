@@ -4,6 +4,8 @@ import { Server as SocketIOServer } from "socket.io";
 import { getToken } from "next-auth/jwt";
 import { IncomingMessage } from "http";
 import { connectRedis } from "./src/lib/redis";
+import { createReadStream, existsSync, statSync } from "fs";
+import { join, extname } from "path";
 
 const dev = process.env.NODE_ENV !== "production";
 const hostname = "0.0.0.0";
@@ -32,9 +34,51 @@ const allowedOrigins = process.env.ALLOWED_ORIGINS
   ? process.env.ALLOWED_ORIGINS.split(",").map((o) => o.trim())
   : [`http://localhost:${port}`, `http://0.0.0.0:${port}`];
 
+const MIME_TYPES: Record<string, string> = {
+  ".webm": "audio/webm",
+  ".ogg": "audio/ogg",
+  ".mp3": "audio/mpeg",
+  ".wav": "audio/wav",
+  ".m4a": "audio/mp4",
+  ".mp4": "video/mp4",
+  ".mov": "video/quicktime",
+  ".mkv": "video/x-matroska",
+  ".webp": "image/webp",
+  ".png": "image/png",
+  ".jpg": "image/jpeg",
+  ".jpeg": "image/jpeg",
+  ".gif": "image/gif",
+  ".svg": "image/svg+xml",
+};
+
+function serveUploadedFile(urlPath: string, res: import("http").ServerResponse): boolean {
+  if (!urlPath.startsWith("/uploads/")) return false;
+  const safePath = urlPath.replace(/\.\.+/g, "").replace(/\/\//g, "/");
+  const filePath = join(process.cwd(), "public", safePath);
+  if (!existsSync(filePath)) return false;
+  try {
+    const stat = statSync(filePath);
+    if (!stat.isFile()) return false;
+    const ext = extname(filePath).toLowerCase();
+    const contentType = MIME_TYPES[ext] || "application/octet-stream";
+    res.writeHead(200, {
+      "Content-Type": contentType,
+      "Content-Length": stat.size,
+      "Cache-Control": "public, max-age=31536000, immutable",
+    });
+    createReadStream(filePath).pipe(res);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 app.prepare().then(() => {
   const httpServer = createServer(async (req, res) => {
     try {
+      const url = req.url || "";
+      const pathOnly = url.split("?")[0];
+      if (serveUploadedFile(pathOnly, res)) return;
       await handle(req, res);
     } catch (err) {
       console.error("[HTTP] Request handler error:", err);
