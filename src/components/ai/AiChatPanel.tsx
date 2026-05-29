@@ -128,7 +128,7 @@ export default function AiChatPanel() {
       {!isOpen && (
         <button
           onClick={() => setIsOpen(true)}
-          className="fixed right-0 top-1/2 -translate-y-1/2 z-40 bg-gradient-to-b from-violet-600 to-indigo-600 text-white shadow-lg hover:shadow-xl transition-all flex items-center justify-center px-1.5 py-3 rounded-l-lg"
+          className="hidden md:flex fixed right-0 top-1/2 -translate-y-1/2 z-40 bg-gradient-to-b from-violet-600 to-indigo-600 text-white shadow-lg hover:shadow-xl transition-all items-center justify-center px-1.5 py-3 rounded-l-lg"
           title="TZ.AI Ассистент"
         >
           <span className="text-[10px] font-bold tracking-wider" style={{ writingMode: "vertical-rl" }}>TZ.AI</span>
@@ -143,7 +143,7 @@ export default function AiChatPanel() {
             animate={{ opacity: 1, x: 0 }}
             exit={{ opacity: 0, x: 20 }}
             transition={{ duration: 0.2 }}
-            className="w-[360px] h-full flex-shrink-0 flex flex-col
+            className="w-full sm:w-[360px] h-full flex-shrink-0 flex flex-col
               bg-white dark:bg-neutral-900 border-l border-neutral-200 dark:border-white/10"
           >
             {/* Header */}
