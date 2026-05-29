@@ -861,7 +861,7 @@ function ConnectPageInner() {
   return (
     <>
     {!splashDone && <ConnectSplash onDone={handleSplashDone} />}
-    <div className="cn-main flex h-[calc(100vh-64px)] max-md:h-[calc(100vh-calc(56px+env(safe-area-inset-bottom,0px)))] overflow-hidden">
+    <div className="cn-main flex h-[calc(100vh-64px)] max-md:h-dvh overflow-hidden">
 
       {/* ── COL 1: NavRail (desktop only) ── */}
       <NavRail
