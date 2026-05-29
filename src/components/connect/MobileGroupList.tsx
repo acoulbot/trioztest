@@ -1,6 +1,7 @@
 "use client";
 
 import Image from "next/image";
+import Link from "next/link";
 
 interface Group {
   id: string;
@@ -22,8 +23,13 @@ interface MobileGroupListProps {
 export default function MobileGroupList({ groups, onSelectGroup, onCreateGroup, onJoinGroup, onToggleFriends }: MobileGroupListProps) {
   return (
     <div className="flex-1 flex flex-col h-full bg-neutral-50 dark:bg-neutral-950">
-      <header className="p-4 border-b border-neutral-200 dark:border-white/5">
+      <header className="p-4 border-b border-neutral-200 dark:border-white/5 flex items-center justify-between">
         <h1 className="text-xl font-bold text-neutral-900 dark:text-white">TZ.Connect</h1>
+        <Link href="/" className="p-2 rounded-lg text-neutral-400 active:bg-neutral-100 dark:active:bg-white/5 transition-colors" aria-label="На главную">
+          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-4 0a1 1 0 01-1-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 01-1 1h-2z" />
+          </svg>
+        </Link>
       </header>
 
       <div className="flex-1 overflow-y-auto p-4 space-y-3">
