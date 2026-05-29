@@ -13,6 +13,7 @@ export default function VoicePlayer({ url, duration: initialDuration, isOwn }: V
   const [progress, setProgress] = useState(0);
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(initialDuration || 0);
+  const [error, setError] = useState(false);
   const audioRef = useRef<HTMLAudioElement | null>(null);
 
   useEffect(() => {
@@ -39,6 +40,11 @@ export default function VoicePlayer({ url, duration: initialDuration, isOwn }: V
       setCurrentTime(0);
     };
 
+    audio.onerror = () => {
+      setError(true);
+      setPlaying(false);
+    };
+
     return () => {
       audio.pause();
       audio.src = "";
@@ -50,7 +56,8 @@ export default function VoicePlayer({ url, duration: initialDuration, isOwn }: V
     if (!audio) return;
 
     if (audio.paused) {
-      audio.play().catch(() => {});
+      setError(false);
+      audio.play().catch(() => setError(true));
       setPlaying(true);
     } else {
       audio.pause();
@@ -79,9 +86,11 @@ export default function VoicePlayer({ url, duration: initialDuration, isOwn }: V
       <button
         onClick={toggle}
         className={`w-8 h-8 flex-shrink-0 rounded-full flex items-center justify-center transition-colors ${
-          isOwn
-            ? "bg-white/20 hover:bg-white/30 text-white"
-            : "bg-violet-100 dark:bg-cyan-400/20 hover:bg-violet-200 dark:hover:bg-cyan-400/30 text-violet-600 dark:text-cyan-400"
+          error
+            ? "bg-red-100 dark:bg-red-900/30 text-red-500"
+            : isOwn
+              ? "bg-white/20 hover:bg-white/30 text-white"
+              : "bg-violet-100 dark:bg-cyan-400/20 hover:bg-violet-200 dark:hover:bg-cyan-400/30 text-violet-600 dark:text-cyan-400"
         }`}
       >
         {playing ? (
