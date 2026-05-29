@@ -957,7 +957,7 @@ function ConnectPageInner() {
           )}
         </div>
 
-        {/* Mobile Connect bottom bar — only when not in deep navigation */}
+        {/* Mobile Connect bottom bar — Сообщества/Друзья/Сообщения (only on groups level) */}
         {mobileView === "groups" && (
           <div className="flex-shrink-0 flex items-center border-t border-neutral-200 dark:border-white/5 bg-white/95 dark:bg-neutral-950/95 backdrop-blur-lg"
             style={{ height: 48 }}>
@@ -981,6 +981,44 @@ function ConnectPageInner() {
                 <span className="text-[10px] font-medium">{label}</span>
               </button>
             ))}
+          </div>
+        )}
+
+        {/* Mobile back bar — Каналы уровень */}
+        {mobileView === "channels" && (
+          <div className="flex-shrink-0 flex items-center gap-2 px-3 border-t border-neutral-200 dark:border-white/5 bg-white/95 dark:bg-neutral-950/95 backdrop-blur-lg"
+            style={{ height: 48 }}>
+            <button
+              onClick={() => { setSelectedGroup(null); setMobileView("groups"); }}
+              className="flex items-center gap-1.5 text-violet-600 dark:text-cyan-400 text-sm font-medium active:opacity-60"
+            >
+              <svg width={18} height={18} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+                <path d="M19 12H5m0 0l7 7m-7-7l7-7" />
+              </svg>
+              Группы
+            </button>
+            {groupDetail && (
+              <span className="text-sm text-neutral-500 dark:text-gray-400 truncate ml-1">· {groupDetail.name}</span>
+            )}
+          </div>
+        )}
+
+        {/* Mobile back bar — Чат уровень */}
+        {mobileView === "chat" && (
+          <div className="flex-shrink-0 flex items-center gap-2 px-3 border-t border-neutral-200 dark:border-white/5 bg-white/95 dark:bg-neutral-950/95 backdrop-blur-lg"
+            style={{ height: 48 }}>
+            <button
+              onClick={() => setMobileView("channels")}
+              className="flex items-center gap-1.5 text-violet-600 dark:text-cyan-400 text-sm font-medium active:opacity-60"
+            >
+              <svg width={18} height={18} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+                <path d="M19 12H5m0 0l7 7m-7-7l7-7" />
+              </svg>
+              Каналы
+            </button>
+            {selectedChannelData && (
+              <span className="text-sm text-neutral-500 dark:text-gray-400 truncate ml-1">· {selectedChannelData.name}</span>
+            )}
           </div>
         )}
 

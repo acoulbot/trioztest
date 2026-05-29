@@ -30,6 +30,9 @@ export default function Navbar() {
     return () => document.removeEventListener("keydown", handler);
   }, []);
 
+  // Close mobile menu on route change
+  useEffect(() => { setMenuOpen(false); }, [pathname]);
+
   const navLinks = [
     { href: "/", label: "Главная" },
     { href: "/connect", label: "TZ.Connect" },

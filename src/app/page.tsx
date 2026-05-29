@@ -445,10 +445,10 @@ export default function HomePage() {
         <UserMenu />
       </div>
 
-      {/* 4 Windows Grid — 2×2 on desktop, vertical stack on mobile */}
-      <div className="absolute inset-0 grid grid-cols-1 md:grid-cols-2 md:grid-rows-2 gap-[1px] max-md:overflow-y-auto max-md:pb-[env(safe-area-inset-bottom,0px)]" style={{ backgroundColor: "rgba(255,255,255,0.03)" }}>
+      {/* 4 Windows Grid — 2×2, fills screen, no scroll */}
+      <div className="absolute inset-0 grid grid-cols-2 grid-rows-2 gap-[1px]" style={{ backgroundColor: "rgba(255,255,255,0.03)" }}>
         {windows.map((win, i) => (
-          <div key={win.id} className="max-md:min-h-[50vh]">
+          <div key={win.id} className="relative overflow-hidden">
             <WindowCard window={win} index={i} />
           </div>
         ))}
