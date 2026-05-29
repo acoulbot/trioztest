@@ -88,9 +88,9 @@ export default function AiChatPanel() {
 
   return (
     <>
-      {/* Hover trigger zone on right edge */}
+      {/* Hover trigger zone — desktop only */}
       <div
-        className="fixed right-0 top-1/4 bottom-1/4 w-2 z-50"
+        className="fixed right-0 top-1/4 bottom-1/4 w-2 z-50 hidden md:block"
         onMouseEnter={() => setIsOpen(true)}
       />
 
@@ -115,7 +115,7 @@ export default function AiChatPanel() {
             animate={{ x: 0 }}
             exit={{ x: 400 }}
             transition={{ type: "spring", damping: 25, stiffness: 200 }}
-            className="fixed right-0 top-0 h-full w-[380px] z-50 flex flex-col
+            className="fixed right-0 top-0 h-full w-full sm:w-[380px] z-50 flex flex-col
               bg-white dark:bg-neutral-900 border-l border-neutral-200 dark:border-white/10 shadow-2xl"
           >
             {/* Header */}

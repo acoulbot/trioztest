@@ -106,7 +106,7 @@ export default function FriendsPanel({ onClose }: { onClose: () => void }) {
   ];
 
   return (
-    <div className="w-80 bg-white dark:bg-neutral-900 border-l border-neutral-200 dark:border-white/5 flex flex-col h-full">
+    <div className="w-full sm:w-80 bg-white dark:bg-neutral-900 border-l border-neutral-200 dark:border-white/5 flex flex-col h-full">
       {/* Header */}
       <div className="p-3 border-b border-neutral-200 dark:border-white/5 flex items-center justify-between">
         <span className="text-sm font-semibold text-neutral-900 dark:text-white">Друзья</span>

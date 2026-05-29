@@ -384,7 +384,7 @@ export default function VoiceChannel({ channelId, channelName, onClose }: VoiceC
         </div>
 
         {/* Controls */}
-        <div className="flex items-center justify-center gap-3 px-6 py-4 border-t border-neutral-200 dark:border-white/10 bg-neutral-50 dark:bg-white/5">
+        <div className="flex items-center justify-center gap-2 sm:gap-3 px-4 sm:px-6 py-4 border-t border-neutral-200 dark:border-white/10 bg-neutral-50 dark:bg-white/5 flex-wrap">
           {!isConnected ? (
             <button
               onClick={joinVoice}

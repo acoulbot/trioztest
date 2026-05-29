@@ -242,7 +242,8 @@ export default function AdminUsersPage() {
           <span className="text-gray-400">{users.length} пользователей</span>
         </div>
 
-        <div className="space-y-3">
+        <div className="overflow-x-auto -mx-4 px-4">
+        <div className="space-y-3 min-w-[320px]">
           {users.map((user, i) => (
             <motion.div
               key={user.id}
@@ -363,6 +364,7 @@ export default function AdminUsersPage() {
             </motion.div>
           ))}
         </div>
+        </div>{/* end overflow-x-auto */}
       </div>
 
       {/* Ban Modal */}

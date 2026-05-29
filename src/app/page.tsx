@@ -402,7 +402,7 @@ export default function HomePage() {
       </div>
 
       {/* 4 Windows Grid */}
-      <div className="absolute inset-0 grid grid-cols-2 grid-rows-2 gap-[1px]" style={{ backgroundColor: "rgba(255,255,255,0.03)" }}>
+      <div className="absolute inset-0 grid grid-cols-2 grid-rows-2 gap-[1px] [&>*]:min-h-[160px]" style={{ backgroundColor: "rgba(255,255,255,0.03)" }}>
         {windows.map((win, i) => (
           <WindowCard key={win.id} window={win} index={i} />
         ))}

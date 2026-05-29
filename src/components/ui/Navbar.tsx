@@ -2,8 +2,9 @@
 
 import Link from "next/link";
 import { useSession, signOut } from "next-auth/react";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
+import { usePathname } from "next/navigation";
 import { useTheme } from "@/components/Providers";
 import { useInlineEdit } from "@/components/InlineEditContext";
 
@@ -12,6 +13,10 @@ export default function Navbar() {
   const [menuOpen, setMenuOpen] = useState(false);
   const { theme, toggleTheme } = useTheme();
   const { editMode, toggleEditMode, isAdmin } = useInlineEdit();
+  const pathname = usePathname();
+
+  // Close mobile menu on route change
+  useEffect(() => { setMenuOpen(false); }, [pathname]);
 
   const navLinks = [
     { href: "/", label: "Главная" },

@@ -279,6 +279,7 @@ export default function ConnectPage() {
   const [showInvite, setShowInvite] = useState(false);
   const [showMembers, setShowMembers] = useState(false);
   const [showFriends, setShowFriends] = useState(false);
+  const [mobileTab, setMobileTab] = useState<"groups" | "channels" | "chat">("groups");
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const pollRef = useRef<NodeJS.Timeout | null>(null);
 
@@ -354,6 +355,7 @@ export default function ConnectPage() {
       setActiveVoiceChannel({ id: channel.id, name: channel.name });
     } else {
       setSelectedChannel(channel.id);
+      setMobileTab("chat"); // auto-navigate to chat on mobile
     }
   };
 
@@ -390,11 +392,45 @@ export default function ConnectPage() {
   const voiceChannels = groupDetail?.channels.filter((c) => c.type === "VOICE") || [];
 
   return (
-    <div className="min-h-screen bg-neutral-50 dark:bg-neutral-950 flex">
-      {/* Group Sidebar (narrow icon strip like Discord) */}
-      <div className="w-[72px] bg-neutral-100 dark:bg-neutral-950 border-r border-neutral-200 dark:border-white/5 flex flex-col items-center py-3 gap-2 h-[calc(100vh-64px)] overflow-y-auto">
+    <div className="bg-neutral-50 dark:bg-neutral-950 flex flex-col" style={{ height: "calc(100vh - 64px)" }}>
+
+      {/* ── MOBILE: Bottom TabBar ── */}
+      <div className="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-white dark:bg-neutral-900 border-t border-neutral-200 dark:border-white/5 flex">
+        {[
+          { tab: "groups" as const, label: "Группы", icon: <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />, always: true },
+          { tab: "channels" as const, label: "Каналы", icon: <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 20l4-16m2 16l4-16M6 9h14M4 15h14" />, always: false },
+          { tab: "chat" as const, label: "Чат", icon: <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />, always: false },
+        ].map(({ tab, label, icon, always }) => {
+          const disabled = !always && (tab === "channels" ? !selectedGroup : !selectedChannel);
+          const active = mobileTab === tab;
+          return (
+            <button key={tab}
+              onClick={() => !disabled && setMobileTab(tab)}
+              disabled={disabled}
+              className={`flex-1 flex flex-col items-center justify-center py-2.5 gap-0.5 text-[10px] font-medium transition-colors ${active ? "text-violet-600 dark:text-cyan-400" : disabled ? "text-neutral-300 dark:text-neutral-600" : "text-neutral-400"}`}
+            >
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">{icon}</svg>
+              {label}
+            </button>
+          );
+        })}
+        <button
+          onClick={() => setShowFriends(!showFriends)}
+          className={`flex-1 flex flex-col items-center justify-center py-2.5 gap-0.5 text-[10px] font-medium transition-colors ${showFriends ? "text-violet-600 dark:text-cyan-400" : "text-neutral-400"}`}
+        >
+          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
+          </svg>
+          Друзья
+        </button>
+      </div>
+
+      <div className="flex flex-1 overflow-hidden pb-[56px] md:pb-0">
+
+      {/* ── Group icon strip — hidden on mobile ── */}
+      <div className="hidden md:flex w-[72px] bg-neutral-100 dark:bg-neutral-950 border-r border-neutral-200 dark:border-white/5 flex-col items-center py-3 gap-2 h-full overflow-y-auto flex-shrink-0">
         {groups.map((group) => (
-          <button key={group.id} onClick={() => setSelectedGroup(group.id)}
+          <button key={group.id} onClick={() => { setSelectedGroup(group.id); setMobileTab("channels"); }}
             className={`w-12 h-12 rounded-2xl flex items-center justify-center text-lg transition-all duration-300 hover:rounded-xl ${
               selectedGroup === group.id
                 ? "bg-violet-500 dark:bg-cyan-500 text-white rounded-xl shadow-lg"
@@ -435,7 +471,11 @@ export default function ConnectPage() {
 
       {/* Channel Sidebar */}
       {selectedGroup && groupDetail && (
-        <div className="w-60 bg-white dark:bg-neutral-900 border-r border-neutral-200 dark:border-white/5 flex flex-col h-[calc(100vh-64px)]">
+        <div className={`
+          bg-white dark:bg-neutral-900 border-r border-neutral-200 dark:border-white/5 flex flex-col flex-shrink-0
+          md:w-60 md:h-full md:static md:z-auto
+          ${mobileTab === "channels" ? "fixed inset-0 z-20 w-full pb-[56px]" : "hidden md:flex"}
+        `}>
           <div className="p-3 border-b border-neutral-200 dark:border-white/5">
             <h2 className="font-bold text-neutral-900 dark:text-white text-sm truncate">{groupDetail.name}</h2>
             {groupDetail.description && <p className="text-[11px] text-neutral-400 truncate mt-0.5">{groupDetail.description}</p>}
@@ -524,7 +564,11 @@ export default function ConnectPage() {
       )}
 
       {/* Main Content */}
-      <div className="flex-1 flex flex-col h-[calc(100vh-64px)]">
+      <div className={`
+        flex-1 flex flex-col min-w-0
+        ${mobileTab === "chat" || (!selectedChannel && mobileTab !== "channels") ? "flex" : "hidden md:flex"}
+        md:flex
+      `}>
         {/* Header */}
         {selectedChannelData && (
           <div className="h-12 bg-white/50 dark:bg-neutral-900/50 border-b border-neutral-200 dark:border-white/5 flex items-center px-4 gap-2 backdrop-blur-sm">
@@ -640,6 +684,7 @@ export default function ConnectPage() {
           <VoiceChannel channelId={activeVoiceChannel.id} channelName={activeVoiceChannel.name} onClose={() => setActiveVoiceChannel(null)} />
         )}
       </AnimatePresence>
+      </div>{/* end flex flex-1 */}
     </div>
   );
 }

@@ -381,7 +381,7 @@ export default function RoomPage() {
               <h2 className="text-lg font-bold text-white">Выбор фракции</h2>
               <p className="text-gray-500 text-xs mt-1">Нажмите на фракцию, чтобы выбрать её</p>
             </div>
-            <div className="p-4 grid grid-cols-2 md:grid-cols-5 gap-2">
+            <div className="p-4 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-5 gap-2">
               {FACTIONS.map((f) => {
                 const taken = takenFactions.has(f.id);
                 const isMine = myPlayer?.faction === f.id;
@@ -434,7 +434,7 @@ export default function RoomPage() {
 
             {/* Map preview */}
             <div className="p-4 border-t border-white/5">
-              <div className="relative rounded-xl overflow-hidden h-48 md:h-64">
+              <div className="relative rounded-xl overflow-hidden h-40 sm:h-48 md:h-64">
                 <Image src="/games/velderan/map.png" alt="Карта" fill className="object-cover" />
                 <div className="absolute inset-0 bg-gradient-to-t from-neutral-900/80 to-transparent" />
                 <div className="absolute bottom-3 left-3 text-sm text-gray-400">Мир Вельд&apos;Эран</div>
