@@ -4,7 +4,7 @@ import { useEffect, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 
 interface ImageLightboxProps {
-  src: string;
+  src: string | null;
   alt?: string;
   onClose: () => void;
 }
@@ -15,16 +15,18 @@ export default function ImageLightbox({ src, alt, onClose }: ImageLightboxProps)
   }, [onClose]);
 
   useEffect(() => {
+    if (!src) return;
     document.addEventListener("keydown", handleKey);
     document.body.style.overflow = "hidden";
     return () => {
       document.removeEventListener("keydown", handleKey);
       document.body.style.overflow = "";
     };
-  }, [handleKey]);
+  }, [handleKey, src]);
 
   return (
     <AnimatePresence>
+      {src && (
       <motion.div
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
@@ -61,6 +63,7 @@ export default function ImageLightbox({ src, alt, onClose }: ImageLightboxProps)
           draggable={false}
         />
       </motion.div>
+      )}
     </AnimatePresence>
   );
 }
