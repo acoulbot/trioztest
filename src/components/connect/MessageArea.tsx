@@ -4,6 +4,8 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { io, Socket } from "socket.io-client";
 import Image from "next/image";
+import ImageLightbox from "@/components/ui/ImageLightbox";
+import { playMsgNotification, playMentionNotification } from "@/lib/msgSound";
 import GlowAvatar from "@/components/ui/GlowAvatar";
 import TypingIndicator from "@/components/ui/TypingIndicator";
 import VoiceRecorder from "@/components/ui/VoiceRecorder";
@@ -62,13 +64,14 @@ interface MessageAreaProps {
   channelName: string;
   channelIcon: string | null;
   currentUserId: string;
+  currentUserName?: string;
   currentUserRole: string;
   isBanned: boolean;
   onBack?: () => void;
 }
 
 export default function MessageArea({
-  channelId, channelName, channelIcon, currentUserId, currentUserRole, isBanned, onBack,
+  channelId, channelName, channelIcon, currentUserId, currentUserName = "", currentUserRole, isBanned, onBack,
 }: MessageAreaProps) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [newMessage, setNewMessage] = useState("");
@@ -84,6 +87,7 @@ export default function MessageArea({
   const [sending, setSending] = useState(false);
   const [recordingVoice, setRecordingVoice] = useState(false);
   const [showScrollBtn, setShowScrollBtn] = useState(false);
+  const [lightboxSrc, setLightboxSrc] = useState<string | null>(null);
 
   // Day-Night background (optional, controlled via profile settings)
   const [dayNightEnabled, setDayNightEnabled] = useState<boolean>(() => {
@@ -149,6 +153,15 @@ export default function MessageArea({
 
     socket.on("new-message", (msg: Message) => {
       setMessages((prev) => [...prev, msg]);
+      // Play notification only for messages from others
+      if (msg.user.id !== currentUserId) {
+        const isMention = currentUserName && (
+          msg.content.toLowerCase().includes(`@${currentUserName.toLowerCase()}`) ||
+          msg.content.includes("@everyone")
+        );
+        if (isMention) playMentionNotification();
+        else playMsgNotification();
+      }
     });
 
     socket.on("message-edited", (msg: Message) => {
@@ -469,7 +482,12 @@ export default function MessageArea({
                         </div>
                       ) : att.isImage ? (
                         <div key={i} className="mt-2 max-w-xs">
-                          <Image src={att.url} alt={att.name} width={320} height={240} className="rounded-lg" unoptimized />
+                          <Image
+                            src={att.url} alt={att.name} width={320} height={240}
+                            className="rounded-lg cursor-zoom-in hover:opacity-90 transition-opacity"
+                            unoptimized
+                            onClick={() => setLightboxSrc(att.url)}
+                          />
                         </div>
                       ) : (
                         <a key={i} href={att.url} target="_blank" rel="noopener noreferrer" className="mt-1 inline-flex items-center gap-1 text-sm text-violet-500 dark:text-cyan-400 hover:underline">
@@ -636,6 +654,9 @@ export default function MessageArea({
           Отправка сообщений ограничена
         </div>
       )}
+
+      {/* Image Lightbox */}
+      <ImageLightbox src={lightboxSrc} onClose={() => setLightboxSrc(null)} />
     </div>
   );
 }
