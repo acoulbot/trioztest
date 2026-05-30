@@ -1,6 +1,6 @@
 "use client";
 
-import Image from "next/image";
+import { useState } from "react";
 
 interface Group {
   id: string;
@@ -20,24 +20,19 @@ interface GroupListPanelProps {
 }
 
 function GroupAvatar({ icon, name, isMain }: { icon: string | null; name: string; isMain?: boolean }) {
+  const [imgError, setImgError] = useState(false);
   const size = isMain ? "w-12 h-12" : "w-10 h-10";
   const imgSize = isMain ? 48 : 40;
   const textSize = isMain ? "text-base" : "text-sm";
 
-  if (icon?.startsWith("/")) {
-    return (
-      <div className={`${size} rounded-xl overflow-hidden flex-shrink-0${isMain ? " ring-2 ring-violet-500/50 dark:ring-cyan-400/50" : ""}`}>
-        <Image src={icon} alt={name} width={imgSize} height={imgSize} className="object-cover w-full h-full" />
-      </div>
-    );
-  }
   const initials = name
     .split(" ")
     .slice(0, 2)
     .map((w) => w[0])
     .join("")
     .toUpperCase();
-  return (
+
+  const fallback = (
     <div
       className={`${size} rounded-xl flex items-center justify-center flex-shrink-0 ${textSize} font-bold${isMain ? " ring-2 ring-violet-500/50 dark:ring-cyan-400/50" : ""}`}
       style={{
@@ -49,6 +44,39 @@ function GroupAvatar({ icon, name, isMain }: { icon: string | null; name: string
       {initials || "?"}
     </div>
   );
+
+  // Emoji or plain text — render as text
+  if (!icon || imgError) return fallback;
+
+  // Single emoji character — render as text
+  const isSingleEmoji = [...icon].length <= 2 && !icon.startsWith("/") && !icon.startsWith("http");
+  if (isSingleEmoji) {
+    return (
+      <div className={`${size} rounded-xl flex items-center justify-center flex-shrink-0 text-2xl${isMain ? " ring-2 ring-violet-500/50 dark:ring-cyan-400/50" : ""}`}
+        style={{ background: "var(--cn-accent-dim)" }}>
+        {icon}
+      </div>
+    );
+  }
+
+  // URL or path — render with img (not next/image to avoid domain restrictions)
+  if (icon.startsWith("/") || icon.startsWith("http")) {
+    return (
+      <div className={`${size} rounded-xl overflow-hidden flex-shrink-0${isMain ? " ring-2 ring-violet-500/50 dark:ring-cyan-400/50" : ""}`}>
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src={icon}
+          alt={name}
+          width={imgSize}
+          height={imgSize}
+          className="object-cover w-full h-full"
+          onError={() => setImgError(true)}
+        />
+      </div>
+    );
+  }
+
+  return fallback;
 }
 
 export default function GroupListPanel({
