@@ -931,6 +931,7 @@ function ConnectPageInner() {
                     channelName={selectedChannelData.name}
                     channelIcon={selectedChannelData.icon}
                     currentUserId={userId}
+                    currentUserName={session.user.name ?? ""}
                     currentUserRole={userRole}
                     isBanned={!!isBanned}
                     onBack={() => setMobileView("channels")}
@@ -1096,6 +1097,7 @@ function ConnectPageInner() {
                   channelName={selectedChannelData.name}
                   channelIcon={selectedChannelData.icon}
                   currentUserId={userId}
+                  currentUserName={session.user.name ?? ""}
                   currentUserRole={userRole}
                   isBanned={!!isBanned}
                 />
