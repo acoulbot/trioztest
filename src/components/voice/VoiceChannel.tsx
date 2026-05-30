@@ -1,9 +1,11 @@
 "use client";
 
 import { useState, useEffect, useRef, useCallback } from "react";
+import { createPortal } from "react-dom";
 import { useSession } from "next-auth/react";
 import { motion, AnimatePresence } from "framer-motion";
 import { io, Socket } from "socket.io-client";
+import ScreenShareWindow from "@/components/voice/ScreenShareWindow";
 
 interface VoiceUser {
   socketId: string;
@@ -34,6 +36,15 @@ export default function VoiceChannel({ channelId, channelName, onClose }: VoiceC
   const [speakingUsers, setSpeakingUsers] = useState<Set<string>>(new Set());
   const [localSpeaking, setLocalSpeaking] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // Screen share state
+  const [screenStream, setScreenStream] = useState<MediaStream | null>(null);
+  const [remoteScreenStream, setRemoteScreenStream] = useState<MediaStream | null>(null);
+  const [screenSharerName, setScreenSharerName] = useState("");
+  const [isLocalSharing, setIsLocalSharing] = useState(false);
+  const screenStreamRef = useRef<MediaStream | null>(null);
+  const screenSendersRef = useRef<Map<string, RTCRtpSender>>(new Map());
+  const iceCandidateBufferRef = useRef<Map<string, RTCIceCandidateInit[]>>(new Map());
 
   const socketRef = useRef<Socket | null>(null);
   const localStreamRef = useRef<MediaStream | null>(null);
@@ -68,14 +79,26 @@ export default function VoiceChannel({ channelId, channelName, onClose }: VoiceC
     }
 
     pc.ontrack = (event) => {
+      const { track } = event;
       const [remoteStream] = event.streams;
-      let audio = remoteAudiosRef.current.get(remoteSocketId);
-      if (!audio) {
-        audio = new Audio();
-        audio.autoplay = true;
-        remoteAudiosRef.current.set(remoteSocketId, audio);
+
+      if (track.kind === "audio") {
+        let audio = remoteAudiosRef.current.get(remoteSocketId);
+        if (!audio) {
+          audio = new Audio();
+          audio.autoplay = true;
+          remoteAudiosRef.current.set(remoteSocketId, audio);
+        }
+        audio.srcObject = remoteStream;
+        audio.play().catch(() => {});
+      } else if (track.kind === "video") {
+        // Remote screen share stream
+        setRemoteScreenStream(remoteStream);
+        track.onended = () => {
+          setRemoteScreenStream(null);
+          setScreenSharerName("");
+        };
       }
-      audio.srcObject = remoteStream;
     };
 
     pc.onicecandidate = (event) => {
@@ -226,6 +249,16 @@ export default function VoiceChannel({ channelId, channelName, onClose }: VoiceC
         });
       });
 
+      // Screen share signaling
+      socket.on("screen-share-started", ({ socketId: sharerId }: { socketId: string }) => {
+        const sharer = users.find(u => u.socketId === sharerId);
+        setScreenSharerName(sharer?.userName ?? "Участник");
+      });
+      socket.on("screen-share-stopped", () => {
+        setRemoteScreenStream(null);
+        setScreenSharerName("");
+      });
+
       socket.on("connect_error", () => {
         setError("Не удалось подключиться к серверу");
       });
@@ -238,7 +271,7 @@ export default function VoiceChannel({ channelId, channelName, onClose }: VoiceC
         setError("Не удалось подключиться к голосовому каналу");
       }
     }
-  }, [session, channelId, createPeerConnection, cleanupPeer, startSpeakingDetection]);
+  }, [session, channelId, createPeerConnection, cleanupPeer, startSpeakingDetection, users]);
 
   const leaveVoice = useCallback(() => {
     socketRef.current?.emit("leave-voice", { channelId });
@@ -282,15 +315,84 @@ export default function VoiceChannel({ channelId, channelName, onClose }: VoiceC
   const toggleDeafen = useCallback(() => {
     const newDeafened = !isDeafened;
     setIsDeafened(newDeafened);
-    remoteAudiosRef.current.forEach((audio) => {
-      audio.muted = newDeafened;
-    });
-    if (newDeafened && !isMuted) {
-      toggleMute();
-    }
+    remoteAudiosRef.current.forEach((audio) => { audio.muted = newDeafened; });
+    if (newDeafened && !isMuted) toggleMute();
   }, [isDeafened, isMuted, toggleMute]);
 
+  /* ── Screen share ──────────────────────────────────────────────────── */
+
+  const stopScreenShare = useCallback(async () => {
+    if (!screenStreamRef.current) return;
+
+    // Remove video sender from every peer and renegotiate
+    for (const [remoteId, pc] of peersRef.current) {
+      const sender = screenSendersRef.current.get(remoteId);
+      if (sender) {
+        try { pc.removeTrack(sender); } catch { /* ignore */ }
+      }
+      if (pc.signalingState === "stable") {
+        try {
+          const offer = await pc.createOffer();
+          await pc.setLocalDescription(offer);
+          socketRef.current?.emit("voice-offer", { to: remoteId, offer: pc.localDescription });
+        } catch { /* ignore */ }
+      }
+    }
+    screenSendersRef.current.clear();
+    screenStreamRef.current.getTracks().forEach(t => t.stop());
+    screenStreamRef.current = null;
+
+    socketRef.current?.emit("screen-share-stopped", { channelId });
+    setIsLocalSharing(false);
+    setScreenStream(null);
+  }, [channelId]);
+
+  const startScreenShare = useCallback(async () => {
+    if (!isConnected) return;
+    if (!navigator.mediaDevices?.getDisplayMedia) {
+      setError("Демонстрация экрана не поддерживается в этом браузере.");
+      return;
+    }
+
+    let stream: MediaStream;
+    try {
+      stream = await navigator.mediaDevices.getDisplayMedia({
+        video: { width: { ideal: 1280, max: 1280 }, height: { ideal: 720, max: 720 }, frameRate: { ideal: 60, max: 60 } } as MediaTrackConstraints,
+        audio: false,
+      });
+    } catch (e) {
+      if (e instanceof DOMException && e.name === "NotAllowedError") return;
+      setError("Не удалось захватить экран.");
+      return;
+    }
+
+    screenStreamRef.current = stream;
+    const videoTrack = stream.getVideoTracks()[0];
+
+    // Add to all existing peers
+    for (const [remoteId, pc] of peersRef.current) {
+      const sender = pc.addTrack(videoTrack, stream);
+      screenSendersRef.current.set(remoteId, sender);
+      if (pc.signalingState === "stable") {
+        try {
+          const offer = await pc.createOffer();
+          await pc.setLocalDescription(offer);
+          socketRef.current?.emit("voice-offer", { to: remoteId, offer: pc.localDescription });
+        } catch { /* ignore */ }
+      }
+    }
+
+    socketRef.current?.emit("screen-share-started", { channelId });
+    setIsLocalSharing(true);
+    setScreenStream(stream);
+    setScreenSharerName(session?.user?.name ?? "Вы");
+
+    // Handle native browser "Stop sharing" button
+    videoTrack.onended = () => stopScreenShare();
+  }, [isConnected, channelId, session?.user?.name, stopScreenShare]);
+
   const handleClose = async () => {
+    if (isLocalSharing) await stopScreenShare();
     if (isConnected) leaveVoice();
     onClose();
   };
@@ -303,6 +405,7 @@ export default function VoiceChannel({ channelId, channelName, onClose }: VoiceC
   }, []);
 
   return (
+    <>
     <motion.div
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
@@ -438,6 +541,22 @@ export default function VoiceChannel({ channelId, channelName, onClose }: VoiceC
                 )}
               </button>
 
+              {/* Screen share */}
+              <button
+                onClick={isLocalSharing ? stopScreenShare : startScreenShare}
+                disabled={!!remoteScreenStream && !isLocalSharing}
+                className={`p-3 rounded-xl transition-all disabled:opacity-40 disabled:cursor-not-allowed ${
+                  isLocalSharing
+                    ? "bg-green-100 dark:bg-green-500/20 text-green-600"
+                    : "bg-neutral-100 dark:bg-white/10 text-neutral-600 dark:text-neutral-300 hover:bg-neutral-200 dark:hover:bg-white/20"
+                }`}
+                title={isLocalSharing ? "Остановить демонстрацию" : "Демонстрация экрана"}
+              >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                </svg>
+              </button>
+
               {/* Disconnect */}
               <button
                 onClick={leaveVoice}
@@ -525,8 +644,23 @@ function VoiceUserCard({ name, muted, speaking, isLocal }: {
               d="M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z" />
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2" />
           </svg>
-        </div>
-      )}
-    </motion.div>
+  </motion.div>
+
+    {/* Screen share floating window — portal so it never blocks the main UI */}
+    {typeof document !== "undefined" && (isLocalSharing || !!remoteScreenStream) &&
+      createPortal(
+        <AnimatePresence>
+          <ScreenShareWindow
+            key="screen-share"
+            stream={isLocalSharing ? screenStream : remoteScreenStream}
+            sharerName={screenSharerName}
+            isLocal={isLocalSharing}
+            onStop={isLocalSharing ? stopScreenShare : undefined}
+          />
+        </AnimatePresence>,
+        document.body
+      )
+    }
+    </>
   );
 }

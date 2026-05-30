@@ -7,6 +7,8 @@ import Link from "next/link";
 import dynamic from "next/dynamic";
 
 import { isOnline, timeAgo } from "@/lib/timeAgo";
+import { playMsgNotification, playMentionNotification } from "@/lib/msgSound";
+import ImageLightbox from "@/components/ui/ImageLightbox";
 
 const VoiceChannel = dynamic(() => import("@/components/voice/VoiceChannel"), { ssr: false });
 const FriendsPanel = dynamic(() => import("@/components/friends/FriendsPanel"), { ssr: false });
@@ -279,6 +281,7 @@ export default function ConnectPage() {
   const [showInvite, setShowInvite] = useState(false);
   const [showMembers, setShowMembers] = useState(false);
   const [showFriends, setShowFriends] = useState(false);
+  const [lightboxSrc, setLightboxSrc] = useState<string | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const pollRef = useRef<NodeJS.Timeout | null>(null);
 
@@ -299,13 +302,33 @@ export default function ConnectPage() {
     }
   }, []);
 
+  const myUserId = (session?.user as { id?: string } | undefined)?.id ?? "";
+  const prevMsgCountRef = useRef<number>(0);
+
   const fetchMessages = useCallback(async (channelId: string) => {
     const res = await fetch(`/api/messages?channelId=${channelId}`);
     if (res.ok) {
-      const data = await res.json();
-      setMessages(data);
+      const data: Message[] = await res.json();
+      setMessages(prev => {
+        // Play sound only when new messages arrive (not on initial load)
+        if (prev.length > 0 && data.length > prev.length) {
+          const newMsgs = data.slice(prev.length);
+          const fromOthers = newMsgs.filter(m => m.user.id !== myUserId);
+          if (fromOthers.length > 0) {
+            // Check for @mention in any new message
+            const myName = session?.user?.name ?? "";
+            const hasMention = fromOthers.some(m =>
+              m.content.toLowerCase().includes(`@${myName.toLowerCase()}`) ||
+              m.content.includes("@everyone")
+            );
+            if (hasMention) playMentionNotification();
+            else playMsgNotification();
+          }
+        }
+        return data;
+      });
     }
-  }, []);
+  }, [myUserId, session?.user?.name]);
 
   useEffect(() => {
     if (session?.user) fetchGroups();
@@ -568,7 +591,10 @@ export default function ConnectPage() {
                           {new Date(msg.createdAt).toLocaleTimeString("ru-RU", { hour: "2-digit", minute: "2-digit" })}
                         </span>
                       </div>
-                      <p className="text-neutral-700 dark:text-gray-300 text-sm mt-0.5 break-words">{msg.content}</p>
+                      <MessageContent
+                        content={msg.content}
+                        onImageClick={setLightboxSrc}
+                      />
                     </div>
                   </motion.div>
                 ))
@@ -634,12 +660,69 @@ export default function ConnectPage() {
         {showInvite && selectedGroup && <InviteModal groupId={selectedGroup} onClose={() => setShowInvite(false)} />}
       </AnimatePresence>
 
+      {/* Image Lightbox */}
+      <AnimatePresence>
+        {lightboxSrc && (
+          <ImageLightbox src={lightboxSrc} onClose={() => setLightboxSrc(null)} />
+        )}
+      </AnimatePresence>
+
       {/* Voice Channel Modal */}
       <AnimatePresence>
         {activeVoiceChannel && (
           <VoiceChannel channelId={activeVoiceChannel.id} channelName={activeVoiceChannel.name} onClose={() => setActiveVoiceChannel(null)} />
         )}
       </AnimatePresence>
+    </div>
+  );
+}
+
+/* ─── MessageContent — renders text + clickable image previews ─────────── */
+
+const IMAGE_URL_RE = /https?:\/\/\S+\.(?:png|jpe?g|gif|webp|svg|bmp)(\?\S*)?/gi;
+
+function MessageContent({
+  content,
+  onImageClick,
+}: {
+  content: string;
+  onImageClick: (src: string) => void;
+}) {
+  const imageUrls = Array.from(new Set(content.match(IMAGE_URL_RE) ?? []));
+  const textOnly  = content.replace(IMAGE_URL_RE, "").trim();
+
+  return (
+    <div className="space-y-1.5">
+      {textOnly && (
+        <p className="text-neutral-700 dark:text-gray-300 text-sm break-words whitespace-pre-wrap">
+          {textOnly}
+        </p>
+      )}
+      {imageUrls.map(url => (
+        <button
+          key={url}
+          onClick={() => onImageClick(url)}
+          className="block group relative overflow-hidden rounded-xl border border-neutral-200 dark:border-white/10 hover:border-violet-400 dark:hover:border-cyan-400 transition-colors"
+          title="Нажмите, чтобы открыть на весь экран"
+        >
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src={url}
+            alt=""
+            className="max-h-64 max-w-xs sm:max-w-sm object-contain rounded-xl bg-neutral-100 dark:bg-neutral-800"
+            loading="lazy"
+          />
+          {/* Zoom hint overlay */}
+          <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 bg-black/20 rounded-xl transition-opacity">
+            <div className="bg-black/60 rounded-lg px-2.5 py-1.5 flex items-center gap-1.5">
+              <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0zM10 7v3m0 0v3m0-3h3m-3 0H7" />
+              </svg>
+              <span className="text-white text-xs">Открыть</span>
+            </div>
+          </div>
+        </button>
+      ))}
     </div>
   );
 }

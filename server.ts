@@ -81,6 +81,14 @@ app.prepare().then(() => {
       socket.to(`voice-${channelId}`).emit("user-speaking", { socketId: socket.id, speaking });
     });
 
+    socket.on("screen-share-started", ({ channelId }: { channelId: string }) => {
+      socket.to(`voice-${channelId}`).emit("screen-share-started", { socketId: socket.id });
+    });
+
+    socket.on("screen-share-stopped", ({ channelId }: { channelId: string }) => {
+      socket.to(`voice-${channelId}`).emit("screen-share-stopped", { socketId: socket.id });
+    });
+
     socket.on("disconnect", () => {
       console.log(`[Socket] Disconnected: ${socket.id}`);
       voiceRooms.forEach((room, channelId) => {
