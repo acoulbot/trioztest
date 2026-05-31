@@ -34,6 +34,13 @@ export default function VoiceChannel({ channelId, channelName, onClose }: VoiceC
   const [speakingUsers, setSpeakingUsers] = useState<Set<string>>(new Set());
   const [localSpeaking, setLocalSpeaking] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [pttMode, setPttMode] = useState(() => {
+    if (typeof window !== "undefined") return localStorage.getItem("voice-ptt") === "1";
+    return false;
+  });
+  const [pttActive, setPttActive] = useState(false);
+  const pttModeRef = useRef(pttMode);
+  const isMobile = typeof navigator !== "undefined" && /Mobi|Android|iPhone|iPad/i.test(navigator.userAgent);
 
   const socketRef = useRef<Socket | null>(null);
   const localStreamRef = useRef<MediaStream | null>(null);
@@ -42,6 +49,7 @@ export default function VoiceChannel({ channelId, channelName, onClose }: VoiceC
   const analyserRef = useRef<AnalyserNode | null>(null);
   const speakingIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const remoteAudiosRef = useRef<Map<string, HTMLAudioElement>>(new Map());
+  const pttKeyDownRef = useRef(false);
   // Buffer for ICE candidates that arrive before setRemoteDescription completes
   const iceCandidateBufferRef = useRef<Map<string, RTCIceCandidateInit[]>>(new Map());
 
@@ -297,6 +305,12 @@ export default function VoiceChannel({ channelId, channelName, onClose }: VoiceC
       });
 
       startSpeakingDetection();
+
+      // If PTT mode, mute mic immediately after joining
+      if (pttModeRef.current && stream) {
+        const audioTrack = stream.getAudioTracks()[0];
+        if (audioTrack) { audioTrack.enabled = false; setIsMuted(true); }
+      }
     } catch (err) {
       // Release any stream that was acquired before the error
       stream?.getTracks().forEach((t) => t.stop());
@@ -369,6 +383,57 @@ export default function VoiceChannel({ channelId, channelName, onClose }: VoiceC
       }
     }
   }, [isMuted, channelId]);
+
+  const togglePttMode = useCallback(() => {
+    setPttMode(prev => {
+      const next = !prev;
+      pttModeRef.current = next;
+      localStorage.setItem("voice-ptt", next ? "1" : "0");
+      if (localStreamRef.current) {
+        const audioTrack = localStreamRef.current.getAudioTracks()[0];
+        if (audioTrack) {
+          if (next) {
+            audioTrack.enabled = false;
+            setIsMuted(true);
+            socketRef.current?.emit("toggle-mute", { channelId, muted: true });
+          } else {
+            audioTrack.enabled = true;
+            setIsMuted(false);
+            socketRef.current?.emit("toggle-mute", { channelId, muted: false });
+          }
+        }
+      }
+      return next;
+    });
+  }, [channelId]);
+
+  // PTT key handler: Shift key
+  useEffect(() => {
+    if (!isConnected || !pttMode) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Shift" && !pttKeyDownRef.current) {
+        pttKeyDownRef.current = true;
+        setPttActive(true);
+        if (localStreamRef.current) {
+          const t = localStreamRef.current.getAudioTracks()[0];
+          if (t) { t.enabled = true; setIsMuted(false); socketRef.current?.emit("toggle-mute", { channelId, muted: false }); }
+        }
+      }
+    };
+    const handleKeyUp = (e: KeyboardEvent) => {
+      if (e.key === "Shift") {
+        pttKeyDownRef.current = false;
+        setPttActive(false);
+        if (localStreamRef.current) {
+          const t = localStreamRef.current.getAudioTracks()[0];
+          if (t) { t.enabled = false; setIsMuted(true); socketRef.current?.emit("toggle-mute", { channelId, muted: true }); }
+        }
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    window.addEventListener("keyup", handleKeyUp);
+    return () => { window.removeEventListener("keydown", handleKeyDown); window.removeEventListener("keyup", handleKeyUp); };
+  }, [isConnected, pttMode, channelId]);
 
   const toggleDeafen = useCallback(() => {
     const newDeafened = !isDeafened;
@@ -529,6 +594,17 @@ export default function VoiceChannel({ channelId, channelName, onClose }: VoiceC
                 )}
               </button>
 
+              {/* PTT toggle */}
+              <button
+                onClick={togglePttMode}
+                className={`p-3 rounded-xl transition-all ${pttMode ? "bg-amber-100 dark:bg-amber-500/20 text-amber-600 dark:text-amber-400" : "bg-neutral-200 dark:bg-white/10 text-neutral-700 dark:text-neutral-300"}`}
+                title={pttMode ? "Рация (вкл) — Shift для передачи" : "Включить режим рации"}
+              >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5.636 18.364a9 9 0 010-12.728m12.728 0a9 9 0 010 12.728m-9.9-2.829a5 5 0 010-7.07m7.072 0a5 5 0 010 7.07M13 12a1 1 0 11-2 0 1 1 0 012 0z" />
+                </svg>
+              </button>
+
               {/* Disconnect */}
               <button
                 onClick={leaveVoice}
@@ -542,6 +618,40 @@ export default function VoiceChannel({ channelId, channelName, onClose }: VoiceC
             </>
           )}
         </div>
+
+        {/* PTT mobile hold button */}
+        {isConnected && pttMode && isMobile && (
+          <div className="px-6 pb-4 flex justify-center">
+            <button
+              onTouchStart={() => {
+                setPttActive(true);
+                if (localStreamRef.current) {
+                  const t = localStreamRef.current.getAudioTracks()[0];
+                  if (t) { t.enabled = true; setIsMuted(false); socketRef.current?.emit("toggle-mute", { channelId, muted: false }); }
+                }
+              }}
+              onTouchEnd={() => {
+                setPttActive(false);
+                if (localStreamRef.current) {
+                  const t = localStreamRef.current.getAudioTracks()[0];
+                  if (t) { t.enabled = false; setIsMuted(true); socketRef.current?.emit("toggle-mute", { channelId, muted: true }); }
+                }
+              }}
+              className={`w-full max-w-xs py-4 rounded-2xl text-sm font-semibold transition-all select-none ${pttActive ? "bg-green-500 text-white scale-95 shadow-lg shadow-green-500/30" : "bg-neutral-200 dark:bg-white/10 text-neutral-600 dark:text-neutral-300"}`}
+            >
+              {pttActive ? "🎙️ Говорите..." : "Удерживайте для передачи"}
+            </button>
+          </div>
+        )}
+
+        {/* PTT hint desktop */}
+        {isConnected && pttMode && !isMobile && (
+          <div className="text-center pb-3">
+            <span className={`text-xs px-3 py-1 rounded-full ${pttActive ? "bg-green-500/20 text-green-500" : "bg-neutral-100 dark:bg-white/5 text-neutral-400"}`}>
+              {pttActive ? "🎙️ Передача..." : "Нажмите Shift для передачи"}
+            </span>
+          </div>
+        )}
       </motion.div>
     </motion.div>
   );

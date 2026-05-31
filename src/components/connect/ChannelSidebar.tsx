@@ -100,7 +100,7 @@ function ChannelSettingsModal({ channel, groupId, allChannels, onClose, onUpdate
 }) {
   const [name, setName] = useState(channel.name);
   const [icon, setIcon] = useState(channel.icon || "");
-  const [type, setType] = useState(channel.type);
+  const type = channel.type;
   const [parentId, setParentId] = useState(channel.parentId || "");
   const [isRestricted, setIsRestricted] = useState(false);
   const [roles, setRoles] = useState<{ id: string; name: string; color: string }[]>([]);
@@ -180,42 +180,25 @@ function ChannelSettingsModal({ channel, groupId, allChannels, onClose, onUpdate
             </div>
 
             <div>
-              <label className="text-xs font-medium text-neutral-500 dark:text-neutral-400 mb-1.5 block">Тип канала</label>
-              <div className="grid grid-cols-3 gap-2">
-                {(["TEXT", "NEWS", "VOICE"] as const).map(t => (
-                  <button key={t} onClick={() => setType(t)} className={`px-3 py-2 rounded-xl text-xs font-medium border transition-all ${type === t ? "bg-violet-500 dark:bg-cyan-600 text-white border-transparent" : "bg-neutral-50 dark:bg-white/5 border-neutral-200 dark:border-white/10 text-neutral-600 dark:text-neutral-300 hover:border-violet-300 dark:hover:border-cyan-400/30"}`}>
-                    {t === "TEXT" ? "💬 Текст" : t === "NEWS" ? "📰 Новости" : "🎙️ Голос"}
-                  </button>
-                ))}
+              <label className="text-xs font-medium text-neutral-500 dark:text-neutral-400 mb-1 block">Тип канала</label>
+              <div className="px-3 py-2 bg-neutral-100 dark:bg-white/5 border border-neutral-200 dark:border-white/10 rounded-xl text-sm text-neutral-600 dark:text-neutral-300">
+                {type === "TEXT" ? "💬 Текстовый" : type === "NEWS" ? "📰 Новости" : "🎙️ Голосовой"}
               </div>
-              {type === "NEWS" && (
-                <p className="text-[11px] text-amber-500 dark:text-amber-400 mt-1.5">Только админы и модераторы могут писать</p>
-              )}
             </div>
 
             {possibleParents.length > 0 && (
               <div>
                 <label className="text-xs font-medium text-neutral-500 dark:text-neutral-400 mb-1 block">Родительский канал</label>
-                <div className="space-y-1">
-                  <button
-                    type="button"
-                    onClick={() => setParentId("")}
-                    className={`w-full flex items-center gap-2 px-3 py-2 rounded-xl text-sm text-left transition-all border ${!parentId ? "bg-violet-500/10 dark:bg-cyan-500/10 border-violet-500 dark:border-cyan-400 text-violet-600 dark:text-cyan-400 font-medium" : "bg-neutral-50 dark:bg-white/5 border-neutral-200 dark:border-white/10 text-neutral-600 dark:text-neutral-300 hover:border-violet-300 dark:hover:border-cyan-400/30"}`}
-                  >
-                    Нет (корневой)
-                  </button>
+                <select
+                  value={parentId}
+                  onChange={e => setParentId(e.target.value)}
+                  className="w-full px-3 py-2 bg-neutral-50 dark:bg-white/5 border border-neutral-200 dark:border-white/10 rounded-xl text-sm text-neutral-900 dark:text-white outline-none focus:border-violet-500 dark:focus:border-cyan-400"
+                >
+                  <option value="">Нет (корневой)</option>
                   {possibleParents.map(p => (
-                    <button
-                      key={p.id}
-                      type="button"
-                      onClick={() => setParentId(p.id)}
-                      className={`w-full flex items-center gap-2 px-3 py-2 rounded-xl text-sm text-left transition-all border ${parentId === p.id ? "bg-violet-500/10 dark:bg-cyan-500/10 border-violet-500 dark:border-cyan-400 text-violet-600 dark:text-cyan-400 font-medium" : "bg-neutral-50 dark:bg-white/5 border-neutral-200 dark:border-white/10 text-neutral-600 dark:text-neutral-300 hover:border-violet-300 dark:hover:border-cyan-400/30"}`}
-                    >
-                      <span>{p.icon || "💬"}</span>
-                      <span className="truncate">{p.name}</span>
-                    </button>
+                    <option key={p.id} value={p.id}>{p.icon || "💬"} {p.name}</option>
                   ))}
-                </div>
+                </select>
               </div>
             )}
 
