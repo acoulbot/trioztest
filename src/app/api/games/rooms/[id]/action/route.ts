@@ -12,7 +12,6 @@ import {
   rollDiceForGod,
   placeReserve,
   placeFromInventory,
-  undoPlacement,
   finishPlacement,
   specialAttack,
   smugglerTeleport,
@@ -166,18 +165,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     }
     newState = placeFromInventory(state, player.id, cityNodeId, inventoryUnitId, playerNames);
   } else if (action === "undo_placement") {
-    if (state.phase !== "PLACEMENT") {
-      return NextResponse.json({ error: "Сейчас не фаза расстановки" }, { status: 400 });
-    }
-    const currentId = getCurrentPlayerId(state);
-    if (player.id !== currentId) {
-      return NextResponse.json({ error: "Не ваш ход" }, { status: 400 });
-    }
-    const { unitId } = body;
-    if (!unitId) {
-      return NextResponse.json({ error: "Укажите фишку" }, { status: 400 });
-    }
-    newState = undoPlacement(state, player.id, unitId, playerNames);
+    return NextResponse.json({ error: "Отмена расстановки запрещена" }, { status: 400 });
   } else if (action === "finish_placement") {
     if (state.phase !== "PLACEMENT") {
       return NextResponse.json({ error: "Сейчас не фаза расстановки" }, { status: 400 });
