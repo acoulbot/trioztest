@@ -135,7 +135,7 @@ export default function UserProfilePage() {
     <div className="min-h-screen bg-neutral-50 dark:bg-neutral-950 pt-16 pb-12 px-4">
       <div className="max-w-3xl mx-auto space-y-4">
         {/* Back */}
-        <Link href="/" className="inline-flex items-center gap-1 text-sm text-violet-600 dark:text-cyan-400 hover:opacity-70 transition-opacity">
+        <Link href="/" className="inline-flex items-center gap-1 text-sm text-accent hover:opacity-70 transition-opacity">
           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
           </svg>

@@ -139,7 +139,7 @@ export default function GroupSidebar({
         className={`w-12 h-12 rounded-2xl flex items-center justify-center hover:rounded-xl transition-all duration-300 ${
           activeSection === "dm"
             ? "bg-violet-500 dark:bg-cyan-500 text-white rounded-xl shadow-lg"
-            : "bg-neutral-200 dark:bg-neutral-800 text-violet-600 dark:text-cyan-400 hover:bg-violet-100 dark:hover:bg-cyan-400/20"
+            : "bg-neutral-200 dark:bg-neutral-800 text-accent hover:bg-violet-100 dark:hover:bg-cyan-400/20"
         }`}
         title="Личные сообщения"
         aria-label="Личные сообщения"

@@ -335,7 +335,7 @@ function LegalSection() {
               {/* Preamble */}
               <p className="text-sm text-neutral-600 dark:text-gray-400 leading-relaxed mb-6">
                 Настоящий документ представляет собой официальное публичное предложение (публичную оферту) проекта TRIOZ, доступного в сети Интернет по адресу{" "}
-                <a href="https://connect.trioz.ru" className="text-violet-600 dark:text-cyan-400 hover:underline">connect.trioz.ru</a>,
+                <a href="https://connect.trioz.ru" className="text-accent hover:underline">connect.trioz.ru</a>,
                 адресованное любому физическому лицу, индивидуальному предпринимателю или юридическому лицу (далее — «Пользователь»).
                 В соответствии с пунктом 2 статьи 437 ГК РФ, принятие условий и использование Платформы является акцептом данной оферты.
               </p>
@@ -381,7 +381,7 @@ function LegalSection() {
               <div className="mt-6 pt-5 border-t border-neutral-100 dark:border-white/[0.05] flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
                 <div className="text-xs text-neutral-400 dark:text-gray-600">
                   Для юридических запросов:{" "}
-                  <a href="mailto:legal@trioz.ru" className="text-violet-600 dark:text-cyan-400 hover:underline">legal@trioz.ru</a>
+                  <a href="mailto:legal@trioz.ru" className="text-accent hover:underline">legal@trioz.ru</a>
                 </div>
                 <div className="text-xs text-neutral-400 dark:text-gray-600">
                   connect.trioz.ru — Юридическая документация

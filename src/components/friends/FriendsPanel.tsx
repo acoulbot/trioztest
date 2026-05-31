@@ -134,7 +134,7 @@ export default function FriendsPanel({ onMessageFriend }: FriendsPanelProps) {
             onClick={() => setTab(t.key)}
             className={`flex-1 px-2 py-2 text-xs font-medium transition-colors relative ${
               tab === t.key
-                ? "text-violet-600 dark:text-cyan-400"
+                ? "text-accent"
                 : "text-neutral-400 hover:text-neutral-600 dark:hover:text-gray-300"
             }`}
           >
@@ -323,7 +323,7 @@ export default function FriendsPanel({ onMessageFriend }: FriendsPanelProps) {
               <div className="px-4 pb-4 pt-2 space-y-1.5">
                 <a
                   href={`/user/${selectedFriend.username}`}
-                  className="w-full flex items-center justify-center gap-2 px-3 py-2 rounded-lg text-sm font-medium bg-violet-500/10 dark:bg-cyan-500/10 text-violet-600 dark:text-cyan-400 hover:bg-violet-500/20 dark:hover:bg-cyan-500/20 transition-colors"
+                  className="w-full flex items-center justify-center gap-2 px-3 py-2 rounded-lg text-sm font-medium bg-violet-500/10 dark:bg-cyan-500/10 text-accent hover:bg-violet-500/20 dark:hover:bg-cyan-500/20 transition-colors"
                 >
                   <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" /></svg>
                   Открыть профиль
@@ -331,7 +331,7 @@ export default function FriendsPanel({ onMessageFriend }: FriendsPanelProps) {
                 {onMessageFriend && (
                   <button
                     onClick={() => { onMessageFriend(selectedFriend.id); setSelectedFriend(null); }}
-                    className="w-full flex items-center justify-center gap-2 px-3 py-2 rounded-lg text-sm font-medium bg-violet-500/10 dark:bg-cyan-500/10 text-violet-600 dark:text-cyan-400 hover:bg-violet-500/20 dark:hover:bg-cyan-500/20 transition-colors"
+                    className="w-full flex items-center justify-center gap-2 px-3 py-2 rounded-lg text-sm font-medium bg-violet-500/10 dark:bg-cyan-500/10 text-accent hover:bg-violet-500/20 dark:hover:bg-cyan-500/20 transition-colors"
                   >
                     <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z" /></svg>
                     Написать

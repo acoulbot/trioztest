@@ -55,12 +55,15 @@ export default function RootLayout({
     <html lang="ru" className="dark" suppressHydrationWarning>
       <head>
         <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
-        {/* Anti-flash: apply saved theme before first paint */}
+        {/* Anti-flash: apply saved theme AND variant (velvet/warm) before first paint */}
         <script dangerouslySetInnerHTML={{ __html: `
           (function(){
+            var d = document.documentElement;
             var t = localStorage.getItem('trioz-theme') || 'dark';
-            document.documentElement.classList.toggle('dark', t === 'dark');
-            document.documentElement.classList.toggle('light', t === 'light');
+            d.classList.toggle('dark', t === 'dark');
+            d.classList.toggle('light', t === 'light');
+            d.classList.toggle('velvet', localStorage.getItem('tz-connect-theme') === 'velvet');
+            d.classList.toggle('warm', localStorage.getItem('tz-connect-light-variant') === 'warm');
           })();
         `}} />
       </head>
