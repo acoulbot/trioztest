@@ -5,32 +5,53 @@ import prisma from "@/lib/prisma";
 import { v4 as uuidv4 } from "uuid";
 import { checkBan } from "@/lib/banCheck";
 
-export async function GET() {
+export async function GET(req: NextRequest) {
   const session = await getServerSession(authOptions);
   if (!session?.user) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
   const userId = (session.user as { id: string }).id;
 
-  const rooms = await prisma.gameRoom.findMany({
-    where: {
-      OR: [
-        { hostId: userId },
-        { players: { some: { userId } } },
-        { invites: { some: { inviteeId: userId, status: "PENDING" } } },
-      ],
-    },
-    include: {
-      host: { select: { id: true, name: true, username: true, avatar: true } },
-      players: {
-        include: {
-          user: { select: { id: true, name: true, username: true, avatar: true } },
+  const { searchParams } = new URL(req.url);
+  const browse = searchParams.get("browse");
+
+  let rooms;
+  if (browse === "1") {
+    rooms = await prisma.gameRoom.findMany({
+      where: { status: "LOBBY" },
+      include: {
+        host: { select: { id: true, name: true, username: true, avatar: true } },
+        players: {
+          include: {
+            user: { select: { id: true, name: true, username: true, avatar: true } },
+          },
         },
+        _count: { select: { players: true } },
       },
-      _count: { select: { players: true } },
-    },
-    orderBy: { createdAt: "desc" },
-  });
+      orderBy: { createdAt: "desc" },
+      take: 50,
+    });
+  } else {
+    rooms = await prisma.gameRoom.findMany({
+      where: {
+        OR: [
+          { hostId: userId },
+          { players: { some: { userId } } },
+          { invites: { some: { inviteeId: userId, status: "PENDING" } } },
+        ],
+      },
+      include: {
+        host: { select: { id: true, name: true, username: true, avatar: true } },
+        players: {
+          include: {
+            user: { select: { id: true, name: true, username: true, avatar: true } },
+          },
+        },
+        _count: { select: { players: true } },
+      },
+      orderBy: { createdAt: "desc" },
+    });
+  }
 
   return NextResponse.json(rooms);
 }

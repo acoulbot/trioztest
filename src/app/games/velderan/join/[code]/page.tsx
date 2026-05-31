@@ -46,36 +46,16 @@ export default function JoinByCodePage() {
   const joinRoom = async () => {
     if (!room) return;
     setJoining(true);
-    const userId = (session?.user as { id: string }).id;
 
-    const res = await fetch(`/api/games/invites`, {
+    const res = await fetch(`/api/games/rooms/${room.id}/players`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ roomId: room.id, inviteeId: userId }),
     });
 
     if (res.ok) {
-      const acceptRes = await fetch(`/api/games/invites`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ inviteId: (await res.json()).id, action: "accept" }),
-      });
-      if (acceptRes.ok) {
-        router.push(`/games/velderan/room/${room.id}`);
-        return;
-      }
-    }
-
-    const directRes = await fetch(`/api/games/rooms/${room.id}/players`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({}),
-    });
-
-    if (directRes.ok) {
       router.push(`/games/velderan/room/${room.id}`);
     } else {
-      setError("Не удалось присоединиться");
+      const data = await res.json();
+      setError(data.error || "Не удалось присоединиться");
     }
     setJoining(false);
   };

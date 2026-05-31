@@ -395,6 +395,7 @@ model GameRoom {
   gameType    String       @default("velderan")
   maxPlayers  Int          @default(6)
   inviteCode  String       @unique
+  gameState   String?      @db.Text
   players     GamePlayer[]
   invites     GameInvite[]
   createdAt   DateTime     @default(now())

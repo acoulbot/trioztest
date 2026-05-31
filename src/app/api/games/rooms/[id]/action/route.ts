@@ -1,0 +1,162 @@
+import { NextRequest, NextResponse } from "next/server";
+import { getServerSession } from "next-auth";
+import { authOptions } from "@/lib/auth";
+import prisma from "@/lib/prisma";
+import {
+  VelderanGameState,
+  getCurrentPlayerId,
+  moveUnit,
+  canMoveUnit,
+  endTurn,
+  resolveCombat,
+  rollDiceForGod,
+} from "@/lib/games/velderanState";
+
+export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  const session = await getServerSession(authOptions);
+  if (!session?.user) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+  const userId = (session.user as { id: string }).id;
+  const { id } = await params;
+
+  const room = await prisma.gameRoom.findUnique({
+    where: { id },
+    include: {
+      players: {
+        include: { user: { select: { id: true, name: true } } },
+      },
+    },
+  });
+
+  if (!room || room.status !== "PLAYING") {
+    return NextResponse.json({ error: "Игра не найдена или не начата" }, { status: 400 });
+  }
+
+  const player = room.players.find((p) => p.userId === userId);
+  if (!player) {
+    return NextResponse.json({ error: "Вы не в этой игре" }, { status: 403 });
+  }
+
+  const state: VelderanGameState = JSON.parse(room.gameState || "{}");
+  if (!state.turnOrder) {
+    return NextResponse.json({ error: "Состояние игры повреждено" }, { status: 500 });
+  }
+
+  const body = await req.json();
+  const { action } = body;
+
+  // Build player names map
+  const playerNames: Record<string, string> = {};
+  for (const p of room.players) {
+    playerNames[p.id] = p.user.name;
+  }
+
+  let newState = state;
+
+  if (action === "move") {
+    const currentId = getCurrentPlayerId(state);
+    if (player.id !== currentId) {
+      return NextResponse.json({ error: "Не ваш ход" }, { status: 400 });
+    }
+    if (state.phase !== "MOVE") {
+      return NextResponse.json({ error: "Сейчас нельзя двигаться" }, { status: 400 });
+    }
+
+    const { unitId, targetNodeId } = body;
+    if (!canMoveUnit(state, unitId, targetNodeId)) {
+      return NextResponse.json({ error: "Невозможный ход" }, { status: 400 });
+    }
+
+    const unit = state.units.find((u) => u.id === unitId);
+    if (!unit || unit.playerId !== player.id) {
+      return NextResponse.json({ error: "Это не ваш отряд" }, { status: 400 });
+    }
+
+    newState = moveUnit(state, unitId, targetNodeId, playerNames);
+  } else if (action === "end_turn") {
+    const currentId = getCurrentPlayerId(state);
+    if (player.id !== currentId) {
+      return NextResponse.json({ error: "Не ваш ход" }, { status: 400 });
+    }
+    if (state.phase === "COMBAT") {
+      return NextResponse.json({ error: "Завершите сражение" }, { status: 400 });
+    }
+    newState = endTurn(state, playerNames);
+  } else if (action === "combat_card") {
+    if (state.phase !== "COMBAT" || !state.combat) {
+      return NextResponse.json({ error: "Нет активного сражения" }, { status: 400 });
+    }
+    const { card, guess } = body;
+    if (!card || !guess || card < 1 || card > 5 || guess < 1 || guess > 5) {
+      return NextResponse.json({ error: "Карта и предположение 1-5" }, { status: 400 });
+    }
+
+    const combat = state.combat;
+    const isAttacker = player.id === combat.attackerPlayerId;
+    const isDefender = player.id === combat.defenderPlayerId;
+
+    if (!isAttacker && !isDefender) {
+      return NextResponse.json({ error: "Вы не участвуете в сражении" }, { status: 400 });
+    }
+
+    // Update combat state
+    newState = structuredClone(state);
+    if (!newState.combat) return NextResponse.json({ error: "Ошибка" }, { status: 500 });
+
+    if (isAttacker) {
+      newState.combat.attackerCard = card;
+      newState.combat.attackerGuess = guess;
+    } else {
+      newState.combat.defenderCard = card;
+      newState.combat.defenderGuess = guess;
+    }
+
+    // If both have played cards, resolve
+    if (newState.combat.attackerCard && newState.combat.defenderCard) {
+      newState = resolveCombat(
+        newState,
+        newState.combat.attackerCard,
+        newState.combat.attackerGuess!,
+        newState.combat.defenderCard,
+        newState.combat.defenderGuess!,
+        playerNames
+      );
+    }
+  } else if (action === "roll_god") {
+    if (state.phase !== "GOD_SUMMON") {
+      return NextResponse.json({ error: "Нет вызова божества" }, { status: 400 });
+    }
+    const currentId = getCurrentPlayerId(state);
+    if (player.id !== currentId) {
+      return NextResponse.json({ error: "Не ваш ход" }, { status: 400 });
+    }
+
+    const guard = state.units.find(
+      (u) => u.playerId === player.id && u.type === "GUARD"
+    );
+    const shrineId = guard?.position || "";
+
+    newState = rollDiceForGod(state, player.id, shrineId, playerNames);
+  } else {
+    return NextResponse.json({ error: "Неизвестное действие" }, { status: 400 });
+  }
+
+  // Check game over
+  if (newState.phase === "GAME_OVER" && newState.winner) {
+    await prisma.gameRoom.update({
+      where: { id },
+      data: {
+        gameState: JSON.stringify(newState),
+        status: "FINISHED",
+      },
+    });
+  } else {
+    await prisma.gameRoom.update({
+      where: { id },
+      data: { gameState: JSON.stringify(newState) },
+    });
+  }
+
+  return NextResponse.json(newState);
+}

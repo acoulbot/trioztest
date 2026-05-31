@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
@@ -88,6 +88,100 @@ function CreateRoomModal({ onClose }: { onClose: () => void }) {
   );
 }
 
+interface RoomListItem {
+  id: string;
+  name: string;
+  status: string;
+  maxPlayers: number;
+  inviteCode: string;
+  host: { id: string; name: string; username: string; avatar: string | null };
+  players: { userId: string; user: { name: string } }[];
+  _count: { players: number };
+}
+
+function OpenRoomsSection() {
+  const { data: session } = useSession();
+  const router = useRouter();
+  const [rooms, setRooms] = useState<RoomListItem[]>([]);
+  const [myRooms, setMyRooms] = useState<RoomListItem[]>([]);
+  const [joining, setJoining] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!session?.user) return;
+    fetch("/api/games/rooms?browse=1").then((r) => r.json()).then((d) => { if (Array.isArray(d)) setRooms(d); });
+    fetch("/api/games/rooms").then((r) => r.json()).then((d) => { if (Array.isArray(d)) setMyRooms(d); });
+  }, [session]);
+
+  const joinRoom = async (roomId: string) => {
+    setJoining(roomId);
+    const res = await fetch(`/api/games/rooms/${roomId}/players`, { method: "POST" });
+    if (res.ok) {
+      router.push(`/games/velderan/room/${roomId}`);
+    }
+    setJoining(null);
+  };
+
+  const userId = (session?.user as { id?: string })?.id;
+  const publicRooms = rooms.filter((r) => !myRooms.some((m) => m.id === r.id));
+
+  if (!session) return null;
+
+  return (
+    <div className="max-w-6xl mx-auto px-4 pb-12">
+      {myRooms.length > 0 && (
+        <div className="mb-8">
+          <h2 className="text-2xl font-display font-bold text-white mb-4">Мои комнаты</h2>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+            {myRooms.map((r) => (
+              <motion.div key={r.id} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}
+                className="bg-neutral-900 border border-amber-500/20 rounded-xl p-4 hover:border-amber-500/40 transition-all cursor-pointer"
+                onClick={() => router.push(`/games/velderan/room/${r.id}`)}>
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-white font-medium text-sm truncate">{r.name}</span>
+                  <span className={`text-[10px] px-2 py-0.5 rounded-full ${r.status === "LOBBY" ? "bg-green-500/20 text-green-400" : r.status === "PLAYING" ? "bg-amber-500/20 text-amber-400" : "bg-gray-500/20 text-gray-400"}`}>
+                    {r.status === "LOBBY" ? "Лобби" : r.status === "PLAYING" ? "Игра" : r.status}
+                  </span>
+                </div>
+                <div className="text-xs text-gray-500">
+                  Хост: {r.host.name} · {r._count.players}/{r.maxPlayers} игроков
+                </div>
+              </motion.div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {publicRooms.length > 0 && (
+        <div>
+          <h2 className="text-2xl font-display font-bold text-white mb-4">Открытые комнаты</h2>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+            {publicRooms.map((r) => (
+              <motion.div key={r.id} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}
+                className="bg-neutral-900 border border-white/10 rounded-xl p-4 hover:border-white/20 transition-all">
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-white font-medium text-sm truncate">{r.name}</span>
+                  <span className="text-[10px] px-2 py-0.5 rounded-full bg-green-500/20 text-green-400">Лобби</span>
+                </div>
+                <div className="text-xs text-gray-500 mb-3">
+                  Хост: {r.host.name} · {r._count.players}/{r.maxPlayers} игроков
+                </div>
+                {r._count.players < r.maxPlayers && r.host.id !== userId ? (
+                  <button onClick={() => joinRoom(r.id)} disabled={joining === r.id}
+                    className="w-full px-3 py-2 bg-gradient-to-r from-red-600 to-amber-600 text-white rounded-lg text-sm font-medium hover:shadow-lg hover:shadow-red-500/20 transition-all disabled:opacity-50">
+                    {joining === r.id ? "Присоединение..." : "Присоединиться"}
+                  </button>
+                ) : r._count.players >= r.maxPlayers ? (
+                  <span className="block text-center text-xs text-gray-500">Комната полна</span>
+                ) : null}
+              </motion.div>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function VelderanPage() {
   const { data: session } = useSession();
   const [showRules, setShowRules] = useState(false);
@@ -129,6 +223,9 @@ export default function VelderanPage() {
           </motion.div>
         </div>
       </div>
+
+      {/* Open Rooms */}
+      <OpenRoomsSection />
 
       {/* Factions */}
       <div className="max-w-6xl mx-auto px-4 py-16">
