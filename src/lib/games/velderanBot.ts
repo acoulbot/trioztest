@@ -1,4 +1,4 @@
-import { VelderanGameState, getCurrentPlayerId, moveUnit, endTurn, placeFromInventory, finishPlacement, canMoveUnit, rollDiceForGod, playCombatCard } from "./velderanState";
+import { VelderanGameState, getCurrentPlayerId, moveUnit, endTurn, placeFromInventory, finishPlacement, canMoveUnit, rollDiceForGod, playCombatCard, specialAttack, smugglerTeleport, playGodCard, getSpecialAttackTargets } from "./velderanState";
 import { getActiveNodes, getNeighbors } from "./velderanMap";
 
 const BOT_USER_PREFIX = "bot-velderan-";
@@ -259,6 +259,48 @@ function botMove(
   };
 
   processUnits();
+
+  // ── Use special locations ──
+  if (newState.phase === "MOVE" && getCurrentPlayerId(newState) === botId && newState.specialLocations) {
+    for (const [locId, loc] of Object.entries(newState.specialLocations)) {
+      if (loc.controllerId !== botId || loc.usesLeft <= 0) continue;
+      const locNode = getActiveNodes().find((n) => n.id === locId);
+      if (!locNode) continue;
+
+      if (locNode.type === "smuggler") {
+        // Smuggler: teleport unit to a random enemy port
+        const ports = getActiveNodes().filter((n) => n.type === "port");
+        if (ports.length > 0) {
+          const target = ports[Math.floor(Math.random() * ports.length)];
+          newState = smugglerTeleport(newState, botId, locId, target.id, playerNames);
+        }
+      } else {
+        // Pirate/Ghost/Camp: attack random valid target
+        const targets = getSpecialAttackTargets(newState, botId, locId);
+        if (targets.length > 0) {
+          const targetId = targets[Math.floor(Math.random() * targets.length)];
+          newState = specialAttack(newState, botId, locId, targetId, playerNames);
+          // Resolve combat if triggered
+          if (newState.phase === "COMBAT") {
+            newState = botCombat(newState, botId, playerNames);
+          }
+        }
+      }
+    }
+  }
+
+  // ── Use god cards ──
+  if (newState.phase === "MOVE" && getCurrentPlayerId(newState) === botId && newState.godCards) {
+    const cards = newState.godCards[botId] || [];
+    while (cards.length > 0 && newState.phase === "MOVE" && getCurrentPlayerId(newState) === botId) {
+      // Find a random enemy unit as target
+      const enemies = newState.units.filter((u) => u.playerId !== botId);
+      const targetUnitId = enemies.length > 0 ? enemies[Math.floor(Math.random() * enemies.length)].id : undefined;
+      newState = playGodCard(newState, botId, 0, targetUnitId, playerNames);
+      // Re-check god cards
+      if (newState.godCards && newState.godCards[botId]) break; // played one, don't spam all
+    }
+  }
 
   // End turn if still in MOVE phase
   if (newState.phase === "MOVE" && getCurrentPlayerId(newState) === botId) {

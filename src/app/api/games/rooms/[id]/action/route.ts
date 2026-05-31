@@ -14,6 +14,11 @@ import {
   placeFromInventory,
   undoPlacement,
   finishPlacement,
+  specialAttack,
+  smugglerTeleport,
+  playGodCard,
+  tryDiceGateMove,
+  getSpecialAttackTargets,
 } from "@/lib/games/velderanState";
 import { executeBotTurns, isBotPlayer } from "@/lib/games/velderanBot";
 import { loadMapConfigFromFiles } from "@/lib/games/velderanMapServer";
@@ -182,6 +187,52 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       return NextResponse.json({ error: "Не ваш ход" }, { status: 400 });
     }
     newState = finishPlacement(state, playerNames);
+  } else if (action === "special_attack") {
+    // Remote attack from pirate/ghost/camp
+    if (state.phase !== "MOVE") {
+      return NextResponse.json({ error: "Сейчас нельзя атаковать" }, { status: 400 });
+    }
+    const currentId = getCurrentPlayerId(state);
+    if (player.id !== currentId) {
+      return NextResponse.json({ error: "Не ваш ход" }, { status: 400 });
+    }
+    const { locationNodeId, targetUnitId } = body;
+    if (!locationNodeId || !targetUnitId) {
+      return NextResponse.json({ error: "Укажите локацию и цель" }, { status: 400 });
+    }
+    const validTargets = getSpecialAttackTargets(state, player.id, locationNodeId);
+    if (!validTargets.includes(targetUnitId)) {
+      return NextResponse.json({ error: "Недопустимая цель" }, { status: 400 });
+    }
+    newState = specialAttack(state, player.id, locationNodeId, targetUnitId, playerNames);
+  } else if (action === "smuggler_teleport") {
+    // Smuggler teleport
+    if (state.phase !== "MOVE") {
+      return NextResponse.json({ error: "Сейчас нельзя телепортировать" }, { status: 400 });
+    }
+    const currentId = getCurrentPlayerId(state);
+    if (player.id !== currentId) {
+      return NextResponse.json({ error: "Не ваш ход" }, { status: 400 });
+    }
+    const { locationNodeId, targetPortId } = body;
+    if (!locationNodeId || !targetPortId) {
+      return NextResponse.json({ error: "Укажите локацию и порт" }, { status: 400 });
+    }
+    newState = smugglerTeleport(state, player.id, locationNodeId, targetPortId, playerNames);
+  } else if (action === "use_god_card") {
+    // Use a god card from inventory
+    if (state.phase !== "MOVE") {
+      return NextResponse.json({ error: "Можно использовать карты только в фазе хода" }, { status: 400 });
+    }
+    const currentId = getCurrentPlayerId(state);
+    if (player.id !== currentId) {
+      return NextResponse.json({ error: "Не ваш ход" }, { status: 400 });
+    }
+    const { cardIndex, targetUnitId } = body;
+    if (cardIndex == null || cardIndex < 0) {
+      return NextResponse.json({ error: "Укажите карту" }, { status: 400 });
+    }
+    newState = playGodCard(state, player.id, cardIndex, targetUnitId, playerNames);
   } else {
     return NextResponse.json({ error: "Неизвестное действие" }, { status: 400 });
   }
