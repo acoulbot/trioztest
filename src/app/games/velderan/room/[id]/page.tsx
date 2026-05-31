@@ -225,6 +225,25 @@ export default function RoomPage() {
     router.push("/games/velderan");
   };
 
+  const addBot = async () => {
+    setError(null);
+    const res = await fetch(`/api/games/rooms/${roomId}/bot`, { method: "POST" });
+    if (!res.ok) {
+      const d = await res.json();
+      setError(d.error);
+    }
+    fetchRoom();
+  };
+
+  const removeBot = async (botPlayerId: string) => {
+    await fetch(`/api/games/rooms/${roomId}/bot`, {
+      method: "DELETE",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ botPlayerId }),
+    });
+    fetchRoom();
+  };
+
   const copyInviteLink = () => {
     if (!room) return;
     const url = `${window.location.origin}/games/velderan/join/${room.inviteCode}`;
@@ -325,6 +344,7 @@ export default function RoomPage() {
                       <div className="flex items-center gap-2">
                         <span className="text-white text-sm font-medium truncate">{p.user.name}</span>
                         {p.userId === room.hostId && <span className="text-amber-400 text-[10px]">👑</span>}
+                        {p.userId.startsWith("bot-velderan-") && <span className="text-purple-400 text-[10px]">🤖</span>}
                       </div>
                       <div className="text-[11px] text-gray-500">
                         {faction ? (
@@ -341,6 +361,14 @@ export default function RoomPage() {
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
                         </svg>
                       </motion.div>
+                    )}
+                    {isHost && p.userId.startsWith("bot-velderan-") && (
+                      <button onClick={() => removeBot(p.id)}
+                        className="w-6 h-6 rounded-full bg-red-500/20 flex items-center justify-center hover:bg-red-500/30 transition-colors">
+                        <svg className="w-3.5 h-3.5 text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                        </svg>
+                      </button>
                     )}
                   </motion.div>
                 );
@@ -463,6 +491,12 @@ export default function RoomPage() {
               <button onClick={leaveRoom}
                 className="px-4 py-2.5 bg-neutral-800 text-gray-400 rounded-xl hover:bg-neutral-700 hover:text-red-400 transition-all text-sm">
                 Покинуть
+              </button>
+            )}
+            {isHost && (
+              <button onClick={addBot}
+                className="px-4 py-2.5 bg-purple-500/20 text-purple-400 rounded-xl hover:bg-purple-500/30 transition-all text-sm border border-purple-500/20">
+                + Бот
               </button>
             )}
             {isHost && (

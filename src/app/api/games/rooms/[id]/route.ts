@@ -2,7 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import prisma from "@/lib/prisma";
-import { createInitialState } from "@/lib/games/velderanState";
+import { createInitialState, getCurrentPlayerId, VelderanGameState } from "@/lib/games/velderanState";
+import { executeBotTurns, isBotPlayer } from "@/lib/games/velderanBot";
 
 export async function GET(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const session = await getServerSession(authOptions);
@@ -76,7 +77,32 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
       faction: p.faction || "empire",
       turnOrder: p.turnOrder,
     }));
-    const initialState = createInitialState(playersData);
+    let initialState: VelderanGameState = createInitialState(playersData);
+
+    // If the first player is a bot, auto-play their turns
+    const botPlayerIds = new Set(
+      players.filter((p) => isBotPlayer(p.userId)).map((p) => p.id)
+    );
+    if (botPlayerIds.size > 0) {
+      const playerNames: Record<string, string> = {};
+      for (const p of players) {
+        playerNames[p.id] = p.faction || p.id;
+      }
+      // Load actual names
+      const users = await prisma.user.findMany({
+        where: { id: { in: players.map((p) => p.userId) } },
+        select: { id: true, name: true },
+      });
+      for (const p of players) {
+        const u = users.find((u) => u.id === p.userId);
+        if (u) playerNames[p.id] = u.name;
+      }
+
+      const firstId = getCurrentPlayerId(initialState);
+      if (botPlayerIds.has(firstId)) {
+        initialState = executeBotTurns(initialState, playerNames, botPlayerIds);
+      }
+    }
 
     const updated = await prisma.gameRoom.update({
       where: { id },

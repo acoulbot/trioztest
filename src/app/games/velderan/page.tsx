@@ -291,17 +291,21 @@ export default function VelderanPage() {
                   <p className="text-gray-400 text-sm leading-relaxed mb-4">
                     Гвардия на святилище бросает 2 кубика. Сумма определяет призываемое божество.
                   </p>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                  <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
                     {GODS.map((g) => (
                       <div key={g.num}
-                        className="bg-neutral-800/60 border border-amber-500/10 rounded-xl p-4 hover:border-amber-500/30 transition-all">
-                        <div className="flex items-center gap-3 mb-2">
-                          <span className="w-8 h-8 rounded-lg bg-gradient-to-br from-amber-600/30 to-red-600/30 border border-amber-500/20 text-amber-400 flex items-center justify-center text-sm font-bold flex-shrink-0">
-                            {g.num}
-                          </span>
-                          <span className="text-white font-medium text-sm">{g.name}</span>
+                        className="group bg-neutral-800/40 border border-amber-500/10 rounded-xl overflow-hidden hover:border-amber-500/30 transition-all">
+                        <div className="relative aspect-[3/4] overflow-hidden">
+                          <Image
+                            src={`/games/velderan/gods/god-${g.num}.png`}
+                            alt={g.name}
+                            fill
+                            className="object-contain group-hover:scale-105 transition-transform duration-300"
+                          />
                         </div>
-                        <p className="text-gray-400 text-xs leading-relaxed">{g.effect}</p>
+                        <div className="p-3">
+                          <p className="text-gray-400 text-xs leading-relaxed">{g.effect}</p>
+                        </div>
                       </div>
                     ))}
                   </div>
