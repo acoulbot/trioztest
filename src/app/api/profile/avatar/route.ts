@@ -5,6 +5,7 @@ import prisma from "@/lib/prisma";
 import { writeFile, mkdir } from "fs/promises";
 import path from "path";
 import { validateImageFile, sanitizeExtension } from "@/lib/fileValidation";
+import { getIO } from "@/lib/socketEmit";
 
 export async function POST(req: Request) {
   const session = await getServerSession(authOptions);
@@ -32,7 +33,14 @@ export async function POST(req: Request) {
   await writeFile(path.join(uploadDir, filename), buffer);
 
   const avatar = `/uploads/avatars/${filename}`;
-  await prisma.user.update({ where: { id: session.user.id }, data: { avatar } });
+  const updated = await prisma.user.update({
+    where: { id: session.user.id },
+    data: { avatar },
+    select: { id: true, avatar: true, avatarGlowEnabled: true, avatarGlowColors: true },
+  });
+
+  const io = getIO();
+  if (io) io.emit("profile-updated", updated);
 
   return NextResponse.json({ avatar });
 }

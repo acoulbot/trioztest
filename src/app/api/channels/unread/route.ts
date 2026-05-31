@@ -26,6 +26,7 @@ export async function GET() {
         channelId: m.channelId,
         createdAt: { gt: m.lastRead },
         deleted: false,
+        userId: { not: session.user.id },
       },
     });
     if (count > 0) {

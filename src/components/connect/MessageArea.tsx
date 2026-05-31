@@ -76,6 +76,10 @@ export default function MessageArea({
 }: MessageAreaProps) {
   const isNewsChannel = channelType === "NEWS";
   const canWriteNews = isNewsChannel && (currentUserRole === "OWNER" || currentUserRole === "ADMIN" || currentUserRole === "MODERATOR" || currentUserRole === "SITE_ADMIN");
+  const currentUserIdRef = useRef(currentUserId);
+  const currentUserNameRef = useRef(currentUserName);
+  useEffect(() => { currentUserIdRef.current = currentUserId; }, [currentUserId]);
+  useEffect(() => { currentUserNameRef.current = currentUserName; }, [currentUserName]);
   const [messages, setMessages] = useState<Message[]>([]);
   const [newMessage, setNewMessage] = useState("");
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -185,11 +189,15 @@ export default function MessageArea({
     });
 
     socket.on("new-message", (msg: Message) => {
-      setMessages((prev) => [...prev, msg]);
+      setMessages((prev) => {
+        if (prev.find((m) => m.id === msg.id)) return prev;
+        return [...prev, msg];
+      });
       // Play notification only for messages from others
-      if (msg.user.id !== currentUserId) {
-        const isMention = currentUserName && (
-          msg.content.toLowerCase().includes(`@${currentUserName.toLowerCase()}`) ||
+      if (msg.user.id !== currentUserIdRef.current) {
+        const uname = currentUserNameRef.current;
+        const isMention = uname && (
+          msg.content.toLowerCase().includes(`@${uname.toLowerCase()}`) ||
           msg.content.includes("@everyone")
         );
         if (isMention) playMentionNotification();
@@ -237,6 +245,13 @@ export default function MessageArea({
 
     socket.on("message-pinned", ({ messageId, pinned }: { messageId: string; pinned: boolean }) => {
       setMessages((prev) => prev.map((m) => m.id === messageId ? { ...m, pinned } : m));
+    });
+
+    socket.on("profile-updated", (data: { id: string; avatar?: string | null; avatarGlowEnabled?: boolean; avatarGlowColors?: string | null }) => {
+      setMessages((prev) => prev.map((m) => {
+        if (m.user.id !== data.id) return m;
+        return { ...m, user: { ...m.user, avatar: data.avatar ?? m.user.avatar, avatarGlowEnabled: data.avatarGlowEnabled ?? m.user.avatarGlowEnabled, avatarGlowColors: data.avatarGlowColors ?? m.user.avatarGlowColors } };
+      }));
     });
 
     return () => {
