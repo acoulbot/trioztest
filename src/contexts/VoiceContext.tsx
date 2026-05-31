@@ -143,6 +143,7 @@ export function VoiceProvider({ children }: { children: React.ReactNode }) {
   const noiseSuppRef        = useRef<NoiseSuppressor | null>(null);
   const connectionSfxRef    = useRef<HTMLAudioElement | null>(null);
   const disconnectionSfxRef = useRef<HTMLAudioElement | null>(null);
+  const screenShareSfxRef   = useRef<HTMLAudioElement | null>(null);
   const channelIdRef        = useRef<string | null>(null);
   const iceConfigRef        = useRef<RTCConfiguration>(DEFAULT_ICE);
 
@@ -171,7 +172,8 @@ export function VoiceProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     connectionSfxRef.current    = Object.assign(new Audio("/sounds/connection.mp3"),    { preload: "auto" as const });
     disconnectionSfxRef.current = Object.assign(new Audio("/sounds/disconnection.mp3"), { preload: "auto" as const });
-    return () => { connectionSfxRef.current = null; disconnectionSfxRef.current = null; };
+    screenShareSfxRef.current   = Object.assign(new Audio("/sounds/screenshare.mp3"),   { preload: "auto" as const });
+    return () => { connectionSfxRef.current = null; disconnectionSfxRef.current = null; screenShareSfxRef.current = null; };
   }, []);
 
   const playSound = useCallback((ref: React.RefObject<HTMLAudioElement | null>) => {
@@ -392,6 +394,7 @@ export function VoiceProvider({ children }: { children: React.ReactNode }) {
     socketRef.current?.emit("screen-share-started", { channelId: channelIdRef.current });
     setIsSharingScreen(true);
     setScreenVideo(stream);
+    playSound(screenShareSfxRef);
     videoTrack.onended = () => stopScreenShare();
   }, [isConnected, setScreenVideo, stopScreenShare]);
 
@@ -603,6 +606,7 @@ export function VoiceProvider({ children }: { children: React.ReactNode }) {
         setScreenSharerId(id);
         const stream = remoteScreenRef.current.get(id);
         if (stream) setScreenVideo(stream);
+        playSound(screenShareSfxRef);
       });
       socket.on("screen-share-stopped", ({ socketId: id }: { socketId: string }) => {
         remoteScreenRef.current.delete(id);

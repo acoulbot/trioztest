@@ -23,7 +23,7 @@ import ModalBackdrop from "@/components/connect/ModalBackdrop";
 import ConnectSplash from "@/components/connect/ConnectSplash";
 import { ThemeProvider } from "@/contexts/ThemeContext";
 
-const VoiceScreenShare = dynamic(() => import("@/components/voice/VoiceScreenShare"), { ssr: false });
+const ScreenShareWindow = dynamic(() => import("@/components/voice/ScreenShareWindow"), { ssr: false });
 const VoiceExpandedPanel = dynamic(() => import("@/components/voice/VoiceExpandedPanel"), { ssr: false });
 const FriendsPanel = dynamic(() => import("@/components/friends/FriendsPanel"), { ssr: false });
 const DMPanel = dynamic(() => import("@/components/dm/DMPanel"), { ssr: false });
@@ -1089,9 +1089,7 @@ function ConnectPageInner() {
 
             {/* COL 3 — chat area */}
             <div className="flex flex-1 flex-col h-full cn-main overflow-hidden">
-              {voice.isConnected && (voice.isSharingScreen || voice.screenSharerId) ? (
-                <VoiceScreenShare />
-              ) : selectedChannel && selectedChannelData ? (
+              {selectedChannel && selectedChannelData ? (
                 <MessageArea
                   channelId={selectedChannel}
                   channelName={selectedChannelData.name}
@@ -1225,6 +1223,16 @@ function ConnectPageInner() {
           <VoiceExpandedPanel onClose={() => setShowVoicePanel(false)} />
         )}
       </AnimatePresence>
+
+      {/* Floating screen share window */}
+      {voice.isConnected && (voice.isSharingScreen || voice.screenSharerId) && (
+        <ScreenShareWindow
+          stream={voice.screenStream}
+          sharerName={voice.isSharingScreen ? "Вы" : voice.screenShareName || "Участник"}
+          isLocal={voice.isSharingScreen}
+          onStop={voice.stopScreenShare}
+        />
+      )}
     </div>
     </>
   );

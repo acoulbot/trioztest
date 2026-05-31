@@ -37,7 +37,10 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "No file provided" }, { status: 400 });
     }
 
-    const isVideo = ALLOWED_VIDEO_TYPES.includes(file.type) || file.type.startsWith("video/");
+    const e2eeIv = formData.get("e2eeIv") as string | null;
+    const isE2EE = !!e2eeIv;
+
+    const isVideo = !isE2EE && (ALLOWED_VIDEO_TYPES.includes(file.type) || file.type.startsWith("video/"));
     const sizeLimit = isVideo ? MAX_VIDEO_SIZE : MAX_FILE_SIZE;
 
     if (file.size > sizeLimit) {
@@ -48,8 +51,8 @@ export async function POST(req: NextRequest) {
     }
 
     const buffer = Buffer.from(await file.arrayBuffer());
-    const isImage = ALLOWED_IMAGE_TYPES.includes(file.type);
-    const isAudio = ALLOWED_AUDIO_TYPES.includes(file.type) || file.type.startsWith("audio/");
+    const isImage = !isE2EE && ALLOWED_IMAGE_TYPES.includes(file.type);
+    const isAudio = isE2EE || ALLOWED_AUDIO_TYPES.includes(file.type) || file.type.startsWith("audio/");
 
     if (isImage && !validateImageMagicBytes(buffer, file.type)) {
       return NextResponse.json({ error: "Invalid file format" }, { status: 400 });
@@ -73,6 +76,9 @@ export async function POST(req: NextRequest) {
       const ext = file.type.includes("webm") ? "webm" : file.type.includes("quicktime") ? "mov" : file.type.includes("matroska") ? "mkv" : "mp4";
       fileName = `${fileId}.${ext}`;
       finalBuffer = buffer;
+    } else if (isE2EE) {
+      fileName = `${fileId}.enc`;
+      finalBuffer = buffer;
     } else if (isAudio) {
       const ext = file.type.includes("webm") ? "webm" : file.type.includes("ogg") ? "ogg" : file.type.includes("mp4") ? "m4a" : "webm";
       fileName = `${fileId}.${ext}`;
@@ -94,11 +100,12 @@ export async function POST(req: NextRequest) {
       url,
       name: file.name,
       size: finalBuffer.length,
-      type: isImage ? "image/webp" : file.type,
-      isImage,
-      isVideo,
+      type: isE2EE ? "application/octet-stream" : isImage ? "image/webp" : file.type,
+      isImage: isImage && !isE2EE,
+      isVideo: isVideo && !isE2EE,
       isVoice: isAudio,
       ...(duration ? { duration: Number(duration) } : {}),
+      ...(isE2EE ? { isE2EE: true, e2eeIv: e2eeIv } : {}),
     });
   } catch (error) {
     console.error("[Upload] Error:", error);

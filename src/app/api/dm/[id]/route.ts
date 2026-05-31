@@ -62,11 +62,13 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   if ((!content || !content.trim()) && !attachments) {
     return NextResponse.json({ error: "Message content required" }, { status: 400 });
   }
-  if (content && content.length > 4000) {
+  const maxLen = content && content.startsWith("e2ee:") ? 16000 : 4000;
+  if (content && content.length > maxLen) {
     return NextResponse.json({ error: "Message too long" }, { status: 400 });
   }
 
-  const sanitized = content ? sanitizeText(content) : "";
+  const isE2EE = content && content.startsWith("e2ee:");
+  const sanitized = isE2EE ? content : (content ? sanitizeText(content) : "");
   if (!sanitized && !attachments) {
     return NextResponse.json({ error: "Message cannot be empty" }, { status: 400 });
   }
@@ -111,7 +113,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
 
   const updated = await prisma.directMessage.update({
     where: { id: messageId },
-    data: { content: sanitizeText(content), edited: true, editedAt: new Date() },
+    data: { content: content.startsWith("e2ee:") ? content : sanitizeText(content), edited: true, editedAt: new Date() },
     include: {
       user: { select: { id: true, name: true, username: true, avatar: true, role: true, avatarGlowEnabled: true, avatarGlowColors: true } },
     },

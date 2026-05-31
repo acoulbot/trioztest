@@ -49,6 +49,7 @@ const MIME_TYPES: Record<string, string> = {
   ".jpeg": "image/jpeg",
   ".gif": "image/gif",
   ".svg": "image/svg+xml",
+  ".enc": "application/octet-stream",
 };
 
 function serveUploadedFile(urlPath: string, res: import("http").ServerResponse): boolean {
