@@ -959,23 +959,22 @@ export default function MessageArea({
         </div>
       ) : !isBanned ? (
         <div className="border-t border-[var(--cn-border)]">
-          {/* Format toolbar */}
+          {/* Extra tools panel */}
           {showFormatBar && (
-            <div className="flex items-center gap-1 px-3 pt-2 pb-0">
-              <button type="button" onClick={() => insertFormat("**", "**")} className="px-1.5 py-0.5 text-xs font-bold text-neutral-500 hover:text-neutral-800 dark:hover:text-white hover:bg-neutral-100 dark:hover:bg-white/10 rounded" title="Жирный">B</button>
-              <button type="button" onClick={() => insertFormat("*", "*")} className="px-1.5 py-0.5 text-xs italic text-neutral-500 hover:text-neutral-800 dark:hover:text-white hover:bg-neutral-100 dark:hover:bg-white/10 rounded" title="Курсив">I</button>
-              <button type="button" onClick={() => insertFormat("`", "`")} className="px-1.5 py-0.5 text-xs font-mono text-neutral-500 hover:text-neutral-800 dark:hover:text-white hover:bg-neutral-100 dark:hover:bg-white/10 rounded" title="Код">&lt;/&gt;</button>
-              <button type="button" onClick={() => insertFormat("- ", "")} className="px-1.5 py-0.5 text-xs text-neutral-500 hover:text-neutral-800 dark:hover:text-white hover:bg-neutral-100 dark:hover:bg-white/10 rounded" title="Список">•</button>
-              <button type="button" onClick={() => insertFormat("#", "")} className="px-1.5 py-0.5 text-xs text-neutral-500 hover:text-neutral-800 dark:hover:text-white hover:bg-neutral-100 dark:hover:bg-white/10 rounded" title="Канал">#</button>
-              <div className="flex-1" />
-              <button type="button" onClick={() => { setShowSchedule(!showSchedule); if (!showSchedule) loadScheduled(); }} className="px-1.5 py-0.5 text-xs text-neutral-500 hover:text-violet-500 dark:hover:text-cyan-400 hover:bg-neutral-100 dark:hover:bg-white/10 rounded" title="Запланировать">⏰</button>
-              <button type="button" onClick={() => setShowFormatBar(false)} className="px-1 py-0.5 text-xs text-neutral-400 hover:text-neutral-600 rounded" title="Скрыть">✕</button>
+            <div className="px-3 pt-2 pb-1">
+              <div className="flex flex-wrap items-center gap-1 p-2 rounded-lg bg-neutral-50 dark:bg-white/5 border border-neutral-200 dark:border-white/10">
+                <span className="text-[10px] text-neutral-400 mr-1">Формат:</span>
+                <button type="button" onClick={() => insertFormat("**", "**")} className="px-2 py-1 text-xs font-bold text-neutral-600 dark:text-neutral-300 hover:text-violet-600 dark:hover:text-cyan-400 hover:bg-violet-50 dark:hover:bg-white/10 rounded transition-colors" title="Жирный">B</button>
+                <button type="button" onClick={() => insertFormat("*", "*")} className="px-2 py-1 text-xs italic text-neutral-600 dark:text-neutral-300 hover:text-violet-600 dark:hover:text-cyan-400 hover:bg-violet-50 dark:hover:bg-white/10 rounded transition-colors" title="Курсив">I</button>
+                <button type="button" onClick={() => insertFormat("`", "`")} className="px-2 py-1 text-xs font-mono text-neutral-600 dark:text-neutral-300 hover:text-violet-600 dark:hover:text-cyan-400 hover:bg-violet-50 dark:hover:bg-white/10 rounded transition-colors" title="Код">&lt;/&gt;</button>
+                <button type="button" onClick={() => insertFormat("- ", "")} className="px-2 py-1 text-xs text-neutral-600 dark:text-neutral-300 hover:text-violet-600 dark:hover:text-cyan-400 hover:bg-violet-50 dark:hover:bg-white/10 rounded transition-colors" title="Список">•</button>
+                <button type="button" onClick={() => insertFormat("#", "")} className="px-2 py-1 text-xs text-neutral-600 dark:text-neutral-300 hover:text-violet-600 dark:hover:text-cyan-400 hover:bg-violet-50 dark:hover:bg-white/10 rounded transition-colors" title="Упоминание канала">#</button>
+                <div className="w-px h-4 bg-neutral-200 dark:bg-white/10 mx-1" />
+                <button type="button" onClick={() => { setShowSchedule(!showSchedule); if (!showSchedule) loadScheduled(); }} className="px-2 py-1 text-xs text-neutral-600 dark:text-neutral-300 hover:text-violet-600 dark:hover:text-cyan-400 hover:bg-violet-50 dark:hover:bg-white/10 rounded transition-colors" title="Запланировать">⏰ Расписание</button>
+                <div className="flex-1" />
+                <button type="button" onClick={() => setShowFormatBar(false)} className="px-1.5 py-1 text-xs text-neutral-400 hover:text-neutral-600 dark:hover:text-neutral-300 rounded transition-colors" title="Закрыть">✕</button>
+              </div>
             </div>
-          )}
-          {!showFormatBar && (
-            <button type="button" onClick={() => setShowFormatBar(true)} className="px-3 pt-1 text-[10px] text-neutral-400 hover:text-neutral-600">
-              Aa форматирование
-            </button>
           )}
 
           {/* Slowmode indicator */}
@@ -1048,6 +1047,15 @@ export default function MessageArea({
                   disabled={slowmodeWait > 0}
                   aria-label={`Message ${channelName}`}
                 />
+                <button
+                  type="button"
+                  onClick={() => setShowFormatBar(!showFormatBar)}
+                  className={`p-2.5 transition-colors ${showFormatBar ? "text-violet-500 dark:text-cyan-400" : "text-neutral-400 hover:text-violet-500 dark:hover:text-cyan-400"}`}
+                  aria-label="Extra tools"
+                  title="Доп. инструменты"
+                >
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4" /></svg>
+                </button>
                 {newMessage.trim() ? (
                   <button type="submit" disabled={slowmodeWait > 0} className="btn-primary !px-4 !py-2.5 disabled:opacity-50" aria-label="Send message">
                     <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
