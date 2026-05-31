@@ -227,6 +227,24 @@ export default function PlayPage() {
     if (res.ok) setGameState(await res.json());
   };
 
+  const doPlaceReserve = async (cityNodeId: string) => {
+    const res = await fetch(`/api/games/rooms/${roomId}/action`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "place_reserve", cityNodeId }),
+    });
+    if (res.ok) setGameState(await res.json());
+  };
+
+  const doFinishPlacement = async () => {
+    const res = await fetch(`/api/games/rooms/${roomId}/action`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "finish_placement" }),
+    });
+    if (res.ok) setGameState(await res.json());
+  };
+
   if (!room || !gameState) {
     return (
       <div className="min-h-screen bg-neutral-950 flex items-center justify-center">
@@ -255,6 +273,19 @@ export default function PlayPage() {
           <span className="text-gray-500 text-sm">Раунд {gameState.round}</span>
         </div>
         <div className="flex items-center gap-2">
+          {gameState.phase === "PLACEMENT" && isMyTurn && (
+            <>
+              <span className="text-cyan-400 text-sm">
+                Резерв: {gameState.reserve?.[myPlayerId || ""] || 0}
+              </span>
+              <button
+                onClick={doFinishPlacement}
+                className="px-4 py-1.5 bg-cyan-600 text-white rounded-lg text-sm font-medium hover:bg-cyan-500 transition-all"
+              >
+                Завершить расстановку
+              </button>
+            </>
+          )}
           {gameState.phase === "GOD_SUMMON" && isMyTurn && (
             <button
               onClick={doRollGod}
@@ -279,7 +310,9 @@ export default function PlayPage() {
               border: `1px solid ${FACTION_COLORS[playerFactions[currentPlayerId]]}40`,
             }}
           >
-            {isMyTurn ? "Ваш ход" : `Ход: ${currentPlayerName}`}
+            {gameState.phase === "PLACEMENT"
+              ? isMyTurn ? "Расстановка" : `Расстановка: ${currentPlayerName}`
+              : isMyTurn ? "Ваш ход" : `Ход: ${currentPlayerName}`}
           </div>
         </div>
       </div>
@@ -315,7 +348,15 @@ export default function PlayPage() {
             const units = unitsByNode[node.id] || [];
             const isValidMove = validMoves.includes(node.id);
             const hasMyUnit = units.some((u) => u.playerId === myPlayerId);
-            const nodeColor = node.faction ? FACTION_COLORS[node.faction] : undefined;
+            const cityOwner = gameState.cityOwners?.[node.id];
+            const cityOwnerColor = cityOwner ? FACTION_COLORS[playerFactions[cityOwner]] : undefined;
+            const nodeColor = cityOwnerColor || (node.faction ? FACTION_COLORS[node.faction] : undefined);
+
+            // Placement: highlight own cities
+            const isPlacementTarget = gameState.phase === "PLACEMENT" && isMyTurn &&
+              node.type === "city" && myPlayerId && gameState.cityOwners?.[node.id] === myPlayerId &&
+              (gameState.reserve?.[myPlayerId] || 0) > 0 &&
+              units.filter((u) => u.playerId === myPlayerId).length < 2;
 
             return (
               <div
@@ -332,10 +373,29 @@ export default function PlayPage() {
                   />
                 )}
 
+                {/* Placement highlight */}
+                {isPlacementTarget && (
+                  <motion.div
+                    animate={{ scale: [1, 1.2, 1] }}
+                    transition={{ repeat: Infinity, duration: 1.5 }}
+                    className="absolute inset-0 -m-2 rounded-full border-2 border-cyan-400/60"
+                  />
+                )}
+
+                {/* City ownership ring */}
+                {node.type === "city" && cityOwnerColor && (
+                  <span
+                    className="absolute inset-[-2px] rounded-full pointer-events-none"
+                    style={{ border: `2px solid ${cityOwnerColor}50` }}
+                  />
+                )}
+
                 {/* Node button */}
                 <button
                   onClick={() => {
-                    if (isValidMove && selectedUnit) {
+                    if (isPlacementTarget) {
+                      doPlaceReserve(node.id);
+                    } else if (isValidMove && selectedUnit) {
                       doMove(node.id);
                     } else if (hasMyUnit && isMyTurn && gameState.phase === "MOVE") {
                       const myUnits = units.filter((u) => u.playerId === myPlayerId && u.movesLeft > 0);
@@ -345,12 +405,14 @@ export default function PlayPage() {
                   className={`relative w-8 h-8 rounded-full flex items-center justify-center text-xs transition-all ${
                     isValidMove
                       ? "bg-green-500/30 border-2 border-green-400 cursor-pointer hover:bg-green-500/50"
-                      : selectedUnit && units.some((u) => u.id === selectedUnit)
-                        ? "bg-amber-500/30 border-2 border-amber-400"
-                        : "bg-neutral-800/80 border border-white/20 hover:border-white/40"
+                      : isPlacementTarget
+                        ? "bg-cyan-500/20 border-2 border-cyan-400 cursor-pointer hover:bg-cyan-500/40"
+                        : selectedUnit && units.some((u) => u.id === selectedUnit)
+                          ? "bg-amber-500/30 border-2 border-amber-400"
+                          : "bg-neutral-800/80 border border-white/20 hover:border-white/40"
                   }`}
                   style={
-                    nodeColor && !isValidMove
+                    nodeColor && !isValidMove && !isPlacementTarget
                       ? { borderColor: nodeColor + "60", backgroundColor: nodeColor + "15" }
                       : undefined
                   }
@@ -361,11 +423,12 @@ export default function PlayPage() {
 
                 {/* Units on this node */}
                 {units.length > 0 && (
-                  <div className="absolute -bottom-3 left-1/2 -translate-x-1/2 flex gap-0.5">
+                  <div className="absolute -bottom-4 left-1/2 -translate-x-1/2 flex gap-1">
                     {units.map((unit) => {
                       const faction = playerFactions[unit.playerId];
                       const color = FACTION_COLORS[faction] || "#fff";
                       const isSelected = unit.id === selectedUnit;
+                      const isGuard = unit.type === "GUARD";
                       return (
                         <button
                           key={unit.id}
@@ -375,16 +438,34 @@ export default function PlayPage() {
                               selectUnit(unit.id);
                             }
                           }}
-                          className={`w-3.5 h-3.5 rounded-sm flex items-center justify-center text-[7px] font-bold transition-all ${
-                            isSelected ? "ring-2 ring-white scale-125" : ""
+                          className={`relative w-4 h-4 rounded-full flex items-center justify-center transition-all ${
+                            isSelected ? "scale-150 z-10" : "hover:scale-125"
                           } ${unit.playerId === myPlayerId ? "cursor-pointer" : ""}`}
-                          style={{
-                            backgroundColor: color,
-                            color: faction === "avains" || faction === "dwarves" ? "#000" : "#fff",
-                          }}
-                          title={`${playerNames[unit.playerId]} — ${unit.type === "GUARD" ? "Гвардия" : "Отряд"} (${unit.movesLeft} ходов)`}
+                          title={`${playerNames[unit.playerId]} — ${isGuard ? "Гвардия" : "Отряд"} (${unit.movesLeft} ходов)`}
                         >
-                          {unit.type === "GUARD" ? "G" : "A"}
+                          {/* Glow halo for guards */}
+                          {isGuard && (
+                            <span
+                              className="absolute inset-[-3px] rounded-full animate-pulse"
+                              style={{
+                                boxShadow: `0 0 6px 2px ${color}90, 0 0 12px 4px ${color}40`,
+                                border: `1.5px solid ${color}80`,
+                              }}
+                            />
+                          )}
+                          {/* Circle body */}
+                          <span
+                            className="relative block w-full h-full rounded-full border"
+                            style={{
+                              backgroundColor: color,
+                              borderColor: isSelected ? "#fff" : `${color}cc`,
+                              boxShadow: isSelected ? `0 0 8px ${color}` : undefined,
+                            }}
+                          />
+                          {/* Moves indicator dot */}
+                          {unit.movesLeft > 0 && unit.playerId === myPlayerId && (
+                            <span className="absolute -top-0.5 -right-0.5 w-1.5 h-1.5 rounded-full bg-green-400 border border-neutral-900" />
+                          )}
                         </button>
                       );
                     })}
@@ -413,7 +494,9 @@ export default function PlayPage() {
                 const color = FACTION_COLORS[faction] || "#888";
                 const isCurrent = p.id === currentPlayerId;
                 const isEliminated = gameState.eliminatedPlayers.includes(p.id);
-                const unitCount = gameState.units.filter((u) => u.playerId === p.id).length;
+                const armies = gameState.units.filter((u) => u.playerId === p.id && u.type === "ARMY");
+                const guards = gameState.units.filter((u) => u.playerId === p.id && u.type === "GUARD");
+                const reserveCount = gameState.reserve?.[p.id] || 0;
 
                 return (
                   <div
@@ -422,7 +505,7 @@ export default function PlayPage() {
                       isCurrent ? "bg-white/10" : "bg-white/[0.02]"
                     } ${isEliminated ? "opacity-40" : ""}`}
                   >
-                    <div className="w-5 h-5 rounded-full flex-shrink-0" style={{ backgroundColor: color + "40" }}>
+                    <div className="relative w-5 h-5 rounded-full flex-shrink-0" style={{ backgroundColor: color + "40" }}>
                       {isCurrent && (
                         <motion.div
                           animate={{ scale: [1, 1.2, 1] }}
@@ -437,8 +520,23 @@ export default function PlayPage() {
                         {p.user.name}
                         {p.userId === userId && " (вы)"}
                       </div>
+                      {!isEliminated && (
+                        <div className="flex items-center gap-2 mt-0.5">
+                          <span className="text-[9px] text-gray-500 flex items-center gap-0.5">
+                            <span className="inline-block w-2 h-2 rounded-full" style={{ backgroundColor: color }} />
+                            {armies.length}
+                          </span>
+                          <span className="text-[9px] text-gray-500 flex items-center gap-0.5">
+                            <span className="inline-block w-2 h-2 rounded-full" style={{ backgroundColor: color, boxShadow: `0 0 4px ${color}` }} />
+                            {guards.length}
+                          </span>
+                          {reserveCount > 0 && (
+                            <span className="text-[9px] text-gray-600">+{reserveCount} рез.</span>
+                          )}
+                        </div>
+                      )}
                     </div>
-                    <span className="text-[10px] text-gray-500">{isEliminated ? "💀" : `${unitCount} ⚔️`}</span>
+                    <span className="text-[10px] text-gray-500">{isEliminated ? "💀" : ""}</span>
                   </div>
                 );
               })}
@@ -467,6 +565,21 @@ export default function PlayPage() {
               </motion.div>
             )}
           </AnimatePresence>
+
+          {/* Unit legend */}
+          <div className="px-3 py-2 border-b border-white/5">
+            <div className="flex items-center gap-3 text-[9px] text-gray-500">
+              <span className="flex items-center gap-1">
+                <span className="inline-block w-2.5 h-2.5 rounded-full bg-gray-400" /> Отряд
+              </span>
+              <span className="flex items-center gap-1">
+                <span className="inline-block w-2.5 h-2.5 rounded-full bg-gray-400" style={{ boxShadow: "0 0 4px rgba(156,163,175,0.8)" }} /> Гвардия
+              </span>
+              <span className="flex items-center gap-1">
+                <span className="inline-block w-1.5 h-1.5 rounded-full bg-green-400" /> Может ходить
+              </span>
+            </div>
+          </div>
 
           {/* Game log */}
           <div className="flex-1 flex flex-col min-h-0">

@@ -40,6 +40,8 @@ export interface VelderanGameState {
   turnOrder: string[]; // array of GamePlayer.id in turn order
   eliminatedPlayers: string[]; // GamePlayer.ids
   winner?: string; // GamePlayer.id
+  reserve: Record<string, number>; // playerId → army count in reserve
+  cityOwners: Record<string, string>; // nodeId → playerId (captured cities)
 }
 
 const GODS: Record<number, { name: string; effect: string }> = {
@@ -89,14 +91,33 @@ export function createInitialState(
     }
   }
 
+  // Initialize city ownership
+  const cityOwners: Record<string, string> = {};
+  for (const player of sorted) {
+    const factionCities = MAP_NODES.filter(
+      (n) => n.type === "city" && n.faction === player.faction
+    );
+    for (const city of factionCities) {
+      cityOwners[city.id] = player.id;
+    }
+  }
+
+  // Initialize reserve (2 per player)
+  const reserve: Record<string, number> = {};
+  for (const player of sorted) {
+    reserve[player.id] = 2;
+  }
+
   return {
     round: 1,
     currentPlayerIndex: 0,
-    phase: "MOVE",
+    phase: "PLACEMENT",
     units,
-    log: ["Игра началась! Раунд 1."],
+    log: ["Игра началась! Расставьте подкрепления из резерва."],
     turnOrder: sorted.map((p) => p.id),
     eliminatedPlayers: [],
+    reserve,
+    cityOwners,
   };
 }
 
@@ -106,6 +127,96 @@ export function getCurrentPlayerId(state: VelderanGameState): string {
 
 export function getPlayerUnits(state: VelderanGameState, playerId: string): GameUnit[] {
   return state.units.filter((u) => u.playerId === playerId);
+}
+
+export function placeReserve(
+  state: VelderanGameState,
+  playerId: string,
+  cityNodeId: string,
+  playerNames: Record<string, string>
+): VelderanGameState {
+  const newState = structuredClone(state);
+  const reserve = newState.reserve[playerId] || 0;
+  if (reserve <= 0) return newState;
+
+  const node = MAP_NODES.find((n) => n.id === cityNodeId);
+  if (!node || node.type !== "city") return newState;
+
+  // Can only place on own cities
+  if (newState.cityOwners[cityNodeId] !== playerId) return newState;
+
+  // Max 2 units per node
+  const unitsAtNode = newState.units.filter(
+    (u) => u.position === cityNodeId && u.playerId === playerId
+  );
+  if (unitsAtNode.length >= 2) return newState;
+
+  const maxId = newState.units.reduce((max, u) => {
+    const num = parseInt(u.id.replace("u", "")) || 0;
+    return Math.max(max, num);
+  }, 0);
+
+  newState.units.push({
+    id: `u${maxId + 1}`,
+    playerId,
+    type: "ARMY",
+    position: cityNodeId,
+    movesLeft: 2,
+  });
+  newState.reserve[playerId] = reserve - 1;
+
+  const playerName = playerNames[playerId] || "Игрок";
+  newState.log.push(`${playerName} выставил отряд из резерва в ${node.name}.`);
+
+  return newState;
+}
+
+export function finishPlacement(
+  state: VelderanGameState,
+  playerNames: Record<string, string>
+): VelderanGameState {
+  const newState = structuredClone(state);
+  const currentId = getCurrentPlayerId(newState);
+  const playerName = playerNames[currentId] || "Игрок";
+
+  // Move to next player for placement or move to MOVE phase
+  let nextIdx = newState.currentPlayerIndex;
+  let allPlaced = true;
+
+  // Check if all subsequent players also have 0 reserve
+  for (let i = 0; i < newState.turnOrder.length; i++) {
+    const idx = (newState.currentPlayerIndex + 1 + i) % newState.turnOrder.length;
+    const pid = newState.turnOrder[idx];
+    if (newState.eliminatedPlayers.includes(pid)) continue;
+    if ((newState.reserve[pid] || 0) > 0) {
+      nextIdx = idx;
+      allPlaced = false;
+      break;
+    }
+  }
+
+  if (allPlaced || (newState.reserve[currentId] || 0) <= 0) {
+    // Check if current player is the last one who could place
+    const anyReserve = newState.turnOrder.some(
+      (pid) => !newState.eliminatedPlayers.includes(pid) && (newState.reserve[pid] || 0) > 0
+    );
+    if (!anyReserve) {
+      newState.phase = "MOVE";
+      newState.currentPlayerIndex = 0;
+      // Skip eliminated
+      while (newState.eliminatedPlayers.includes(newState.turnOrder[newState.currentPlayerIndex])) {
+        newState.currentPlayerIndex = (newState.currentPlayerIndex + 1) % newState.turnOrder.length;
+      }
+      const nextName = playerNames[newState.turnOrder[newState.currentPlayerIndex]] || "Игрок";
+      newState.log.push(`Фаза расстановки завершена. Ход ${nextName}.`);
+      return newState;
+    }
+  }
+
+  newState.currentPlayerIndex = nextIdx;
+  const nextName = playerNames[newState.turnOrder[nextIdx]] || "Игрок";
+  newState.log.push(`Расстановка: ход ${nextName}.`);
+  return newState;
 }
 
 export function canMoveUnit(state: VelderanGameState, unitId: string, targetNodeId: string): boolean {
@@ -158,6 +269,19 @@ export function moveUnit(
       nodeId: targetNodeId,
     };
     newState.log.push(`Сражение на ${toNode?.name || targetNodeId}!`);
+  }
+
+  // Capture city if undefended enemy city
+  if (toNode?.type === "city" && !newState.combat) {
+    const currentOwner = newState.cityOwners[targetNodeId];
+    if (currentOwner && currentOwner !== unit.playerId) {
+      newState.cityOwners[targetNodeId] = unit.playerId;
+      const prevOwnerName = playerNames[currentOwner] || "Противник";
+      newState.log.push(`${playerName} захватил город ${toNode.name} у ${prevOwnerName}!`);
+    } else if (!currentOwner) {
+      newState.cityOwners[targetNodeId] = unit.playerId;
+      newState.log.push(`${playerName} занял нейтральный город ${toNode.name}.`);
+    }
   }
 
   // Check if moved onto shrine with guard
@@ -283,9 +407,21 @@ export function resolveCombat(
 
   if (loserId) {
     const loserUnitId = loserId === attackerPlayerId ? attackerUnitId : defenderUnitId;
+    const winnerId = loserId === attackerPlayerId ? defenderPlayerId : attackerPlayerId;
     newState.units = newState.units.filter((u) => u.id !== loserUnitId);
     const loserName = loserId === attackerPlayerId ? attackerName : defenderName;
     newState.log.push(`Отряд ${loserName} уничтожен.`);
+
+    // Capture city if attacker won and city belongs to defender
+    if (!newState.cityOwners) newState.cityOwners = {};
+    if (node?.type === "city" && winnerId === attackerPlayerId) {
+      const prevOwner = newState.cityOwners[nodeId];
+      if (prevOwner && prevOwner !== winnerId) {
+        newState.cityOwners[nodeId] = winnerId;
+        const winName = playerNames[winnerId] || "Игрок";
+        newState.log.push(`${winName} захватил город ${node.name}!`);
+      }
+    }
 
     // Check elimination
     const remaining = newState.units.filter((u) => u.playerId === loserId);
@@ -317,6 +453,10 @@ export function endTurn(
   playerNames: Record<string, string>
 ): VelderanGameState {
   const newState = structuredClone(state);
+  // Ensure reserve/cityOwners exist (backward compat)
+  if (!newState.reserve) newState.reserve = {};
+  if (!newState.cityOwners) newState.cityOwners = {};
+
   const currentId = getCurrentPlayerId(newState);
   const playerName = playerNames[currentId] || "Игрок";
 
@@ -334,7 +474,30 @@ export function endTurn(
     for (const unit of newState.units) {
       unit.movesLeft = unit.type === "ARMY" ? 2 : 1;
     }
-    newState.log.push(`Раунд ${newState.round} начинается!`);
+
+    // Reinforcements: 2 reserves per own city without enemy
+    for (const pid of newState.turnOrder) {
+      if (newState.eliminatedPlayers.includes(pid)) continue;
+      const ownCities = Object.entries(newState.cityOwners).filter(
+        ([, owner]) => owner === pid
+      );
+      const reinforcements = Math.min(ownCities.length, 2);
+      newState.reserve[pid] = (newState.reserve[pid] || 0) + reinforcements;
+      if (reinforcements > 0) {
+        const pName = playerNames[pid] || "Игрок";
+        newState.log.push(`${pName} получил +${reinforcements} в резерв (${ownCities.length} городов).`);
+      }
+    }
+
+    newState.log.push(`Раунд ${newState.round}. Расставьте подкрепления.`);
+
+    // Go to placement phase if anyone has reserves
+    const anyReserve = newState.turnOrder.some(
+      (pid) => !newState.eliminatedPlayers.includes(pid) && (newState.reserve[pid] || 0) > 0
+    );
+    if (anyReserve) {
+      newState.phase = "PLACEMENT";
+    }
   }
 
   newState.currentPlayerIndex = nextIdx;

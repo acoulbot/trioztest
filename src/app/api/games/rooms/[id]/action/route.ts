@@ -10,6 +10,8 @@ import {
   endTurn,
   resolveCombat,
   rollDiceForGod,
+  placeReserve,
+  finishPlacement,
 } from "@/lib/games/velderanState";
 
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
@@ -82,6 +84,9 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     if (state.phase === "COMBAT") {
       return NextResponse.json({ error: "Завершите сражение" }, { status: 400 });
     }
+    if (state.phase === "PLACEMENT") {
+      return NextResponse.json({ error: "Завершите расстановку" }, { status: 400 });
+    }
     newState = endTurn(state, playerNames);
   } else if (action === "combat_card") {
     if (state.phase !== "COMBAT" || !state.combat) {
@@ -138,6 +143,28 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     const shrineId = guard?.position || "";
 
     newState = rollDiceForGod(state, player.id, shrineId, playerNames);
+  } else if (action === "place_reserve") {
+    if (state.phase !== "PLACEMENT") {
+      return NextResponse.json({ error: "Сейчас не фаза расстановки" }, { status: 400 });
+    }
+    const currentId = getCurrentPlayerId(state);
+    if (player.id !== currentId) {
+      return NextResponse.json({ error: "Не ваш ход" }, { status: 400 });
+    }
+    const { cityNodeId } = body;
+    if (!cityNodeId) {
+      return NextResponse.json({ error: "Укажите город" }, { status: 400 });
+    }
+    newState = placeReserve(state, player.id, cityNodeId, playerNames);
+  } else if (action === "finish_placement") {
+    if (state.phase !== "PLACEMENT") {
+      return NextResponse.json({ error: "Сейчас не фаза расстановки" }, { status: 400 });
+    }
+    const currentId = getCurrentPlayerId(state);
+    if (player.id !== currentId) {
+      return NextResponse.json({ error: "Не ваш ход" }, { status: 400 });
+    }
+    newState = finishPlacement(state, playerNames);
   } else {
     return NextResponse.json({ error: "Неизвестное действие" }, { status: 400 });
   }
