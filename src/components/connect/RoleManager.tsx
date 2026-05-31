@@ -45,9 +45,11 @@ export default function RoleManager({ groupId, canManage }: RoleManagerProps) {
     setCreating(false);
   };
 
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
+
   const deleteRole = async (roleId: string) => {
-    if (!confirm("Удалить роль?")) return;
     await fetch(`/api/groups/${groupId}/roles/${roleId}`, { method: "DELETE" });
+    setConfirmDeleteId(null);
     fetchRoles();
   };
 
@@ -76,7 +78,7 @@ export default function RoleManager({ groupId, canManage }: RoleManagerProps) {
             <span className="text-[10px] text-neutral-400">{role._count?.members ?? 0}</span>
             {canManage && (
               <button
-                onClick={() => deleteRole(role.id)}
+                onClick={() => setConfirmDeleteId(role.id)}
                 className="opacity-0 group-hover:opacity-100 text-neutral-400 hover:text-red-500 transition-all"
                 aria-label="Delete role"
               >
@@ -120,6 +122,18 @@ export default function RoleManager({ groupId, canManage }: RoleManagerProps) {
           >
             +
           </button>
+        </div>
+      )}
+      {confirmDeleteId && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4" onClick={() => setConfirmDeleteId(null)}>
+          <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" />
+          <div className="relative z-10 bg-white dark:bg-neutral-900 border border-neutral-200 dark:border-white/10 rounded-2xl shadow-2xl p-5 max-w-sm w-full" onClick={e => e.stopPropagation()}>
+            <p className="text-sm text-neutral-900 dark:text-white mb-4">Удалить роль?</p>
+            <div className="flex gap-2 justify-end">
+              <button onClick={() => setConfirmDeleteId(null)} className="px-4 py-2 text-sm text-neutral-500 rounded-xl hover:bg-neutral-100 dark:hover:bg-white/5">Отмена</button>
+              <button onClick={() => deleteRole(confirmDeleteId)} className="px-4 py-2 text-sm bg-red-500 text-white rounded-xl hover:bg-red-600">Подтвердить</button>
+            </div>
+          </div>
         </div>
       )}
     </div>

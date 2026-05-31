@@ -152,6 +152,7 @@ function CreateGroupModal({ onClose, onCreated }: { onClose: () => void; onCreat
           </label>
           <div className="flex-1 min-w-0">
             <input type="text" value={name} onChange={(e) => setName(e.target.value)}
+              onKeyDown={(e) => { if (e.key === "Enter" && name.trim() && !loading) handleCreate(); }}
               placeholder="Название группы..." className="w-full bg-neutral-50 dark:bg-neutral-700 border border-neutral-200 dark:border-white/10 rounded-xl px-3 py-2.5 text-sm text-neutral-900 dark:text-white placeholder:text-neutral-400" autoFocus />
             <p className="text-[11px] text-neutral-400 mt-1">Иконка необязательна</p>
           </div>
@@ -237,6 +238,7 @@ function CreateChannelModal({ groupId, onClose, onCreated }: { groupId: string; 
       <h3 className="text-lg font-semibold text-neutral-900 dark:text-white mb-4">Создать канал</h3>
       <div className="space-y-3">
         <input type="text" value={name} onChange={(e) => setName(e.target.value)}
+          onKeyDown={(e) => { if (e.key === "Enter" && name.trim() && !loading) handleCreate(); }}
           placeholder="Название канала..." className="w-full bg-neutral-50 dark:bg-neutral-700 border border-neutral-200 dark:border-white/10 rounded-xl px-3 py-2.5 text-sm text-neutral-900 dark:text-white placeholder:text-neutral-400" autoFocus />
         <div className="flex gap-2">
           <button onClick={() => setType("TEXT")} className={`flex-1 px-3 py-2 rounded-xl text-sm transition-all ${type === "TEXT" ? "bg-violet-50 dark:bg-cyan-400/20 text-violet-600 dark:text-cyan-400 border border-violet-200 dark:border-cyan-400/30" : "bg-neutral-50 dark:bg-neutral-700 text-neutral-500 dark:text-gray-400 border border-neutral-200 dark:border-white/5"}`}>
@@ -472,6 +474,7 @@ function GroupSettingsModal({ group, onClose, onUpdated, onDelete }: { group: Gr
   const [rules, setRules] = useState(group.rules || "");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
+  const [confirmAction, setConfirmAction] = useState<{ message: string; onConfirm: () => void } | null>(null);
 
   const isOwner = group.myRole === "OWNER";
 
@@ -527,10 +530,15 @@ function GroupSettingsModal({ group, onClose, onUpdated, onDelete }: { group: Gr
     onUpdated();
   };
 
-  const handleKick = async (memberId: string) => {
-    if (!confirm("Исключить участника?")) return;
-    await fetch(`/api/groups/${group.id}/members/${memberId}`, { method: "DELETE" });
-    onUpdated();
+  const handleKick = (memberId: string) => {
+    setConfirmAction({
+      message: "Исключить участника?",
+      onConfirm: async () => {
+        await fetch(`/api/groups/${group.id}/members/${memberId}`, { method: "DELETE" });
+        setConfirmAction(null);
+        onUpdated();
+      },
+    });
   };
 
   const tabs = [
@@ -636,6 +644,18 @@ function GroupSettingsModal({ group, onClose, onUpdated, onDelete }: { group: Gr
           </div>
         )}
       </div>
+      {confirmAction && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4" onClick={() => setConfirmAction(null)}>
+          <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" />
+          <div className="relative z-10 bg-white dark:bg-neutral-900 border border-neutral-200 dark:border-white/10 rounded-2xl shadow-2xl p-5 max-w-sm w-full" onClick={e => e.stopPropagation()}>
+            <p className="text-sm text-neutral-900 dark:text-white mb-4">{confirmAction.message}</p>
+            <div className="flex gap-2 justify-end">
+              <button onClick={() => setConfirmAction(null)} className="px-4 py-2 text-sm text-neutral-500 hover:text-neutral-700 dark:hover:text-neutral-300 rounded-xl hover:bg-neutral-100 dark:hover:bg-white/5">Отмена</button>
+              <button onClick={confirmAction.onConfirm} className="px-4 py-2 text-sm bg-red-500 text-white rounded-xl hover:bg-red-600 transition-colors">Подтвердить</button>
+            </div>
+          </div>
+        </div>
+      )}
     </ModalBackdrop>
   );
 }
@@ -712,6 +732,7 @@ function ConnectPageInner() {
   const [mentionChannels, setMentionChannels] = useState<Record<string, boolean>>({});
   const [mobileView, setMobileView] = useState<MobileView>("groups");
   const [showVoicePanel, setShowVoicePanel] = useState(false);
+  const [pageConfirm, setPageConfirm] = useState<{ message: string; onConfirm: () => void } | null>(null);
 
   const isBanned = session?.user?.banned && (!session.user.bannedUntil || new Date(session.user.bannedUntil) > new Date());
   const canManage = groupDetail?.myRole === "OWNER" || groupDetail?.myRole === "MODERATOR";
@@ -860,22 +881,33 @@ function ConnectPageInner() {
     }
   };
 
-  const deleteChannel = async (channelId: string) => {
-    if (!confirm("Удалить канал?")) return;
-    await fetch(`/api/channels/${channelId}`, { method: "DELETE" });
-    if (selectedChannel === channelId) setSelectedChannel(null);
-    if (selectedGroup) fetchGroupDetail(selectedGroup);
+  const deleteChannel = (channelId: string) => {
+    setPageConfirm({
+      message: "Удалить канал?",
+      onConfirm: async () => {
+        await fetch(`/api/channels/${channelId}`, { method: "DELETE" });
+        if (selectedChannel === channelId) setSelectedChannel(null);
+        if (selectedGroup) fetchGroupDetail(selectedGroup);
+        setPageConfirm(null);
+      },
+    });
   };
 
-  const deleteGroup = async () => {
-    if (!selectedGroup || !confirm("Удалить группу? Это действие нельзя отменить.")) return;
-    const res = await fetch(`/api/groups/${selectedGroup}`, { method: "DELETE" });
-    if (res.ok) {
-      setSelectedGroup(null);
-      setGroupDetail(null);
-      setShowGroupSettings(false);
-      fetchGroups();
-    }
+  const deleteGroup = () => {
+    if (!selectedGroup) return;
+    setPageConfirm({
+      message: "Удалить группу? Это действие нельзя отменить.",
+      onConfirm: async () => {
+        const res = await fetch(`/api/groups/${selectedGroup}`, { method: "DELETE" });
+        if (res.ok) {
+          setSelectedGroup(null);
+          setGroupDetail(null);
+          setShowGroupSettings(false);
+          fetchGroups();
+        }
+        setPageConfirm(null);
+      },
+    });
   };
 
   if (status === "loading") {
@@ -1288,6 +1320,20 @@ function ConnectPageInner() {
           isLocal={voice.isSharingScreen}
           onStop={voice.stopScreenShare}
         />
+      )}
+
+      {/* Confirm modal */}
+      {pageConfirm && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4" onClick={() => setPageConfirm(null)}>
+          <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" />
+          <div className="relative z-10 bg-white dark:bg-neutral-900 border border-neutral-200 dark:border-white/10 rounded-2xl shadow-2xl p-5 max-w-sm w-full" onClick={e => e.stopPropagation()}>
+            <p className="text-sm text-neutral-900 dark:text-white mb-4">{pageConfirm.message}</p>
+            <div className="flex gap-2 justify-end">
+              <button onClick={() => setPageConfirm(null)} className="px-4 py-2 text-sm text-neutral-500 hover:text-neutral-700 dark:hover:text-neutral-300 rounded-xl hover:bg-neutral-100 dark:hover:bg-white/5">Отмена</button>
+              <button onClick={pageConfirm.onConfirm} className="px-4 py-2 text-sm bg-red-500 text-white rounded-xl hover:bg-red-600 transition-colors">Подтвердить</button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
     </>

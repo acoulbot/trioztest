@@ -87,6 +87,7 @@ export default function ProfileSettingsModal({ user, onClose, onSaved, userRole 
   const [useCustom, setUseCustom] = useState(detectPreset(user.avatarGlowColors ?? null) === null && !!user.avatarGlowColors);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [successToast, setSuccessToast] = useState<string | null>(null);
   const [statusType, setStatusType] = useState<string>("online");
   const [customStatus, setCustomStatus] = useState<string>("");
   const [statusLoading, setStatusLoading] = useState(false);
@@ -515,7 +516,7 @@ export default function ProfileSettingsModal({ user, onClose, onSaved, userRole 
                   if (!f) return;
                   const text = await f.text();
                   const ok = await importKeysFromJSON(text);
-                  if (ok) { setError(null); alert("Ключи восстановлены!"); }
+                  if (ok) { setError(null); setSuccessToast("Ключи восстановлены!"); setTimeout(() => setSuccessToast(null), 3500); }
                   else setError("Неверный формат файла ключей");
                   e.target.value = "";
                 }} />
@@ -545,6 +546,11 @@ export default function ProfileSettingsModal({ user, onClose, onSaved, userRole 
           </button>
         </div>
       </motion.div>
+      {successToast && (
+        <div className="fixed bottom-20 left-1/2 -translate-x-1/2 z-[60] px-4 py-2 bg-green-500 text-white text-sm rounded-xl shadow-lg animate-fade-in">
+          {successToast}
+        </div>
+      )}
     </div>
   );
 }

@@ -83,13 +83,6 @@ export default function VoiceChannel({ channelId, channelName, onClose }: VoiceC
         remoteAudiosRef.current.set(remoteSocketId, audio);
       }
       audio.srcObject = remoteStream;
-      // Explicitly call play() — browser autoplay policy blocks
-      // programmatically created Audio elements even with autoplay=true.
-      audio.play().catch((err) => {
-        console.warn("[Voice] audio.play() blocked:", err.name, "— will retry on next track event");
-      });
-      // BUG 1 FIX: Explicitly call play() — browser autoplay policy blocks
-      // programmatically created Audio elements even with autoplay=true.
       audio.play().catch((err) => {
         console.warn("[Voice] audio.play() blocked:", err.name, "— will retry on next track event");
       });

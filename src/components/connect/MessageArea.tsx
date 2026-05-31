@@ -106,6 +106,8 @@ export default function MessageArea({
   const [nextCursor, setNextCursor] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
   const [sending, setSending] = useState(false);
+  const [errorToast, setErrorToast] = useState<string | null>(null);
+  const [confirmModal, setConfirmModal] = useState<{ message: string; onConfirm: () => void } | null>(null);
   const [toolsRefresh, setToolsRefresh] = useState(0);
   const [channelMembers, setChannelMembers] = useState<{id:string;name:string|null}[]>([]);
   const [recordingVoice, setRecordingVoice] = useState(false);
@@ -246,6 +248,11 @@ export default function MessageArea({
     socket.on("new-message", (msg: Message) => {
       setMessages((prev) => {
         if (prev.find((m) => m.id === msg.id)) return prev;
+        // If this is our own message, replace optimistic placeholder
+        if (msg.user.id === currentUserIdRef.current) {
+          const hasOptimistic = prev.some((m) => m.id.startsWith("opt-"));
+          if (hasOptimistic) return prev.map((m) => m.id.startsWith("opt-") && m.user.id === msg.user.id ? msg : m);
+        }
         return [...prev, msg];
       });
       onNewMessageRef.current?.();
@@ -421,7 +428,7 @@ export default function MessageArea({
   const scheduleMessage = async () => {
     if (!newMessage.trim() || !scheduleDate || !scheduleTime) return;
     const dt = new Date(`${scheduleDate}T${scheduleTime}`);
-    if (dt.getTime() <= Date.now()) { alert("Время должно быть в будущем"); return; }
+    if (dt.getTime() <= Date.now()) { setErrorToast("Время должно быть в будущем"); setTimeout(() => setErrorToast(null), 3500); return; }
     await fetch("/api/messages/scheduled", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -483,7 +490,25 @@ export default function MessageArea({
     if (replyTo) body.replyToId = replyTo.id;
 
     setNewMessage("");
+    const savedReply = replyTo;
     setReplyTo(null);
+
+    // Optimistic update — show message immediately
+    const optimisticId = `opt-${Date.now()}`;
+    const optimisticMsg: Message = {
+      id: optimisticId,
+      content,
+      createdAt: new Date().toISOString(),
+      edited: false,
+      deleted: false,
+      pinned: false,
+      attachments: null,
+      user: { id: currentUserId, name: currentUserName, avatar: null, avatarGlowEnabled: false, avatarGlowColors: null, role: currentUserRole },
+      replyTo: savedReply ? { id: savedReply.id, content: savedReply.content, user: { id: "", name: savedReply.name } } : undefined,
+      reads: [],
+    };
+    setMessages(prev => [...prev, optimisticMsg]);
+    isAtBottomRef.current = true;
 
     try {
       const res = await fetch("/api/messages", {
@@ -495,14 +520,21 @@ export default function MessageArea({
       if (!res.ok) {
         const data = await res.json();
         setNewMessage(content);
+        setMessages(prev => prev.filter(m => m.id !== optimisticId));
         if (res.status === 429 && data.error) {
           const secs = parseInt(data.error.match(/\d+/)?.[0] || "5");
           setSlowmodeWait(secs);
         }
-        alert(data.error || "Ошибка отправки");
+        setErrorToast(data.error || "Ошибка отправки");
+        setTimeout(() => setErrorToast(null), 3500);
+      } else {
+        // Replace optimistic message with real one from server
+        const real = await res.json();
+        setMessages(prev => prev.map(m => m.id === optimisticId ? { ...real } : m));
       }
     } catch {
       setNewMessage(content);
+      setMessages(prev => prev.filter(m => m.id !== optimisticId));
     } finally {
       setSending(false);
     }
@@ -540,7 +572,8 @@ export default function MessageArea({
       const uploadRes = await fetch("/api/messages/upload", { method: "POST", body: fd });
       if (!uploadRes.ok) {
         const data = await uploadRes.json();
-        alert(data.error || "Upload failed");
+        setErrorToast(data.error || "Ошибка загрузки");
+        setTimeout(() => setErrorToast(null), 3500);
         return;
       }
       const attachment = await uploadRes.json();
@@ -600,8 +633,13 @@ export default function MessageArea({
   };
 
   const deleteMessage = async (messageId: string) => {
-    if (!confirm("Удалить сообщение?")) return;
-    await fetch(`/api/messages?messageId=${messageId}`, { method: "DELETE" });
+    setConfirmModal({
+      message: "Удалить сообщение?",
+      onConfirm: async () => {
+        await fetch(`/api/messages?messageId=${messageId}`, { method: "DELETE" });
+        setConfirmModal(null);
+      },
+    });
   };
 
   const parseAttachments = (raw: string | null | undefined): Attachment[] => {
@@ -844,13 +882,20 @@ export default function MessageArea({
             </div>
           </div>
         ) : (
-          messages.map((msg) => (
+          messages.map((msg, idx) => {
+            const prev = idx > 0 ? messages[idx - 1] : null;
+            const isGrouped = prev
+              && prev.user.id === msg.user.id
+              && !msg.replyTo
+              && !msg.pinned
+              && (new Date(msg.createdAt).getTime() - new Date(prev.createdAt).getTime()) < 5 * 60 * 1000;
+            return (
             <motion.div key={msg.id}
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ type: "spring", stiffness: 380, damping: 28 }}
-              className={`flex gap-3 group ${msg.pinned ? "bg-amber-50/50 dark:bg-amber-400/5 -mx-2 px-2 py-1 rounded-lg" : ""}`}>
-              <GlowAvatar user={msg.user} size={36} />
+              className={`flex gap-3 group ${isGrouped ? "mt-[-8px]" : ""} ${msg.pinned ? "bg-amber-50/50 dark:bg-amber-400/5 -mx-2 px-2 py-1 rounded-lg" : ""}`}>
+              {isGrouped ? <div className="w-9 flex-shrink-0" /> : <GlowAvatar user={msg.user} size={36} />}
               <div className="flex-1 min-w-0">
                 {/* Pin indicator */}
                 {msg.pinned && (
@@ -868,7 +913,7 @@ export default function MessageArea({
                   </div>
                 )}
 
-                <div className="flex items-baseline gap-2 flex-wrap">
+                {!isGrouped && <div className="flex items-baseline gap-2 flex-wrap">
                   <span className="font-medium text-neutral-900 dark:text-white text-sm">{msg.user.name}</span>
                   {msg.user.role === "ADMIN" && <span className="text-[10px] px-1.5 py-0.5 rounded bg-red-500/15 text-red-400 font-medium">Админ</span>}
                   {msg.user.role === "MODERATOR" && <span className="text-[10px] px-1.5 py-0.5 rounded bg-blue-500/15 text-blue-400 font-medium">Модератор</span>}
@@ -882,7 +927,7 @@ export default function MessageArea({
                     </span>
                   )}
                   {msg.edited && <span className="text-[10px] text-neutral-400">(ред.)</span>}
-                </div>
+                </div>}
 
                 {msg.deleted ? (
                   <p className="text-neutral-400 dark:text-gray-600 text-sm mt-0.5 italic">Сообщение удалено</p>
@@ -1016,7 +1061,8 @@ export default function MessageArea({
 
               </div>
             </motion.div>
-          ))
+            );
+          })
         )}
         <div ref={messagesEndRef} />
       </div>
@@ -1162,7 +1208,7 @@ export default function MessageArea({
                   <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4" /></svg>
                 </button>
                 {newMessage.trim() ? (
-                  <button type="submit" disabled={slowmodeWait > 0} className="btn-primary !px-4 !py-2.5 disabled:opacity-50" aria-label="Send message">
+                  <button type="submit" disabled={slowmodeWait > 0 || sending} className="btn-primary !px-4 !py-2.5 disabled:opacity-50" aria-label="Send message">
                     <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
                     </svg>
@@ -1287,6 +1333,27 @@ export default function MessageArea({
       {forwardToast && (
         <div className="fixed bottom-20 left-1/2 -translate-x-1/2 z-50 px-4 py-2 bg-green-500 text-white text-sm rounded-xl shadow-lg animate-fade-in">
           Сообщение переслано
+        </div>
+      )}
+
+      {/* Error toast */}
+      {errorToast && (
+        <div className="fixed bottom-20 left-1/2 -translate-x-1/2 z-50 px-4 py-2 bg-red-500 text-white text-sm rounded-xl shadow-lg animate-fade-in">
+          {errorToast}
+        </div>
+      )}
+
+      {/* Confirm modal */}
+      {confirmModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4" onClick={() => setConfirmModal(null)}>
+          <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" />
+          <div className="relative z-10 bg-white dark:bg-neutral-900 border border-neutral-200 dark:border-white/10 rounded-2xl shadow-2xl p-5 max-w-sm w-full" onClick={e => e.stopPropagation()}>
+            <p className="text-sm text-neutral-900 dark:text-white mb-4">{confirmModal.message}</p>
+            <div className="flex gap-2 justify-end">
+              <button onClick={() => setConfirmModal(null)} className="px-4 py-2 text-sm text-neutral-500 hover:text-neutral-700 dark:hover:text-neutral-300 rounded-xl hover:bg-neutral-100 dark:hover:bg-white/5">Отмена</button>
+              <button onClick={confirmModal.onConfirm} className="px-4 py-2 text-sm bg-red-500 text-white rounded-xl hover:bg-red-600 transition-colors">Удалить</button>
+            </div>
+          </div>
         </div>
       )}
     </div>

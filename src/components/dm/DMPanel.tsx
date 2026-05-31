@@ -81,6 +81,7 @@ export default function DMPanel({ currentUserId, onClose, initialFriendId }: DMP
   const [sending, setSending] = useState(false);
   const [voiceUploading, setVoiceUploading] = useState(false);
   const [fileUploading, setFileUploading] = useState(false);
+  const [dmErrorToast, setDmErrorToast] = useState<string | null>(null);
   const [e2eeReady, setE2eeReady] = useState(false);
   const [peerReadAt, setPeerReadAt] = useState<string | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -416,7 +417,8 @@ export default function DMPanel({ currentUserId, onClose, initialFriendId }: DMP
       const uploadRes = await fetch("/api/messages/upload", { method: "POST", body: fd });
       if (!uploadRes.ok) {
         const data = await uploadRes.json();
-        alert(data.error || "Ошибка загрузки");
+        setDmErrorToast(data.error || "Ошибка загрузки");
+        setTimeout(() => setDmErrorToast(null), 3500);
         return;
       }
       const attachment = await uploadRes.json();
@@ -713,6 +715,11 @@ export default function DMPanel({ currentUserId, onClose, initialFriendId }: DMP
           </div>
         )}
       </main>
+      {dmErrorToast && (
+        <div className="fixed bottom-20 left-1/2 -translate-x-1/2 z-50 px-4 py-2 bg-red-500 text-white text-sm rounded-xl shadow-lg animate-fade-in">
+          {dmErrorToast}
+        </div>
+      )}
     </div>
   );
 }
