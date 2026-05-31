@@ -116,6 +116,15 @@ export default function AdminPage() {
       color: "from-gray-400/20 to-slate-600/20",
       borderColor: "border-gray-400/20 hover:border-gray-400/40",
     },
+    {
+      title: "Приветствие",
+      count: "📜",
+      href: "/admin/welcome",
+      icon: "📜",
+      description: "Текст согласия после регистрации",
+      color: "from-emerald-400/20 to-teal-600/20",
+      borderColor: "border-emerald-400/20 hover:border-emerald-400/40",
+    },
   ];
 
   return (
@@ -182,6 +191,10 @@ export default function AdminPage() {
             <Link href="/admin/logs" className="flex items-center gap-3 p-3 rounded-xl hover:bg-white/5 transition-colors text-gray-300 hover:text-white">
               <span className="text-xl">📋</span>
               <span>Логи редактора сайта</span>
+            </Link>
+            <Link href="/admin/welcome" className="flex items-center gap-3 p-3 rounded-xl hover:bg-white/5 transition-colors text-gray-300 hover:text-white">
+              <span className="text-xl">📜</span>
+              <span>Приветственная форма</span>
             </Link>
           </div>
         </div>

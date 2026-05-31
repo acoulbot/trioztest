@@ -28,6 +28,32 @@
   --cn-hover:       rgba(0,0,0,0.04);
 }
 
+/* ── Light Warm variant ─────────────────────────────────────────────────── */
+.light.warm {
+  --background: #faf8f5;
+  --foreground: #171717;
+  --card-bg: #ffffff;
+  --card-border: #e5e7eb;
+  --muted: #6b7280;
+  --muted-bg: #fef3e8;
+  --tag-bg: #fdebd0;
+  --tag-text: #92400e;
+  --accent: #ea580c;
+  --accent-hover: #c2410c;
+
+  --cn-rail:        #f5f0eb;
+  --cn-sidebar:     #faf7f4;
+  --cn-main:        #fffcfa;
+  --cn-border:      rgba(234,88,12,0.10);
+  --cn-accent:      #ea580c;
+  --cn-accent-dim:  rgba(234,88,12,0.10);
+  --cn-accent-text: #ea580c;
+  --cn-pill:        #ea580c;
+  --cn-text:        #171717;
+  --cn-muted:       #6b7280;
+  --cn-hover:       rgba(234,88,12,0.05);
+}
+
 /* ── Cyber Dark (default dark) ─────────────────────────────────────────── */
 .dark {
   --background: #0a0a0f;

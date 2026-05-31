@@ -48,9 +48,11 @@ model User {
   dmConversations1  DirectConversation[] @relation("DMUser1")
   dmConversations2  DirectConversation[] @relation("DMUser2")
   directMessages    DirectMessage[]
+  notifications     Notification[]
   avatarGlowEnabled Boolean         @default(false)
   avatarGlowColors  String?
   e2eePublicKey     String?         @db.Text
+  tosAccepted       Boolean         @default(false)
   lastSeen          DateTime?
   createdAt         DateTime        @default(now())
   updatedAt         DateTime        @updatedAt
@@ -456,4 +458,19 @@ model AuditLog {
   @@index([userId])
   @@index([createdAt])
   @@index([action])
+}
+
+model Notification {
+  id        String   @id @default(cuid())
+  userId    String
+  type      String
+  title     String
+  body      String?
+  link      String?
+  read      Boolean  @default(false)
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+
+  @@index([userId, read])
+  @@index([createdAt])
 }
