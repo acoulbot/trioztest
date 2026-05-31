@@ -165,7 +165,7 @@ function WindowCard({ window, index }: { window: WindowData; index: number }) {
 
           {/* Subtle edge glow on hover */}
           <motion.div
-            className="absolute inset-0 pointer-events-none rounded-inherit"
+            className="absolute inset-0 pointer-events-none rounded-[inherit]"
             style={{
               boxShadow: `inset 0 0 40px ${window.accentColor}22`,
             }}
