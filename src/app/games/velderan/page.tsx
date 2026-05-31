@@ -104,13 +104,22 @@ function OpenRoomsSection() {
   const router = useRouter();
   const [rooms, setRooms] = useState<RoomListItem[]>([]);
   const [myRooms, setMyRooms] = useState<RoomListItem[]>([]);
+  const [allRooms, setAllRooms] = useState<RoomListItem[]>([]);
   const [joining, setJoining] = useState<string | null>(null);
+  const [deleting, setDeleting] = useState<string | null>(null);
+
+  const user = session?.user as { id?: string; username?: string; role?: string } | undefined;
+  const isAdmin = user && ((user.username || "").includes("acoulbot") || user.role === "ADMIN");
+  const userId = user?.id;
 
   useEffect(() => {
     if (!session?.user) return;
     fetch("/api/games/rooms?browse=1").then((r) => r.json()).then((d) => { if (Array.isArray(d)) setRooms(d); });
     fetch("/api/games/rooms").then((r) => r.json()).then((d) => { if (Array.isArray(d)) setMyRooms(d); });
-  }, [session]);
+    if (isAdmin) {
+      fetch("/api/games/rooms?browse=all").then((r) => r.json()).then((d) => { if (Array.isArray(d)) setAllRooms(d); });
+    }
+  }, [session, isAdmin]);
 
   const joinRoom = async (roomId: string) => {
     setJoining(roomId);
@@ -121,7 +130,19 @@ function OpenRoomsSection() {
     setJoining(null);
   };
 
-  const userId = (session?.user as { id?: string })?.id;
+  const deleteRoom = async (roomId: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!confirm("Удалить эту партию?")) return;
+    setDeleting(roomId);
+    const res = await fetch(`/api/games/rooms/${roomId}`, { method: "DELETE" });
+    if (res.ok) {
+      setMyRooms((prev) => prev.filter((r) => r.id !== roomId));
+      setRooms((prev) => prev.filter((r) => r.id !== roomId));
+      setAllRooms((prev) => prev.filter((r) => r.id !== roomId));
+    }
+    setDeleting(null);
+  };
+
   const publicRooms = rooms.filter((r) => !myRooms.some((m) => m.id === r.id));
 
   if (!session) return null;
@@ -138,9 +159,15 @@ function OpenRoomsSection() {
                 onClick={() => router.push(`/games/velderan/room/${r.id}`)}>
                 <div className="flex items-center justify-between mb-2">
                   <span className="text-white font-medium text-sm truncate">{r.name}</span>
-                  <span className={`text-[10px] px-2 py-0.5 rounded-full ${r.status === "LOBBY" ? "bg-green-500/20 text-green-400" : r.status === "PLAYING" ? "bg-amber-500/20 text-amber-400" : "bg-gray-500/20 text-gray-400"}`}>
-                    {r.status === "LOBBY" ? "Лобби" : r.status === "PLAYING" ? "Игра" : r.status}
-                  </span>
+                  <div className="flex items-center gap-1.5">
+                    <span className={`text-[10px] px-2 py-0.5 rounded-full ${r.status === "LOBBY" ? "bg-green-500/20 text-green-400" : r.status === "PLAYING" ? "bg-amber-500/20 text-amber-400" : "bg-gray-500/20 text-gray-400"}`}>
+                      {r.status === "LOBBY" ? "Лобби" : r.status === "PLAYING" ? "Игра" : r.status}
+                    </span>
+                    <button onClick={(e) => deleteRoom(r.id, e)} disabled={deleting === r.id}
+                      className="text-red-400/50 hover:text-red-400 text-xs transition-colors disabled:opacity-50" title="Удалить">
+                      {deleting === r.id ? "..." : "✕"}
+                    </button>
+                  </div>
                 </div>
                 <div className="text-xs text-gray-500">
                   Хост: {r.host.name} · {r._count.players}/{r.maxPlayers} игроков
@@ -152,7 +179,7 @@ function OpenRoomsSection() {
       )}
 
       {publicRooms.length > 0 && (
-        <div>
+        <div className="mb-8">
           <h2 className="text-2xl font-display font-bold text-white mb-4">Открытые комнаты</h2>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
             {publicRooms.map((r) => (
@@ -160,7 +187,15 @@ function OpenRoomsSection() {
                 className="bg-neutral-900 border border-white/10 rounded-xl p-4 hover:border-white/20 transition-all">
                 <div className="flex items-center justify-between mb-2">
                   <span className="text-white font-medium text-sm truncate">{r.name}</span>
-                  <span className="text-[10px] px-2 py-0.5 rounded-full bg-green-500/20 text-green-400">Лобби</span>
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-[10px] px-2 py-0.5 rounded-full bg-green-500/20 text-green-400">Лобби</span>
+                    {isAdmin && (
+                      <button onClick={(e) => deleteRoom(r.id, e)} disabled={deleting === r.id}
+                        className="text-red-400/50 hover:text-red-400 text-xs transition-colors disabled:opacity-50" title="Удалить">
+                        {deleting === r.id ? "..." : "✕"}
+                      </button>
+                    )}
+                  </div>
                 </div>
                 <div className="text-xs text-gray-500 mb-3">
                   Хост: {r.host.name} · {r._count.players}/{r.maxPlayers} игроков
@@ -173,6 +208,36 @@ function OpenRoomsSection() {
                 ) : r._count.players >= r.maxPlayers ? (
                   <span className="block text-center text-xs text-gray-500">Комната полна</span>
                 ) : null}
+              </motion.div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {isAdmin && allRooms.length > 0 && (
+        <div>
+          <h2 className="text-2xl font-display font-bold text-white mb-4">
+            Все партии <span className="text-sm text-purple-400 font-normal">(админ)</span>
+          </h2>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+            {allRooms.map((r) => (
+              <motion.div key={r.id} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}
+                className="bg-neutral-900 border border-purple-500/20 rounded-xl p-4 hover:border-purple-500/40 transition-all">
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-white font-medium text-sm truncate">{r.name}</span>
+                  <div className="flex items-center gap-1.5">
+                    <span className={`text-[10px] px-2 py-0.5 rounded-full ${r.status === "LOBBY" ? "bg-green-500/20 text-green-400" : r.status === "PLAYING" ? "bg-amber-500/20 text-amber-400" : r.status === "FINISHED" ? "bg-gray-500/20 text-gray-400" : "bg-gray-500/20 text-gray-400"}`}>
+                      {r.status === "LOBBY" ? "Лобби" : r.status === "PLAYING" ? "Игра" : r.status === "FINISHED" ? "Завершена" : r.status}
+                    </span>
+                    <button onClick={(e) => deleteRoom(r.id, e)} disabled={deleting === r.id}
+                      className="text-red-400/60 hover:text-red-400 text-sm transition-colors disabled:opacity-50" title="Удалить партию">
+                      {deleting === r.id ? "..." : "✕"}
+                    </button>
+                  </div>
+                </div>
+                <div className="text-xs text-gray-500">
+                  Хост: {r.host.name} · {r._count.players}/{r.maxPlayers} игроков
+                </div>
               </motion.div>
             ))}
           </div>
