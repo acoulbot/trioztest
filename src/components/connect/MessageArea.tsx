@@ -608,6 +608,8 @@ export default function MessageArea({
 
                 <div className="flex items-baseline gap-2 flex-wrap">
                   <span className="font-medium text-neutral-900 dark:text-white text-sm">{msg.user.name}</span>
+                  {msg.user.role === "ADMIN" && <span className="text-[10px] px-1.5 py-0.5 rounded bg-red-500/15 text-red-400 font-medium">Админ</span>}
+                  {msg.user.role === "MODERATOR" && <span className="text-[10px] px-1.5 py-0.5 rounded bg-blue-500/15 text-blue-400 font-medium">Модератор</span>}
                   {msg.user.username && <span className="text-[11px] text-neutral-400">@{msg.user.username}</span>}
                   <span className="text-xs text-neutral-400 dark:text-gray-600">
                     {new Date(msg.createdAt).toLocaleTimeString("ru-RU", { hour: "2-digit", minute: "2-digit" })}
