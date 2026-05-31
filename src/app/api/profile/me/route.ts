@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import prisma from "@/lib/prisma";
+import { getIO } from "@/lib/socketEmit";
 
 export async function GET() {
   const session = await getServerSession(authOptions);
@@ -73,10 +74,14 @@ export async function PATCH(req: Request) {
     data,
     select: {
       id: true,
+      avatar: true,
       avatarGlowEnabled: true,
       avatarGlowColors: true,
     },
   });
+
+  const io = getIO();
+  if (io) io.emit("profile-updated", updated);
 
   return NextResponse.json(updated);
 }

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useSession } from "next-auth/react";
 import { AnimatePresence } from "framer-motion";
 import Link from "next/link";
@@ -756,6 +756,31 @@ function ConnectPageInner() {
         .then((d) => setMyGlowSettings({ avatarGlowEnabled: d.avatarGlowEnabled ?? false, avatarGlowColors: d.avatarGlowColors ?? null, avatar: d.avatar ?? null }))
         .catch(() => {});
     }
+  }, [session]);
+
+  // Listen for profile updates (avatar/glow) via Socket.IO
+  const profileSocketRef = useRef<import("socket.io-client").Socket | null>(null);
+  useEffect(() => {
+    if (!session?.user) return;
+    const uid = (session.user as { id?: string }).id;
+    if (!uid) return;
+    import("socket.io-client").then(({ io: ioClient }) => {
+      const sock = ioClient({ path: "/api/socketio", withCredentials: true });
+      profileSocketRef.current = sock;
+      sock.on("profile-updated", (data: { id: string; avatar?: string | null; avatarGlowEnabled?: boolean; avatarGlowColors?: string | null }) => {
+        if (data.id === uid) {
+          setMyGlowSettings((prev) => ({
+            avatar: data.avatar ?? prev?.avatar ?? null,
+            avatarGlowEnabled: data.avatarGlowEnabled ?? prev?.avatarGlowEnabled ?? false,
+            avatarGlowColors: data.avatarGlowColors ?? prev?.avatarGlowColors ?? null,
+          }));
+        }
+      });
+    });
+    return () => {
+      profileSocketRef.current?.disconnect();
+      profileSocketRef.current = null;
+    };
   }, [session]);
 
   useEffect(() => {

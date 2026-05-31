@@ -65,6 +65,8 @@ interface DMPanelProps {
 }
 
 export default function DMPanel({ currentUserId, onClose, initialFriendId }: DMPanelProps) {
+  const currentUserIdRef = useRef(currentUserId);
+  currentUserIdRef.current = currentUserId;
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [selectedConv, setSelectedConv] = useState<string | null>(null);
   const [initialHandled, setInitialHandled] = useState(false);
@@ -253,7 +255,7 @@ export default function DMPanel({ currentUserId, onClose, initialFriendId }: DMP
         });
       }
       // Play notification only for incoming messages (not own)
-      if (msg.userId !== currentUserId) {
+      if (msg.userId !== currentUserIdRef.current) {
         playDMNotification();
       }
       setConversations((prev) =>
