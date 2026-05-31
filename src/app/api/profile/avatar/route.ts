@@ -12,27 +12,39 @@ export async function POST(req: Request) {
   if (!session?.user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const formData = await req.formData();
-  const file = formData.get("avatar") as File | null;
+  const uploadType = (formData.get("type") as string) || "avatar";
+  const file = (formData.get("file") as File) || (formData.get("avatar") as File);
 
   if (!file) return NextResponse.json({ error: "Файл не передан" }, { status: 400 });
-  if (file.size > 3 * 1024 * 1024)
-    return NextResponse.json({ error: "Файл слишком большой (макс. 3MB)" }, { status: 400 });
+  const maxSize = uploadType === "banner" ? 10 * 1024 * 1024 : 3 * 1024 * 1024;
+  if (file.size > maxSize)
+    return NextResponse.json({ error: `Файл слишком большой (макс. ${uploadType === "banner" ? "10MB" : "3MB"})` }, { status: 400 });
 
   const buffer = Buffer.from(await file.arrayBuffer());
 
-  const validation = validateImageFile(buffer, file.type);
-  if (!validation.valid) {
-    return NextResponse.json({ error: validation.error }, { status: 400 });
+  // Skip strict validation for GIFs used as banners
+  if (uploadType !== "banner" || !file.type.includes("gif")) {
+    const validation = validateImageFile(buffer, file.type);
+    if (!validation.valid) {
+      return NextResponse.json({ error: validation.error }, { status: 400 });
+    }
   }
 
-  const uploadDir = path.join(process.cwd(), "public", "uploads", "avatars");
+  const subDir = uploadType === "banner" ? "banners" : "avatars";
+  const uploadDir = path.join(process.cwd(), "public", "uploads", subDir);
   await mkdir(uploadDir, { recursive: true });
 
   const ext = sanitizeExtension(file.name);
   const filename = `${session.user.id}-${Date.now()}.${ext}`;
   await writeFile(path.join(uploadDir, filename), buffer);
 
-  const avatar = `/uploads/avatars/${filename}`;
+  const url = `/uploads/${subDir}/${filename}`;
+
+  if (uploadType === "banner") {
+    return NextResponse.json({ url });
+  }
+
+  const avatar = url;
   const updated = await prisma.user.update({
     where: { id: session.user.id },
     data: { avatar },

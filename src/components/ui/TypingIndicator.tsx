@@ -15,7 +15,7 @@ export default function TypingIndicator({ names }: TypingIndicatorProps) {
     names.length === 0 ? null
     : names.length === 1 ? `${names[0]} печатает`
     : names.length <= 3 ? `${names.join(", ")} печатают`
-    : "Несколько человек печатают";
+    : `${names.slice(0, 3).join(", ")} +${names.length - 3} печатают`;
 
   return (
     <AnimatePresence>

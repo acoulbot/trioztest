@@ -59,6 +59,7 @@ model User {
   scheduledMsgs    ScheduledMessage[]
   avatarGlowEnabled Boolean         @default(false)
   avatarGlowColors  String?
+  profileBanner     String?         @db.Text
   e2eePublicKey     String?         @db.Text
   tosAccepted       Boolean         @default(false)
   lastSeen          DateTime?

@@ -1,10 +1,11 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import GlowAvatar, { GLOW_PRESETS, GlowAvatarUser } from "@/components/ui/GlowAvatar";
 import { DayNightMiniPreview } from "@/components/connect/DayNightBackground";
 import { getDMSoundEnabled, setDMSoundEnabled, playDMNotification } from "@/lib/dmSound";
+import { exportKeysToJSON, importKeysFromJSON } from "@/lib/e2ee";
 
 function DMSoundToggle() {
   const [on, setOn] = useState(true);
@@ -89,11 +90,15 @@ export default function ProfileSettingsModal({ user, onClose, onSaved, userRole 
   const [statusType, setStatusType] = useState<string>("online");
   const [customStatus, setCustomStatus] = useState<string>("");
   const [statusLoading, setStatusLoading] = useState(false);
+  const [bannerUrl, setBannerUrl] = useState<string | null>(null);
+  const [bannerUploading, setBannerUploading] = useState(false);
+  const bannerInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     fetch("/api/profile/me").then(r => r.json()).then(d => {
       if (d.statusType) setStatusType(d.statusType);
       if (d.customStatus) setCustomStatus(d.customStatus);
+      if (d.profileBanner) setBannerUrl(d.profileBanner);
     }).catch(() => {});
   }, []);
 
@@ -119,13 +124,17 @@ export default function ProfileSettingsModal({ user, onClose, onSaved, userRole 
     setSaving(true);
     setError(null);
     try {
+      const patchBody: Record<string, unknown> = {
+        avatarGlowEnabled: glowEnabled,
+        avatarGlowColors: glowEnabled ? activeColors : null,
+      };
+      if (isPrivileged) {
+        patchBody.profileBanner = bannerUrl;
+      }
       const res = await fetch("/api/profile/me", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          avatarGlowEnabled: glowEnabled,
-          avatarGlowColors: glowEnabled ? activeColors : null,
-        }),
+        body: JSON.stringify(patchBody),
       });
       const data = await res.json();
       if (!res.ok) {
@@ -223,6 +232,54 @@ export default function ProfileSettingsModal({ user, onClose, onSaved, userRole 
               </button>
             </div>
           </div>
+
+          {/* Animated profile banner — admin only */}
+          {isPrivileged && (
+          <div className="space-y-3">
+            <h3 className="text-sm font-semibold text-neutral-900 dark:text-white">🎬 Анимированный профиль</h3>
+            <p className="text-xs text-neutral-400">Загрузите GIF или изображение для фона профиля</p>
+            {bannerUrl && (
+              <div className="relative h-24 rounded-xl overflow-hidden border border-neutral-200 dark:border-white/10">
+                <img src={bannerUrl} alt="Banner" className="w-full h-full object-cover" />
+                <button
+                  onClick={() => setBannerUrl(null)}
+                  className="absolute top-1.5 right-1.5 p-1 rounded-lg bg-black/50 text-white hover:bg-black/70 transition-colors"
+                >
+                  <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+                </button>
+              </div>
+            )}
+            <button
+              onClick={() => bannerInputRef.current?.click()}
+              disabled={bannerUploading}
+              className="px-3 py-2 bg-violet-500/10 text-violet-600 dark:text-violet-400 rounded-xl text-xs font-medium hover:bg-violet-500/20 transition-colors disabled:opacity-50"
+            >
+              {bannerUploading ? "Загрузка..." : bannerUrl ? "Заменить фон" : "Загрузить фон"}
+            </button>
+            <input
+              ref={bannerInputRef}
+              type="file"
+              accept="image/*,.gif"
+              className="hidden"
+              onChange={async (e) => {
+                const file = e.target.files?.[0];
+                if (!file) return;
+                setBannerUploading(true);
+                const fd = new FormData();
+                fd.append("file", file);
+                fd.append("type", "banner");
+                try {
+                  const res = await fetch("/api/profile/avatar", { method: "POST", body: fd });
+                  const data = await res.json();
+                  if (data.url) setBannerUrl(data.url);
+                  else setError("Ошибка загрузки");
+                } catch { setError("Ошибка сети"); }
+                setBannerUploading(false);
+                e.target.value = "";
+              }}
+            />
+          </div>
+          )}
 
           {/* Enable toggle — only for admins */}
           {isPrivileged && (<>
@@ -431,6 +488,40 @@ export default function ProfileSettingsModal({ user, onClose, onSaved, userRole 
             </AnimatePresence>
           </div>
           )}
+
+          {/* E2EE key backup */}
+          <div className="space-y-3">
+            <h3 className="text-sm font-semibold text-neutral-900 dark:text-white">🔐 Шифрование E2EE</h3>
+            <p className="text-xs text-neutral-400">Экспорт/импорт ключей для расшифровки старых сообщений на новом устройстве</p>
+            <div className="flex gap-2">
+              <button
+                onClick={async () => {
+                  const json = await exportKeysToJSON();
+                  if (!json) { setError("Ключи не найдены"); return; }
+                  const blob = new Blob([json], { type: "application/json" });
+                  const url = URL.createObjectURL(blob);
+                  const a = document.createElement("a");
+                  a.href = url; a.download = "tz-e2ee-keys.json"; a.click();
+                  URL.revokeObjectURL(url);
+                }}
+                className="px-3 py-2 bg-violet-500/10 text-violet-600 dark:text-violet-400 rounded-xl text-xs font-medium hover:bg-violet-500/20 transition-colors"
+              >
+                📤 Экспорт ключей
+              </button>
+              <label className="px-3 py-2 bg-green-500/10 text-green-600 dark:text-green-400 rounded-xl text-xs font-medium hover:bg-green-500/20 transition-colors cursor-pointer">
+                📥 Импорт ключей
+                <input type="file" accept=".json" className="hidden" onChange={async (e) => {
+                  const f = e.target.files?.[0];
+                  if (!f) return;
+                  const text = await f.text();
+                  const ok = await importKeysFromJSON(text);
+                  if (ok) { setError(null); alert("Ключи восстановлены!"); }
+                  else setError("Неверный формат файла ключей");
+                  e.target.value = "";
+                }} />
+              </label>
+            </div>
+          </div>
 
           {error && (
             <p className="text-sm text-red-500 dark:text-red-400">{error}</p>
