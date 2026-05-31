@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import { useSession } from "next-auth/react";
 import { useParams, useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
@@ -226,6 +226,18 @@ export default function PlayPage() {
     }
   }, [gameState?.phase, isMyTurn]);
 
+  const playerNames = useMemo(() => {
+    const names: Record<string, string> = {};
+    if (room) for (const p of room.players) names[p.id] = p.user.name;
+    return names;
+  }, [room]);
+
+  const playerFactions = useMemo(() => {
+    const factions: Record<string, string> = {};
+    if (room) for (const p of room.players) factions[p.id] = p.faction || "";
+    return factions;
+  }, [room]);
+
   // Victory sound
   useEffect(() => {
     if (gameState?.phase === "GAME_OVER" && gameState.winner) {
@@ -248,7 +260,7 @@ export default function PlayPage() {
     prevPhaseRef.current = gameState.phase;
     prevCombatRef.current = !!gameState.combat;
 
-    if (!prevPhase) return; // skip initial load
+    if (!prevPhase) return;
 
     if (gameState.combat && !prevCombat) {
       const aName = playerNames[gameState.combat.attackerPlayerId] || "?";
@@ -269,17 +281,7 @@ export default function PlayPage() {
       const curName = playerNames[gameState.turnOrder[gameState.currentPlayerIndex]] || "?";
       showNotif(`🏰 Ход: ${curName}`);
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [gameState?.phase, gameState?.combat, gameState?.currentPlayerIndex]);
-
-  const playerNames: Record<string, string> = {};
-  const playerFactions: Record<string, string> = {};
-  if (room) {
-    for (const p of room.players) {
-      playerNames[p.id] = p.user.name;
-      playerFactions[p.id] = p.faction || "";
-    }
-  }
+  }, [gameState?.phase, gameState?.combat, gameState?.currentPlayerIndex, playerNames, showNotif]);
 
   const selectUnit = (unitId: string) => {
     if (!gameState || !isMyTurn || gameState.phase !== "MOVE") return;

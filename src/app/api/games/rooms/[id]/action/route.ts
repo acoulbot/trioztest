@@ -16,7 +16,6 @@ import {
   specialAttack,
   smugglerTeleport,
   playGodCard,
-  tryDiceGateMove,
   getSpecialAttackTargets,
 } from "@/lib/games/velderanState";
 import { executeBotTurns, isBotPlayer } from "@/lib/games/velderanBot";

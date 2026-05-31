@@ -1119,7 +1119,6 @@ export function endTurn(
     processSmuglerArrivals(newState, playerNames);
 
     // Reinforcements: +2 armies to inventory per player (per rules: 2 фишки за круг)
-    let anyHasReinforcements = false;
     const maxId = newState.units.reduce((max, u) => {
       const num = parseInt(u.id.replace("u", "")) || 0;
       return Math.max(max, num);
@@ -1137,7 +1136,6 @@ export function endTurn(
       for (let i = 0; i < reinforcements; i++) {
         newState.inventory[pid].push({ id: `u${nextUnitId++}`, type: "ARMY" });
       }
-      anyHasReinforcements = true;
       const pName = playerNames[pid] || "Игрок";
       newState.log.push(`${pName} получил +${reinforcements} отрядов в инвентарь.`);
     }
