@@ -1,6 +1,7 @@
 "use client";
 
 import { useConnectTheme } from "@/contexts/ThemeContext";
+import { useTheme } from "@/components/Providers";
 import type { GlowAvatarUser } from "@/components/ui/GlowAvatar";
 
 export type NavSection = "communities" | "friends" | "dm";
@@ -118,6 +119,7 @@ export default function NavRail({
   onToggleMic,
 }: NavRailProps) {
   const { theme, toggleTheme } = useConnectTheme();
+  const { theme: globalTheme } = useTheme();
 
   return (
     <nav
@@ -159,19 +161,21 @@ export default function NavRail({
 
       {/* ── Bottom: theme toggle + user panel ── */}
       <div className="flex flex-col items-center gap-2 w-full px-3">
-        {/* Theme toggle */}
-        <button
-          onClick={toggleTheme}
-          className="w-8 h-8 rounded-lg flex items-center justify-center transition-all duration-200"
-          style={{
-            background: "var(--cn-accent-dim)",
-            color: "var(--cn-accent-text)",
-            border: "none",
-          }}
-          title={theme === "cyber" ? "Переключить на Velvet" : "Переключить на Cyber"}
-        >
-          <ThemeToggleIcon isCyber={theme === "cyber"} />
-        </button>
+        {/* Theme toggle — only in dark mode */}
+        {globalTheme === "dark" && (
+          <button
+            onClick={toggleTheme}
+            className="w-8 h-8 rounded-lg flex items-center justify-center transition-all duration-200"
+            style={{
+              background: "var(--cn-accent-dim)",
+              color: "var(--cn-accent-text)",
+              border: "none",
+            }}
+            title={theme === "cyber" ? "Переключить на Velvet" : "Переключить на Cyber"}
+          >
+            <ThemeToggleIcon isCyber={theme === "cyber"} />
+          </button>
+        )}
 
         {/* Mic */}
         {onToggleMic && (

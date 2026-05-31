@@ -125,6 +125,15 @@ export default function AdminPage() {
       color: "from-emerald-400/20 to-teal-600/20",
       borderColor: "border-emerald-400/20 hover:border-emerald-400/40",
     },
+    {
+      title: "Рассылка",
+      count: "📢",
+      href: "/admin/broadcast",
+      icon: "📢",
+      description: "Уведомления всем пользователям",
+      color: "from-orange-400/20 to-red-600/20",
+      borderColor: "border-orange-400/20 hover:border-orange-400/40",
+    },
   ];
 
   return (
@@ -195,6 +204,10 @@ export default function AdminPage() {
             <Link href="/admin/welcome" className="flex items-center gap-3 p-3 rounded-xl hover:bg-white/5 transition-colors text-gray-300 hover:text-white">
               <span className="text-xl">📜</span>
               <span>Приветственная форма</span>
+            </Link>
+            <Link href="/admin/broadcast" className="flex items-center gap-3 p-3 rounded-xl hover:bg-white/5 transition-colors text-gray-300 hover:text-white">
+              <span className="text-xl">📢</span>
+              <span>Рассылка уведомлений</span>
             </Link>
           </div>
         </div>

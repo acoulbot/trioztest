@@ -7,7 +7,7 @@ import { validateImageFile, sanitizeExtension } from "@/lib/fileValidation";
 
 const MAX_SIZE = 5 * 1024 * 1024; // 5 MB
 // Allowed upload destinations (maps to subfolders under public/uploads/)
-const ALLOWED_DIRS = ["ecosystem", "windows", "articles"] as const;
+const ALLOWED_DIRS = ["ecosystem", "windows", "articles", "broadcast"] as const;
 type UploadDir = (typeof ALLOWED_DIRS)[number];
 
 export async function POST(req: Request) {
