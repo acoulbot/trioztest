@@ -307,6 +307,14 @@ export default function MessageArea({
       }));
     });
 
+    socket.on("messages-read", ({ userId: readerId, messageIds: readIds }: { userId: string; messageIds: string[] }) => {
+      setMessages((prev) => prev.map((m) => {
+        if (!readIds.includes(m.id)) return m;
+        if ((m.reads || []).some(r => r.userId === readerId)) return m;
+        return { ...m, reads: [...(m.reads || []), { userId: readerId }] };
+      }));
+    });
+
     return () => {
       socket.emit("leave-channel", { channelId });
       socket.disconnect();
@@ -348,7 +356,7 @@ export default function MessageArea({
     fetch("/api/messages/read", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ messageIds: unread.map(m => m.id) }),
+      body: JSON.stringify({ messageIds: unread.map(m => m.id), channelId }),
     }).then(() => {
       setMessages(prev => prev.map(m => {
         if (unread.some(u => u.id === m.id)) {
@@ -430,10 +438,10 @@ export default function MessageArea({
     setTimeout(() => { ta.focus(); ta.selectionStart = start + prefix.length; ta.selectionEnd = end + prefix.length; }, 0);
   };
 
-  // Render formatted content: **bold**, *italic*, `code`, - lists, #channel mentions
+  // Render formatted content: **bold**, *italic*, `code`, - lists, #channel mentions, @mentions
   const renderContent = (text: string) => {
     const parts: React.ReactNode[] = [];
-    const regex = /(\*\*(.+?)\*\*|\*(.+?)\*|`(.+?)`|^- (.+)$|#(\S+))/gm;
+    const regex = /(\*\*(.+?)\*\*|\*(.+?)\*|`(.+?)`|^- (.+)$|#(\S+)|@(everyone|[A-Za-z0-9_а-яА-ЯёЁ]+))/gm;
     let lastIndex = 0;
     let match;
     let key = 0;
@@ -444,6 +452,7 @@ export default function MessageArea({
       else if (match[4]) parts.push(<code key={key++} className="bg-neutral-200 dark:bg-white/10 px-1 rounded text-xs">{match[4]}</code>);
       else if (match[5]) parts.push(<span key={key++} className="flex items-start gap-1"><span className="text-violet-500 dark:text-cyan-400">•</span>{match[5]}</span>);
       else if (match[6]) parts.push(<span key={key++} className="text-violet-500 dark:text-cyan-400 cursor-pointer hover:underline">#{match[6]}</span>);
+      else if (match[7]) parts.push(<span key={key++} className="bg-violet-500/20 dark:bg-cyan-400/20 text-violet-600 dark:text-cyan-300 px-1 rounded font-medium">@{match[7]}</span>);
       lastIndex = match.index + match[0].length;
     }
     if (lastIndex < text.length) parts.push(text.slice(lastIndex));
@@ -762,6 +771,11 @@ export default function MessageArea({
                   <span className="text-xs text-neutral-400 dark:text-gray-600">
                     {new Date(msg.createdAt).toLocaleTimeString("ru-RU", { hour: "2-digit", minute: "2-digit" })}
                   </span>
+                  {msg.user.id === currentUserId && !msg.deleted && (
+                    <span className="text-[10px] text-neutral-400" title={`Прочитано: ${(msg.reads || []).filter(r => r.userId !== currentUserId).length}`}>
+                      {(msg.reads || []).filter(r => r.userId !== currentUserId).length > 0 ? <span className="text-violet-500 dark:text-cyan-400">✓✓</span> : "✓"}
+                    </span>
+                  )}
                   {msg.edited && <span className="text-[10px] text-neutral-400">(ред.)</span>}
                 </div>
 
@@ -895,12 +909,6 @@ export default function MessageArea({
                   </button>
                 )}
 
-                {/* Read receipts */}
-                {msg.user.id === currentUserId && !msg.deleted && (
-                  <span className="text-[10px] text-neutral-400 mt-0.5" title={`Прочитано: ${(msg.reads || []).filter(r => r.userId !== currentUserId).length}`}>
-                    {(msg.reads || []).filter(r => r.userId !== currentUserId).length > 0 ? "✓✓" : "✓"}
-                  </span>
-                )}
               </div>
             </motion.div>
           ))

@@ -280,7 +280,13 @@ function ChannelItem({ ch, selectedChannel, unreadCounts, mentionChannels = {}, 
   return (
     <div className="group flex items-center">
       <button
-        onClick={() => onChannelClick(ch)}
+        onClick={() => {
+          if (selectedChannel === ch.id && canManage && onEditChannel) {
+            onEditChannel(ch);
+          } else {
+            onChannelClick(ch);
+          }
+        }}
         className={`cn-channel-btn flex-1 text-left px-2.5 py-1.5 rounded-lg flex items-center gap-2 transition-all text-sm ${
           selectedChannel === ch.id ? "active" : ""
         }`}
