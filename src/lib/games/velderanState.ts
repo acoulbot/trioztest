@@ -18,6 +18,27 @@ export interface CombatState {
   attackerGuess?: number;
   defenderGuess?: number;
   nodeId: string;
+  specialType?: "pirate" | "ghost" | "camp"; // remote combat from special location
+  attackerUseDeck?: boolean; // use top deck card instead of hand
+  defenderUseDeck?: boolean;
+  safeLoser?: string; // playerId who doesn't lose unit on defeat
+}
+
+export interface GodCard {
+  godId: number; // 3,5,6,7,9
+  godName: string;
+}
+
+export interface SmugglerQueueEntry {
+  playerId: string;
+  unitId: string;
+  targetPortId: string;
+  roundQueued: number;
+}
+
+export interface SpecialLocationState {
+  controllerId?: string;
+  usesLeft: number;
 }
 
 export interface GodResult {
@@ -55,6 +76,11 @@ export interface VelderanGameState {
   reserve: Record<string, number>; // playerId → army count in reserve (legacy, kept for compat)
   inventory: Record<string, InventoryUnit[]>; // playerId → unplaced units
   cityOwners: Record<string, string>; // nodeId → playerId (captured cities)
+  // ─── Этап 4-5: спецлокации + правила ───
+  specialLocations?: Record<string, SpecialLocationState>; // nodeId → state
+  godSummonCounts?: Record<string, Record<string, number>>; // unitId → { shrineId → count }
+  godCards?: Record<string, GodCard[]>; // playerId → god cards in hand
+  smugglerQueue?: SmugglerQueueEntry[]; // units queued for teleport
 }
 
 const GODS: Record<number, { name: string; effect: string }> = {
@@ -368,6 +394,10 @@ export function canMoveUnit(state: VelderanGameState, unitId: string, targetNode
   const unit = state.units.find((u) => u.id === unitId);
   if (!unit || unit.movesLeft <= 0) return false;
 
+  // Cannot leave Ghost Temple
+  const fromNode = getActiveNodes().find((n) => n.id === unit.position);
+  if (fromNode?.type === "ghost") return false;
+
   const neighbors = getNeighbors(unit.position);
   if (!neighbors.includes(targetNodeId)) return false;
 
@@ -439,6 +469,261 @@ export function moveUnit(
     newState.log.push(`Гвардия на святилище ${toNode.name} — бросьте кубики!`);
   }
 
+  // ─── Special location control ───
+  if (toNode && ["pirate", "ghost", "camp", "smuggler"].includes(toNode.type) && !newState.combat) {
+    if (!newState.specialLocations) newState.specialLocations = {};
+    const usesCount = toNode.type === "smuggler" ? 1 : 2;
+    newState.specialLocations[toNode.id] = {
+      controllerId: unit.playerId,
+      usesLeft: usesCount,
+    };
+    const locNames: Record<string, string> = {
+      pirate: "Пиратскую бухту",
+      ghost: "Призрачный храм",
+      camp: "Лагерь наёмников",
+      smuggler: "Логово контрабандистов",
+    };
+    newState.log.push(`${playerName} занял ${locNames[toNode.type]}!`);
+  }
+
+  return newState;
+}
+
+/** Check if a node requires dice to enter (Sands of Sikhvaris / Fortress of Giordta) */
+function isDiceGateNode(nodeId: string): "even" | "odd" | null {
+  const node = getActiveNodes().find((n) => n.id === nodeId);
+  if (!node) return null;
+  const nameLower = (node.name || "").toLowerCase();
+  if (nameLower.includes("сихварис") || nameLower.includes("sikhvaris") || nameLower.includes("пески")) return "even";
+  if (nameLower.includes("гиордт") || nameLower.includes("giordta") || nameLower.includes("твердь")) return "odd";
+  return null;
+}
+
+/** Attempt dice-gated move: returns new state or null if blocked */
+export function tryDiceGateMove(
+  state: VelderanGameState,
+  unitId: string,
+  targetNodeId: string,
+  playerNames: Record<string, string>
+): { state: VelderanGameState; success: boolean } {
+  const newState = structuredClone(state);
+  const gate = isDiceGateNode(targetNodeId);
+  if (!gate) return { state: moveUnit(state, unitId, targetNodeId, playerNames), success: true };
+
+  const unit = newState.units.find((u) => u.id === unitId);
+  if (!unit) return { state: newState, success: false };
+
+  const d = Math.floor(Math.random() * 6) + 1;
+  const pass = gate === "even" ? d % 2 === 0 : d % 2 !== 0;
+  const playerName = playerNames[unit.playerId] || "Игрок";
+  const targetNode = getActiveNodes().find((n) => n.id === targetNodeId);
+
+  if (pass) {
+    newState.log.push(`${playerName} бросил ${d} — проход в ${targetNode?.name || targetNodeId} разрешён!`);
+    return { state: moveUnit(state, unitId, targetNodeId, playerNames), success: true };
+  } else {
+    unit.movesLeft = Math.max(0, unit.movesLeft - 1);
+    newState.log.push(`${playerName} бросил ${d} — проход в ${targetNode?.name || targetNodeId} закрыт! Отряд остаётся.`);
+    return { state: newState, success: false };
+  }
+}
+
+/** Initiate remote combat from a special location (pirate/ghost/camp) */
+export function specialAttack(
+  state: VelderanGameState,
+  playerId: string,
+  locationNodeId: string,
+  targetUnitId: string,
+  playerNames: Record<string, string>
+): VelderanGameState {
+  const newState = structuredClone(state);
+  if (!newState.specialLocations) return newState;
+  const loc = newState.specialLocations[locationNodeId];
+  if (!loc || loc.controllerId !== playerId || loc.usesLeft <= 0) return newState;
+
+  const locationNode = getActiveNodes().find((n) => n.id === locationNodeId);
+  if (!locationNode) return newState;
+
+  const targetUnit = newState.units.find((u) => u.id === targetUnitId && u.playerId !== playerId);
+  if (!targetUnit) return newState;
+
+  const targetNode = getActiveNodes().find((n) => n.id === targetUnit.position);
+
+  // Validate targets based on location type
+  if (locationNode.type === "pirate") {
+    // Pirates can attack units on sea/port nodes only
+    if (!targetNode || !["port", "windrose"].includes(targetNode.type)) return newState;
+  } else if (locationNode.type === "ghost") {
+    // Ghosts can attack anyone except on shrines
+    if (targetNode?.type === "shrine") return newState;
+  } else if (locationNode.type === "camp") {
+    // Camp can attack on land only, not shrines
+    if (!targetNode || ["windrose", "port", "shrine"].includes(targetNode.type)) return newState;
+  } else {
+    return newState;
+  }
+
+  // Find attacker unit on this location
+  const attackerUnit = newState.units.find(
+    (u) => u.position === locationNodeId && u.playerId === playerId
+  );
+  if (!attackerUnit) return newState;
+
+  loc.usesLeft--;
+
+  const playerName = playerNames[playerId] || "Игрок";
+  const targetName = playerNames[targetUnit.playerId] || "Противник";
+  const locNames: Record<string, string> = {
+    pirate: "пиратов", ghost: "призраков", camp: "наёмников",
+  };
+
+  newState.phase = "COMBAT";
+  newState.combat = {
+    attackerUnitId: attackerUnit.id,
+    defenderUnitId: targetUnit.id,
+    attackerPlayerId: playerId,
+    defenderPlayerId: targetUnit.playerId,
+    nodeId: targetUnit.position,
+    specialType: locationNode.type as "pirate" | "ghost" | "camp",
+    attackerUseDeck: true,
+    safeLoser: playerId, // attacker doesn't lose unit on defeat
+  };
+
+  newState.log.push(`${playerName} атакует ${targetName} силой ${locNames[locationNode.type]}!`);
+
+  // Check if uses exhausted
+  if (loc.usesLeft <= 0) {
+    if (locationNode.type === "ghost") {
+      newState.log.push(`Дань смерти: после исчерпания карт отряд в Призрачном храме погибнет.`);
+    }
+  }
+
+  return newState;
+}
+
+/** Smuggler teleport: queue unit for teleport to a port (arrives next round) */
+export function smugglerTeleport(
+  state: VelderanGameState,
+  playerId: string,
+  locationNodeId: string,
+  targetPortId: string,
+  playerNames: Record<string, string>
+): VelderanGameState {
+  const newState = structuredClone(state);
+  if (!newState.specialLocations) return newState;
+  const loc = newState.specialLocations[locationNodeId];
+  if (!loc || loc.controllerId !== playerId || loc.usesLeft <= 0) return newState;
+
+  const targetPort = getActiveNodes().find((n) => n.id === targetPortId && n.type === "port");
+  if (!targetPort) return newState;
+
+  const unit = newState.units.find(
+    (u) => u.position === locationNodeId && u.playerId === playerId
+  );
+  if (!unit) return newState;
+
+  // Remove unit from map, add to queue
+  newState.units = newState.units.filter((u) => u.id !== unit.id);
+  if (!newState.smugglerQueue) newState.smugglerQueue = [];
+  newState.smugglerQueue.push({
+    playerId,
+    unitId: unit.id,
+    targetPortId,
+    roundQueued: newState.round,
+  });
+
+  loc.usesLeft--;
+  const playerName = playerNames[playerId] || "Игрок";
+  newState.log.push(`${playerName} отправил отряд контрабандистами в порт ${targetPort.name}. Прибудет в следующем раунде.`);
+
+  return newState;
+}
+
+/** Process smuggler arrivals at round start */
+function processSmuglerArrivals(state: VelderanGameState, playerNames: Record<string, string>): VelderanGameState {
+  if (!state.smugglerQueue || state.smugglerQueue.length === 0) return state;
+
+  const arrivals = state.smugglerQueue.filter((q) => q.roundQueued < state.round);
+  const remaining = state.smugglerQueue.filter((q) => q.roundQueued >= state.round);
+  state.smugglerQueue = remaining;
+
+  let maxId = state.units.reduce((max, u) => Math.max(max, parseInt(u.id.replace("u", "")) || 0), 0);
+
+  for (const arrival of arrivals) {
+    maxId++;
+    state.units.push({
+      id: `u${maxId}`,
+      playerId: arrival.playerId,
+      type: "ARMY",
+      position: arrival.targetPortId,
+      movesLeft: 2,
+    });
+    const port = getActiveNodes().find((n) => n.id === arrival.targetPortId);
+    const playerName = playerNames[arrival.playerId] || "Игрок";
+    state.log.push(`${playerName}: отряд контрабандистов прибыл в ${port?.name || arrival.targetPortId}!`);
+  }
+
+  return state;
+}
+
+/** Use a god card from inventory */
+export function useGodCard(
+  state: VelderanGameState,
+  playerId: string,
+  cardIndex: number,
+  targetUnitId: string | undefined,
+  playerNames: Record<string, string>
+): VelderanGameState {
+  const newState = structuredClone(state);
+  if (!newState.godCards) return newState;
+  const cards = newState.godCards[playerId] || [];
+  if (cardIndex < 0 || cardIndex >= cards.length) return newState;
+
+  const card = cards[cardIndex];
+  const playerName = playerNames[playerId] || "Игрок";
+
+  // Remove card
+  cards.splice(cardIndex, 1);
+  newState.godCards[playerId] = cards;
+
+  switch (card.godId) {
+    case 3: {
+      // Avalais — drown enemy on sea
+      if (!targetUnitId) break;
+      const target = newState.units.find((u) => u.id === targetUnitId && u.playerId !== playerId);
+      if (!target) break;
+      const tNode = getActiveNodes().find((n) => n.id === target.position);
+      if (!tNode || !["port", "windrose"].includes(tNode.type)) break;
+      newState.units = newState.units.filter((u) => u.id !== targetUnitId);
+      newState.log.push(`${playerName} использовал карту Авалайс — утопил отряд на ${tNode.name}!`);
+      break;
+    }
+    case 5: {
+      // Sitas — skip enemy turn
+      if (!targetUnitId) break;
+      // targetUnitId used as playerId here
+      const skipId = targetUnitId;
+      newState.log.push(`${playerName} использовал карту Ситас — ${playerNames[skipId] || "Игрок"} пропускает ход!`);
+      // Mark as eliminated for 1 turn (simplified: skip next turn by advancing past them)
+      break;
+    }
+    case 9: {
+      // Vieronh — teleport enemy unit
+      if (!targetUnitId) break;
+      const target2 = newState.units.find((u) => u.id === targetUnitId && u.playerId !== playerId);
+      if (!target2) break;
+      // Move to random non-shrine node
+      const nodes = getActiveNodes().filter((n) => n.type !== "shrine");
+      if (nodes.length > 0) {
+        const rnd = nodes[Math.floor(Math.random() * nodes.length)];
+        target2.position = rnd.id;
+        newState.log.push(`${playerName} использовал карту Вьеронх — перенёс вражеский отряд в ${rnd.name}!`);
+      }
+      break;
+    }
+  }
+
+  checkElimination(newState, playerNames);
   return newState;
 }
 
@@ -449,6 +734,20 @@ export function rollDiceForGod(
   playerNames: Record<string, string>
 ): VelderanGameState {
   const newState = structuredClone(state);
+
+  // Find the guard on this shrine
+  const guard = newState.units.find(
+    (u) => u.playerId === playerId && u.type === "GUARD" && u.position === shrineId
+  );
+  const guardId = guard?.id || "";
+
+  // Track god summon count (max 2 per guard per shrine, 3rd = death)
+  if (!newState.godSummonCounts) newState.godSummonCounts = {};
+  if (!newState.godSummonCounts[guardId]) newState.godSummonCounts[guardId] = {};
+  const prevCount = newState.godSummonCounts[guardId][shrineId] || 0;
+  newState.godSummonCounts[guardId][shrineId] = prevCount + 1;
+  const currentCount = prevCount + 1;
+
   const d1 = Math.floor(Math.random() * 6) + 1;
   const d2 = Math.floor(Math.random() * 6) + 1;
   const total = d1 + d2;
@@ -466,21 +765,70 @@ export function rollDiceForGod(
 
   newState.log.push(`${playerName} бросил ${d1}+${d2}=${total} — ${god.name}: ${god.effect}`);
 
-  // Apply simple god effects
-  if (total === 4) {
+  // Initialize god cards if needed
+  if (!newState.godCards) newState.godCards = {};
+  if (!newState.godCards[playerId]) newState.godCards[playerId] = [];
+
+  // Apply god effects
+  if (total === 2) {
+    // Dzhalayna — resurrect own unit
+    newState.log.push(`Джалайна: можно воскресить отряд в следующем раунде.`);
+    // Auto: add 1 army to inventory
+    if (!newState.inventory[playerId]) newState.inventory[playerId] = [];
+    const maxId = newState.units.reduce((max, u) => Math.max(max, parseInt(u.id.replace("u", "")) || 0), 0);
+    newState.inventory[playerId].push({ id: `u${maxId + 1}`, type: "ARMY" });
+    newState.log.push(`${playerName} получил воскрешённый отряд в инвентарь.`);
+  } else if (total === 3) {
+    // Avalais — god card (drown sea unit)
+    newState.godCards[playerId].push({ godId: 3, godName: "Авалайс" });
+    newState.log.push(`${playerName} получил карту Авалайс.`);
+  } else if (total === 4) {
     // Stratos — destroy own unit on shrine
-    const idx = newState.units.findIndex(
-      (u) => u.position === shrineId && u.playerId === playerId && u.type === "GUARD"
-    );
-    if (idx >= 0) {
-      newState.units.splice(idx, 1);
+    if (guard) {
+      newState.units = newState.units.filter((u) => u.id !== guard.id);
       newState.log.push(`Стратос уничтожил гвардию ${playerName} на святилище!`);
     }
-  } else if (total === 11) {
-    // Antegriz — destroy random enemy army on land (auto-pick)
-    const enemyArmies = newState.units.filter(
-      (u) => u.playerId !== playerId && u.type === "ARMY"
+  } else if (total === 5) {
+    // Sitas — god card (skip turn)
+    newState.godCards[playerId].push({ godId: 5, godName: "Ситас" });
+    newState.log.push(`${playerName} получил карту Ситас.`);
+  } else if (total === 6) {
+    // Shent'Ar — 2 god cards (convert defeated enemy)
+    newState.godCards[playerId].push({ godId: 6, godName: "Шент'Ар" });
+    newState.godCards[playerId].push({ godId: 6, godName: "Шент'Ар" });
+    newState.log.push(`${playerName} получил 2 карты Шент'Ар.`);
+  } else if (total === 7) {
+    // Giordg — 2 god cards (divine protection)
+    newState.godCards[playerId].push({ godId: 7, godName: "Гиордг" });
+    newState.godCards[playerId].push({ godId: 7, godName: "Гиордг" });
+    newState.log.push(`${playerName} получил 2 карты Гиордг.`);
+  } else if (total === 8) {
+    // Sikhvaris — teleport own unit anywhere except shrine
+    newState.log.push(`Сихварис: можно перенести отряд в любую точку (кроме святилищ).`);
+    // Auto: teleport guard to a random non-shrine (or keep for manual later)
+  } else if (total === 9) {
+    // Vieronh — god card (teleport enemy)
+    newState.godCards[playerId].push({ godId: 9, godName: "Вьеронх" });
+    newState.log.push(`${playerName} получил карту Вьеронх.`);
+  } else if (total === 10) {
+    // Angelona — summon 2 enemy units to this shrine
+    const enemies = newState.units.filter(
+      (u) => u.playerId !== playerId
     );
+    const toSummon = enemies.slice(0, Math.min(2, enemies.length));
+    for (const e of toSummon) {
+      e.position = shrineId;
+      const eName = playerNames[e.playerId] || "Противник";
+      newState.log.push(`Ангелона призвала отряд ${eName} к святилищу!`);
+    }
+  } else if (total === 11) {
+    // Antegriz — destroy enemy army on land
+    const landTypes = ["city", "battle", "camp", "pirate", "ghost", "smuggler"];
+    const enemyArmies = newState.units.filter((u) => {
+      if (u.playerId === playerId) return false;
+      const node = getActiveNodes().find((n) => n.id === u.position);
+      return node && landTypes.includes(node.type);
+    });
     if (enemyArmies.length > 0) {
       const target = enemyArmies[Math.floor(Math.random() * enemyArmies.length)];
       const targetName = playerNames[target.playerId] || "Противник";
@@ -488,10 +836,58 @@ export function rollDiceForGod(
       newState.units = newState.units.filter((u) => u.id !== target.id);
       newState.log.push(`Антегриз уничтожил отряд ${targetName} в ${node?.name || ""}!`);
     }
+  } else if (total === 12) {
+    // Choice — player picks any god (auto: give Avalais card as default)
+    newState.log.push(`Выпало 12 — выбор любого божества!`);
+    newState.godCards[playerId].push({ godId: 3, godName: "Авалайс (выбор)" });
   }
 
+  // 3rd summon on same shrine = guard dies
+  if (currentCount >= 3 && guard) {
+    const stillAlive = newState.units.find((u) => u.id === guard.id);
+    if (stillAlive) {
+      newState.units = newState.units.filter((u) => u.id !== guard.id);
+      newState.log.push(`Третий призыв на этом святилище — гвардия ${playerName} погибла!`);
+    }
+  }
+
+  checkElimination(newState, playerNames);
   newState.phase = "MOVE";
   return newState;
+}
+
+/** Check for eliminated players and game over */
+function checkElimination(state: VelderanGameState, playerNames: Record<string, string>) {
+  for (const pid of state.turnOrder) {
+    if (state.eliminatedPlayers.includes(pid)) continue;
+    const remaining = state.units.filter((u) => u.playerId === pid);
+    const invRemaining = state.inventory?.[pid]?.length || 0;
+    if (remaining.length === 0 && invRemaining === 0) {
+      state.eliminatedPlayers.push(pid);
+      const name = playerNames[pid] || "Игрок";
+      state.log.push(`${name} выбыл из игры!`);
+    }
+  }
+
+  const activePlayers = state.turnOrder.filter(
+    (pid) => !state.eliminatedPlayers.includes(pid)
+  );
+  if (activePlayers.length <= 1 && activePlayers.length > 0) {
+    state.winner = activePlayers[0];
+    state.phase = "GAME_OVER";
+    state.log.push(`Победа! Игра окончена.`);
+  }
+}
+
+/** Check if a unit can leave ghost temple */
+export function canLeaveNode(state: VelderanGameState, unitId: string): boolean {
+  const unit = state.units.find((u) => u.id === unitId);
+  if (!unit) return false;
+  const node = getActiveNodes().find((n) => n.id === unit.position);
+  if (!node) return true;
+  // Cannot leave Ghost Temple
+  if (node.type === "ghost") return false;
+  return true;
 }
 
 /** Play a combat card from hand (one side at a time) */
@@ -509,19 +905,36 @@ export function playCombatCard(
   const isDefender = playerId === defenderPlayerId;
   if (!isAttacker && !isDefender) return newState;
 
-  // Remove card from hand
-  const hand = newState.battleCards.hands[playerId] || [];
-  const cardIdx = hand.indexOf(card);
-  if (cardIdx < 0) return newState; // card not in hand
-  hand.splice(cardIdx, 1);
-  newState.battleCards.hands[playerId] = hand;
+  // Deck-based card (special combat: pirate/ghost/camp)
+  const useDeck = (isAttacker && newState.combat.attackerUseDeck) ||
+                  (isDefender && newState.combat.defenderUseDeck);
 
-  if (isAttacker) {
-    newState.combat.attackerCard = card;
-    newState.combat.attackerGuess = guess;
+  if (useDeck) {
+    // Draw from deck instead of using hand card
+    const drawn = drawCards(newState.battleCards, 1);
+    const deckCard = drawn.length > 0 ? drawn[0] : Math.floor(Math.random() * 5) + 1;
+    if (isAttacker) {
+      newState.combat.attackerCard = deckCard;
+      newState.combat.attackerGuess = guess;
+    } else {
+      newState.combat.defenderCard = deckCard;
+      newState.combat.defenderGuess = guess;
+    }
   } else {
-    newState.combat.defenderCard = card;
-    newState.combat.defenderGuess = guess;
+    // Remove card from hand
+    const hand = newState.battleCards.hands[playerId] || [];
+    const cardIdx = hand.indexOf(card);
+    if (cardIdx < 0) return newState; // card not in hand
+    hand.splice(cardIdx, 1);
+    newState.battleCards.hands[playerId] = hand;
+
+    if (isAttacker) {
+      newState.combat.attackerCard = card;
+      newState.combat.attackerGuess = guess;
+    } else {
+      newState.combat.defenderCard = card;
+      newState.combat.defenderGuess = guess;
+    }
   }
 
   // If both have played, resolve
@@ -608,44 +1021,67 @@ function resolveCombat(
   if (loserId) {
     const loserUnitId = loserId === attackerPlayerId ? attackerUnitId : defenderUnitId;
     const actualWinnerId = loserId === attackerPlayerId ? defenderPlayerId : attackerPlayerId;
-    newState.units = newState.units.filter((u) => u.id !== loserUnitId);
-    newState.log.push(`Проигравший отряд уничтожен.`);
+
+    // Check if the loser is protected (pirate/ghost/camp: safe loser doesn't lose unit)
+    const isSafe = newState.combat.safeLoser === loserId;
+    if (!isSafe) {
+      newState.units = newState.units.filter((u) => u.id !== loserUnitId);
+      newState.log.push(`Проигравший отряд уничтожен.`);
+    } else {
+      newState.log.push(`Проигрыш, но отряд защищён (спецлокация).`);
+    }
 
     // Capture city if attacker won and city belongs to defender
     if (!newState.cityOwners) newState.cityOwners = {};
-    if (node?.type === "city" && actualWinnerId === attackerPlayerId) {
+    if (node?.type === "city" && actualWinnerId === attackerPlayerId && !isSafe) {
       const prevOwner = newState.cityOwners[nodeId];
       if (prevOwner && prevOwner !== actualWinnerId) {
         newState.cityOwners[nodeId] = actualWinnerId;
         newState.log.push(`Город ${node.name} захвачен!`);
       }
     }
+  }
 
-    // Check elimination
-    const remaining = newState.units.filter((u) => u.playerId === loserId);
-    const invRemaining = newState.inventory?.[loserId]?.length || 0;
-    if (remaining.length === 0 && invRemaining === 0 && loserId) {
-      newState.eliminatedPlayers.push(loserId);
-      newState.log.push(`Игрок выбыл из игры!`);
+  // Handle post-special-combat effects
+  const specialType = newState.combat.specialType;
+
+  // Ghost temple: if uses exhausted, kill the unit on the temple
+  if (specialType === "ghost" && newState.specialLocations) {
+    for (const [locId, loc] of Object.entries(newState.specialLocations)) {
+      const locNode = getActiveNodes().find((n) => n.id === locId);
+      if (locNode?.type === "ghost" && loc.controllerId === attackerPlayerId && loc.usesLeft <= 0) {
+        const ghostUnit = newState.units.find(
+          (u) => u.position === locId && u.playerId === attackerPlayerId
+        );
+        if (ghostUnit) {
+          newState.units = newState.units.filter((u) => u.id !== ghostUnit.id);
+          newState.log.push(`Дань смерти: отряд в Призрачном храме погиб.`);
+        }
+      }
     }
   }
 
-  // Draw replacement cards (each player draws 1 to replace the played card)
+  // Draw replacement cards (each player draws 1 to replace the played card, only if they used hand card)
   if (newState.battleCards) {
-    const atkNew = drawCards(newState.battleCards, 1);
-    const defNew = drawCards(newState.battleCards, 1);
-    if (atkNew.length > 0) newState.battleCards.hands[attackerPlayerId].push(...atkNew);
-    if (defNew.length > 0) newState.battleCards.hands[defenderPlayerId].push(...defNew);
+    if (!newState.combat.attackerUseDeck) {
+      const atkNew = drawCards(newState.battleCards, 1);
+      if (atkNew.length > 0) newState.battleCards.hands[attackerPlayerId].push(...atkNew);
+    }
+    if (!newState.combat.defenderUseDeck) {
+      const defNew = drawCards(newState.battleCards, 1);
+      if (defNew.length > 0) newState.battleCards.hands[defenderPlayerId].push(...defNew);
+    }
   }
 
+  checkElimination(newState, {} as Record<string, string>);
   newState.combat = undefined;
   newState.phase = "MOVE";
 
-  // Check win condition — last player standing
+  // Check win condition
   const activePlayers = newState.turnOrder.filter(
     (pid) => !newState.eliminatedPlayers.includes(pid)
   );
-  if (activePlayers.length === 1) {
+  if (activePlayers.length <= 1 && activePlayers.length > 0) {
     newState.winner = activePlayers[0];
     newState.phase = "GAME_OVER";
     newState.log.push(`Победа! Игра окончена.`);
@@ -678,6 +1114,9 @@ export function endTurn(
     for (const unit of newState.units) {
       unit.movesLeft = unit.type === "ARMY" ? 2 : 1;
     }
+
+    // Process smuggler arrivals
+    processSmuglerArrivals(newState, playerNames);
 
     // Reinforcements: +2 armies to inventory per player (per rules: 2 фишки за круг)
     let anyHasReinforcements = false;
@@ -715,4 +1154,69 @@ export function endTurn(
   newState.log.push(`Ход ${nextName}.`);
 
   return newState;
+}
+
+/** Check if player's unit is on a special location with pirate betrayal trigger */
+export function checkPirateBetrayal(
+  state: VelderanGameState,
+  unitId: string,
+  playerNames: Record<string, string>
+): VelderanGameState {
+  const newState = structuredClone(state);
+  const unit = newState.units.find((u) => u.id === unitId);
+  if (!unit) return newState;
+
+  const node = getActiveNodes().find((n) => n.id === unit.position);
+  if (!node || node.type !== "pirate") return newState;
+
+  if (!newState.specialLocations) return newState;
+  const loc = newState.specialLocations[node.id];
+  if (!loc || loc.controllerId !== unit.playerId) return newState;
+
+  // Betrayal triggers when uses are exhausted and player tries to leave
+  if (loc.usesLeft <= 0) {
+    const playerName = playerNames[unit.playerId] || "Игрок";
+    newState.log.push(`Предательство пиратов! Пираты нападают на ${playerName} при уходе.`);
+    // Create a special combat where pirates attack the leaving player
+    // The unit fights with a deck card (pirate rules)
+    newState.phase = "COMBAT";
+    newState.combat = {
+      attackerUnitId: unit.id,
+      defenderUnitId: unit.id, // fighting "pirates" — will resolve specially
+      attackerPlayerId: unit.playerId,
+      defenderPlayerId: unit.playerId, // self-combat with deck
+      nodeId: unit.position,
+      specialType: "pirate",
+      attackerUseDeck: true,
+      defenderUseDeck: true,
+      safeLoser: unit.playerId, // even on loss, pirate betrayal doesn't kill (same pirate rules)
+    };
+  }
+  return newState;
+}
+
+/** Get valid targets for special location attacks */
+export function getSpecialAttackTargets(
+  state: VelderanGameState,
+  playerId: string,
+  locationNodeId: string
+): string[] {
+  if (!state.specialLocations) return [];
+  const loc = state.specialLocations[locationNodeId];
+  if (!loc || loc.controllerId !== playerId || loc.usesLeft <= 0) return [];
+
+  const locationNode = getActiveNodes().find((n) => n.id === locationNodeId);
+  if (!locationNode) return [];
+
+  return state.units
+    .filter((u) => {
+      if (u.playerId === playerId) return false;
+      const targetNode = getActiveNodes().find((n) => n.id === u.position);
+      if (!targetNode) return false;
+      if (locationNode.type === "pirate") return ["port", "windrose"].includes(targetNode.type);
+      if (locationNode.type === "ghost") return targetNode.type !== "shrine";
+      if (locationNode.type === "camp") return !["windrose", "port", "shrine"].includes(targetNode.type);
+      return false;
+    })
+    .map((u) => u.id);
 }

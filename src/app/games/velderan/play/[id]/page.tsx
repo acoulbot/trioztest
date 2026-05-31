@@ -8,7 +8,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { FACTION_COLORS, getNeighbors, setMapEdges, setCustomNodes, getActiveNodes } from "@/lib/games/velderanMap";
 import type { MapEdge, MapNode } from "@/lib/games/velderanMap";
-import type { VelderanGameState, GameUnit, CombatState, InventoryUnit } from "@/lib/games/velderanState";
+import type { VelderanGameState, GameUnit, CombatState, InventoryUnit, GodCard, SpecialLocationState } from "@/lib/games/velderanState";
 import DiceRoller from "@/components/games/DiceRoller";
 
 const NODE_TYPE_LABELS: Record<string, string> = {
@@ -231,6 +231,10 @@ export default function PlayPage() {
     const unit = gameState.units.find((u) => u.id === unitId);
     if (!unit || unit.playerId !== myPlayerId || unit.movesLeft <= 0) return;
 
+    // Cannot leave Ghost Temple
+    const fromNode = getActiveNodes().find((n) => n.id === unit.position);
+    if (fromNode?.type === "ghost") return;
+
     setSelectedUnit(unitId);
     setSelectedInvUnit(null);
     const neighbors = getNeighbors(unit.position);
@@ -333,6 +337,33 @@ export default function PlayPage() {
       setGameState(await res.json());
       setSelectedInvUnit(null);
     }
+  };
+
+  const doSpecialAttack = async (locationNodeId: string, targetUnitId: string) => {
+    const res = await fetch(`/api/games/rooms/${roomId}/action`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "special_attack", locationNodeId, targetUnitId }),
+    });
+    if (res.ok) setGameState(await res.json());
+  };
+
+  const doSmugglerTeleport = async (locationNodeId: string, targetPortId: string) => {
+    const res = await fetch(`/api/games/rooms/${roomId}/action`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "smuggler_teleport", locationNodeId, targetPortId }),
+    });
+    if (res.ok) setGameState(await res.json());
+  };
+
+  const doUseGodCard = async (cardIndex: number, targetUnitId?: string) => {
+    const res = await fetch(`/api/games/rooms/${roomId}/action`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "use_god_card", cardIndex, targetUnitId }),
+    });
+    if (res.ok) setGameState(await res.json());
   };
 
   if (!room || !gameState) {
@@ -698,6 +729,99 @@ export default function PlayPage() {
               {selectedInvUnit && (
                 <p className="text-[10px] text-cyan-400 mt-1.5">Нажмите на свой город для размещения</p>
               )}
+            </div>
+          )}
+
+          {/* Special Location controls */}
+          {myPlayerId && isMyTurn && gameState.phase === "MOVE" && gameState.specialLocations && (() => {
+            const locs = Object.entries(gameState.specialLocations).filter(
+              ([, loc]: [string, SpecialLocationState]) => loc.controllerId === myPlayerId && loc.usesLeft > 0
+            );
+            if (locs.length === 0) return null;
+            return (
+              <div className="p-3 border-b border-white/5">
+                <h3 className="text-sm font-bold text-yellow-400 mb-2">⚡ Спецлокации</h3>
+                {locs.map(([locId, loc]: [string, SpecialLocationState]) => {
+                  const locNode = getActiveNodes().find((n: MapNode) => n.id === locId);
+                  if (!locNode) return null;
+                  const label = NODE_TYPE_LABELS[locNode.type] || locNode.type;
+
+                  if (locNode.type === "smuggler") {
+                    const ports = getActiveNodes().filter((n: MapNode) => n.type === "port");
+                    return (
+                      <div key={locId} className="mb-2">
+                        <p className="text-xs text-gray-300 mb-1">{label} ({loc.usesLeft} исп.)</p>
+                        <div className="flex flex-wrap gap-1">
+                          {ports.map((p: MapNode) => (
+                            <button key={p.id} onClick={() => doSmugglerTeleport(locId, p.id)}
+                              className="px-2 py-1 bg-teal-600/20 text-teal-400 rounded text-[10px] hover:bg-teal-600/40">
+                              ⛵ {p.name || p.id}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    );
+                  }
+                  // pirate/ghost/camp
+                  const enemies = gameState.units.filter((u: GameUnit) => {
+                    if (u.playerId === myPlayerId) return false;
+                    const tNode = getActiveNodes().find((n: MapNode) => n.id === u.position);
+                    if (!tNode) return false;
+                    if (locNode.type === "pirate") return ["port", "windrose"].includes(tNode.type);
+                    if (locNode.type === "ghost") return tNode.type !== "shrine";
+                    if (locNode.type === "camp") return !["windrose", "port", "shrine"].includes(tNode.type);
+                    return false;
+                  });
+                  return (
+                    <div key={locId} className="mb-2">
+                      <p className="text-xs text-gray-300 mb-1">{label} ({loc.usesLeft} исп.)</p>
+                      {enemies.length === 0 ? (
+                        <p className="text-[10px] text-gray-600">Нет целей</p>
+                      ) : (
+                        <div className="flex flex-wrap gap-1">
+                          {enemies.map((e: GameUnit) => {
+                            const eName = playerNames[e.playerId] || "?";
+                            const eNode = getActiveNodes().find((n: MapNode) => n.id === e.position);
+                            return (
+                              <button key={e.id} onClick={() => doSpecialAttack(locId, e.id)}
+                                className="px-2 py-1 bg-red-600/20 text-red-400 rounded text-[10px] hover:bg-red-600/40">
+                                ⚔️ {eName} ({eNode?.name || e.position})
+                              </button>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            );
+          })()}
+
+          {/* God Cards */}
+          {myPlayerId && gameState.godCards?.[myPlayerId] && gameState.godCards[myPlayerId].length > 0 && (
+            <div className="p-3 border-b border-white/5">
+              <h3 className="text-sm font-bold text-purple-400 mb-2">🔮 Карты богов</h3>
+              <div className="flex flex-wrap gap-1.5">
+                {gameState.godCards[myPlayerId].map((gc: GodCard, idx: number) => (
+                  <button key={idx}
+                    disabled={!isMyTurn || gameState.phase !== "MOVE"}
+                    onClick={() => {
+                      const enemies = gameState.units.filter((u: GameUnit) => u.playerId !== myPlayerId);
+                      const targetId = enemies.length > 0 ? enemies[0].id : undefined;
+                      doUseGodCard(idx, targetId);
+                    }}
+                    className={`px-2.5 py-1.5 rounded-lg text-[10px] border ${
+                      isMyTurn && gameState.phase === "MOVE"
+                        ? "border-purple-500/30 bg-purple-500/10 text-purple-300 hover:bg-purple-500/30 cursor-pointer"
+                        : "border-white/5 bg-white/5 text-gray-600 cursor-not-allowed"
+                    }`}
+                    title={`Использовать карту бога ${gc.godName}`}
+                  >
+                    ✨ {gc.godName}
+                  </button>
+                ))}
+              </div>
             </div>
           )}
 
