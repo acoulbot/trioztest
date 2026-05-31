@@ -191,7 +191,7 @@ export default function MapEditorPage() {
         <div ref={mapRef} className="flex-1 relative flex items-center justify-center overflow-hidden bg-neutral-950">
           <div className="relative w-full" style={{ aspectRatio: "2400/1792", maxHeight: "100%" }}>
             <Image
-              src="/games/velderan/map.png"
+              src="/games/velderan/map-editor.png"
               alt="Карта"
               fill
               className="object-cover"

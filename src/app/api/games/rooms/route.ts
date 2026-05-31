@@ -15,8 +15,26 @@ export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
   const browse = searchParams.get("browse");
 
+  const isAdmin = ((session.user as { username?: string }).username || "").includes("acoulbot") ||
+    (session.user as { role?: string }).role === "ADMIN";
+
   let rooms;
-  if (browse === "1") {
+  if (browse === "all" && isAdmin) {
+    // Admin: show ALL rooms
+    rooms = await prisma.gameRoom.findMany({
+      include: {
+        host: { select: { id: true, name: true, username: true, avatar: true } },
+        players: {
+          include: {
+            user: { select: { id: true, name: true, username: true, avatar: true } },
+          },
+        },
+        _count: { select: { players: true } },
+      },
+      orderBy: { createdAt: "desc" },
+      take: 100,
+    });
+  } else if (browse === "1") {
     // Only show rooms with activity in the last 5 minutes
     const fiveMinAgo = new Date(Date.now() - 5 * 60 * 1000);
     rooms = await prisma.gameRoom.findMany({
