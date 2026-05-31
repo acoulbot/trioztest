@@ -1,4 +1,4 @@
-import { VelderanGameState, getCurrentPlayerId, moveUnit, endTurn, placeReserve, finishPlacement, canMoveUnit, rollDiceForGod, resolveCombat } from "./velderanState";
+import { VelderanGameState, getCurrentPlayerId, moveUnit, endTurn, placeReserve, placeFromInventory, finishPlacement, canMoveUnit, rollDiceForGod, resolveCombat } from "./velderanState";
 import { getActiveNodes, getNeighbors } from "./velderanMap";
 
 const BOT_USER_PREFIX = "bot-velderan-";
@@ -67,13 +67,35 @@ function botPlacement(
   playerNames: Record<string, string>
 ): VelderanGameState {
   let newState = structuredClone(state);
-  const reserve = newState.reserve[botId] || 0;
+  if (!newState.inventory) newState.inventory = {};
+  const inv = newState.inventory[botId] || [];
 
+  // If bot has inventory units, place them
+  if (inv.length > 0) {
+    const ownCities = Object.entries(newState.cityOwners)
+      .filter(([, owner]) => owner === botId)
+      .map(([nodeId]) => nodeId);
+
+    for (const cityId of ownCities) {
+      const currentInv = newState.inventory[botId] || [];
+      if (currentInv.length <= 0) break;
+      const unitsAtCity = newState.units.filter(
+        (u) => u.position === cityId && u.playerId === botId
+      );
+      const maxPerCity = newState.round === 1 ? 1 : 2;
+      if (unitsAtCity.length < maxPerCity) {
+        newState = placeFromInventory(newState, botId, cityId, currentInv[0].id, playerNames);
+      }
+    }
+    return finishPlacement(newState, playerNames);
+  }
+
+  // Fallback: legacy reserve
+  const reserve = newState.reserve[botId] || 0;
   if (reserve <= 0) {
     return finishPlacement(newState, playerNames);
   }
 
-  // Find own cities to place reserves
   const ownCities = Object.entries(newState.cityOwners)
     .filter(([, owner]) => owner === botId)
     .map(([nodeId]) => nodeId);
@@ -83,7 +105,8 @@ function botPlacement(
     const unitsAtCity = newState.units.filter(
       (u) => u.position === cityId && u.playerId === botId
     );
-    if (unitsAtCity.length < 2) {
+    const maxPerCity = newState.round === 1 ? 1 : 2;
+    if (unitsAtCity.length < maxPerCity) {
       newState = placeReserve(newState, botId, cityId, playerNames);
     }
   }

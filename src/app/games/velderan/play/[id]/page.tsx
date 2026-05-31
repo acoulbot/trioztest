@@ -8,7 +8,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { FACTION_COLORS, getNeighbors, setMapEdges, setCustomNodes, getActiveNodes } from "@/lib/games/velderanMap";
 import type { MapEdge, MapNode } from "@/lib/games/velderanMap";
-import type { VelderanGameState, GameUnit, CombatState } from "@/lib/games/velderanState";
+import type { VelderanGameState, GameUnit, CombatState, InventoryUnit } from "@/lib/games/velderanState";
 
 interface Player {
   id: string;
@@ -128,6 +128,7 @@ export default function PlayPage() {
   const [room, setRoom] = useState<Room | null>(null);
   const [gameState, setGameState] = useState<VelderanGameState | null>(null);
   const [selectedUnit, setSelectedUnit] = useState<string | null>(null);
+  const [selectedInvUnit, setSelectedInvUnit] = useState<string | null>(null);
   const [validMoves, setValidMoves] = useState<string[]>([]);
   const [edgesLoaded, setEdgesLoaded] = useState(false);
   const logRef = useRef<HTMLDivElement>(null);
@@ -193,12 +194,17 @@ export default function PlayPage() {
     if (!unit || unit.playerId !== myPlayerId || unit.movesLeft <= 0) return;
 
     setSelectedUnit(unitId);
+    setSelectedInvUnit(null);
     const neighbors = getNeighbors(unit.position);
     const validTargets = neighbors.filter((nid) => {
       const samePlayerUnits = gameState.units.filter(
         (u) => u.position === nid && u.playerId === myPlayerId
       );
-      return samePlayerUnits.length < 2;
+      if (samePlayerUnits.length >= 2) return false;
+      // Only guards can enter shrines
+      const targetNode = getActiveNodes().find((n) => n.id === nid);
+      if (targetNode?.type === "shrine" && unit.type !== "GUARD") return false;
+      return true;
     });
     setValidMoves(validTargets);
   };
@@ -254,13 +260,28 @@ export default function PlayPage() {
     if (res.ok) setGameState(await res.json());
   };
 
+  const doPlaceInventory = async (cityNodeId: string, inventoryUnitId: string) => {
+    const res = await fetch(`/api/games/rooms/${roomId}/action`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "place_inventory", cityNodeId, inventoryUnitId }),
+    });
+    if (res.ok) {
+      setGameState(await res.json());
+      setSelectedInvUnit(null);
+    }
+  };
+
   const doFinishPlacement = async () => {
     const res = await fetch(`/api/games/rooms/${roomId}/action`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ action: "finish_placement" }),
     });
-    if (res.ok) setGameState(await res.json());
+    if (res.ok) {
+      setGameState(await res.json());
+      setSelectedInvUnit(null);
+    }
   };
 
   if (!room || !gameState) {
@@ -294,7 +315,7 @@ export default function PlayPage() {
           {gameState.phase === "PLACEMENT" && isMyTurn && (
             <>
               <span className="text-cyan-400 text-sm">
-                Резерв: {gameState.reserve?.[myPlayerId || ""] || 0}
+                Инвентарь: {(gameState.inventory?.[myPlayerId || ""] || []).length}
               </span>
               <button
                 onClick={doFinishPlacement}
@@ -349,11 +370,13 @@ export default function PlayPage() {
             const cityOwner = gameState.cityOwners?.[node.id];
             const cityOwnerColor = cityOwner ? FACTION_COLORS[playerFactions[cityOwner]] : undefined;
 
-            // Placement: highlight own cities
+            // Placement: highlight own cities where player can place from inventory
+            const myInv = gameState.inventory?.[myPlayerId || ""] || [];
+            const maxPerCity = gameState.round === 1 ? 1 : 2;
             const isPlacementTarget = gameState.phase === "PLACEMENT" && isMyTurn &&
               node.type === "city" && myPlayerId && gameState.cityOwners?.[node.id] === myPlayerId &&
-              (gameState.reserve?.[myPlayerId] || 0) > 0 &&
-              units.filter((u) => u.playerId === myPlayerId).length < 2;
+              myInv.length > 0 &&
+              units.filter((u) => u.playerId === myPlayerId).length < maxPerCity;
 
             return (
               <div
@@ -390,8 +413,11 @@ export default function PlayPage() {
                 {/* Node button — invisible by default, map image shows symbols */}
                 <button
                   onClick={() => {
-                    if (isPlacementTarget) {
-                      doPlaceReserve(node.id);
+                    if (isPlacementTarget && selectedInvUnit) {
+                      doPlaceInventory(node.id, selectedInvUnit);
+                    } else if (isPlacementTarget && myInv.length > 0) {
+                      // Auto-select first inventory unit and place
+                      doPlaceInventory(node.id, myInv[0].id);
                     } else if (isValidMove && selectedUnit) {
                       doMove(node.id);
                     } else if (hasMyUnit && isMyTurn && gameState.phase === "MOVE") {
@@ -413,7 +439,7 @@ export default function PlayPage() {
 
                 {/* Units on this node */}
                 {units.length > 0 && (
-                  <div className="absolute -bottom-4 left-1/2 -translate-x-1/2 flex gap-1">
+                  <div className="absolute -bottom-5 left-1/2 -translate-x-1/2 flex gap-0.5">
                     {units.map((unit) => {
                       const faction = playerFactions[unit.playerId];
                       const color = FACTION_COLORS[faction] || "#fff";
@@ -428,31 +454,32 @@ export default function PlayPage() {
                               selectUnit(unit.id);
                             }
                           }}
-                          className={`relative w-4 h-4 rounded-full flex items-center justify-center transition-all ${
-                            isSelected ? "scale-150 z-10" : "hover:scale-125"
+                          className={`relative flex items-center justify-center transition-all ${
+                            isSelected ? "scale-[1.6] z-10" : "hover:scale-125"
                           } ${unit.playerId === myPlayerId ? "cursor-pointer" : ""}`}
                           title={`${playerNames[unit.playerId]} — ${isGuard ? "Гвардия" : "Отряд"} (${unit.movesLeft} ходов)`}
                         >
-                          {/* Glow halo for guards */}
-                          {isGuard && (
+                          {isGuard ? (
+                            /* Guard: shield shape */
+                            <svg width="14" height="16" viewBox="0 0 14 16">
+                              <path d="M7 0 L14 4 L14 10 Q14 14 7 16 Q0 14 0 10 L0 4 Z"
+                                fill={color} stroke={isSelected ? "#fff" : `${color}cc`} strokeWidth="1.5"
+                                style={{ filter: `drop-shadow(0 0 4px ${color}80)` }} />
+                              <text x="7" y="10.5" textAnchor="middle" fill={color === "#f5f5f5" || color === "#eab308" ? "#000" : "#fff"}
+                                fontSize="7" fontWeight="bold">G</text>
+                            </svg>
+                          ) : (
+                            /* Army: circle piece */
                             <span
-                              className="absolute inset-[-3px] rounded-full animate-pulse"
+                              className="block w-4 h-4 rounded-full border-[1.5px]"
                               style={{
-                                boxShadow: `0 0 6px 2px ${color}90, 0 0 12px 4px ${color}40`,
-                                border: `1.5px solid ${color}80`,
+                                backgroundColor: color,
+                                borderColor: isSelected ? "#fff" : `${color}cc`,
+                                boxShadow: isSelected ? `0 0 8px ${color}` : undefined,
                               }}
                             />
                           )}
-                          {/* Circle body */}
-                          <span
-                            className="relative block w-full h-full rounded-full border"
-                            style={{
-                              backgroundColor: color,
-                              borderColor: isSelected ? "#fff" : `${color}cc`,
-                              boxShadow: isSelected ? `0 0 8px ${color}` : undefined,
-                            }}
-                          />
-                          {/* Moves indicator dot */}
+                          {/* Moves indicator */}
                           {unit.movesLeft > 0 && unit.playerId === myPlayerId && (
                             <span className="absolute -top-0.5 -right-0.5 w-1.5 h-1.5 rounded-full bg-green-400 border border-neutral-900" />
                           )}
@@ -518,11 +545,11 @@ export default function PlayPage() {
                             {armies.length}
                           </span>
                           <span className="text-[9px] text-gray-500 flex items-center gap-0.5">
-                            <span className="inline-block w-2 h-2 rounded-full" style={{ backgroundColor: color, boxShadow: `0 0 4px ${color}` }} />
+                            <svg width="8" height="9" viewBox="0 0 14 16"><path d="M7 0 L14 4 L14 10 Q14 14 7 16 Q0 14 0 10 L0 4 Z" fill={color} /></svg>
                             {guards.length}
                           </span>
-                          {reserveCount > 0 && (
-                            <span className="text-[9px] text-gray-600">+{reserveCount} рез.</span>
+                          {(gameState.inventory?.[p.id] || []).length > 0 && (
+                            <span className="text-[9px] text-gray-600">+{(gameState.inventory?.[p.id] || []).length} инв.</span>
                           )}
                         </div>
                       )}
@@ -557,6 +584,65 @@ export default function PlayPage() {
             )}
           </AnimatePresence>
 
+          {/* Inventory panel */}
+          {myPlayerId && (gameState.inventory?.[myPlayerId] || []).length > 0 && (
+            <div className="p-3 border-b border-white/5">
+              <h3 className="text-sm font-bold text-gray-400 mb-2 flex items-center gap-1">
+                <span>🎒</span> Инвентарь
+              </h3>
+              <div className="flex flex-wrap gap-1.5">
+                {(() => {
+                  const inv = gameState.inventory?.[myPlayerId] || [];
+                  const myFaction = playerFactions[myPlayerId] || "";
+                  const myColor = FACTION_COLORS[myFaction] || "#fff";
+                  return inv.map((unit: InventoryUnit) => {
+                    const isSelected = unit.id === selectedInvUnit;
+                    const isGuard = unit.type === "GUARD";
+                    return (
+                      <button
+                        key={unit.id}
+                        onClick={() => {
+                          if (gameState.phase === "PLACEMENT" && isMyTurn) {
+                            setSelectedInvUnit(isSelected ? null : unit.id);
+                            setSelectedUnit(null);
+                            setValidMoves([]);
+                          }
+                        }}
+                        className={`relative flex items-center justify-center p-1 rounded-lg transition-all ${
+                          isSelected
+                            ? "bg-cyan-500/20 ring-2 ring-cyan-400 scale-110"
+                            : "bg-white/5 hover:bg-white/10"
+                        } ${gameState.phase === "PLACEMENT" && isMyTurn ? "cursor-pointer" : "opacity-50 cursor-not-allowed"}`}
+                        title={isGuard ? "Гвардия" : "Отряд"}
+                      >
+                        {isGuard ? (
+                          <svg width="18" height="20" viewBox="0 0 14 16">
+                            <path d="M7 0 L14 4 L14 10 Q14 14 7 16 Q0 14 0 10 L0 4 Z"
+                              fill={myColor} stroke={isSelected ? "#22d3ee" : `${myColor}cc`} strokeWidth="1.2"
+                              style={{ filter: `drop-shadow(0 0 3px ${myColor}60)` }} />
+                            <text x="7" y="10.5" textAnchor="middle" fill={myColor === "#f5f5f5" || myColor === "#eab308" ? "#000" : "#fff"}
+                              fontSize="6" fontWeight="bold">G</text>
+                          </svg>
+                        ) : (
+                          <span
+                            className="block w-4 h-4 rounded-full border-[1.5px]"
+                            style={{
+                              backgroundColor: myColor,
+                              borderColor: isSelected ? "#22d3ee" : `${myColor}cc`,
+                            }}
+                          />
+                        )}
+                      </button>
+                    );
+                  });
+                })()}
+              </div>
+              {selectedInvUnit && (
+                <p className="text-[10px] text-cyan-400 mt-1.5">Нажмите на свой город для размещения</p>
+              )}
+            </div>
+          )}
+
           {/* Unit legend */}
           <div className="px-3 py-2 border-b border-white/5">
             <div className="flex items-center gap-3 text-[9px] text-gray-500">
@@ -564,7 +650,7 @@ export default function PlayPage() {
                 <span className="inline-block w-2.5 h-2.5 rounded-full bg-gray-400" /> Отряд
               </span>
               <span className="flex items-center gap-1">
-                <span className="inline-block w-2.5 h-2.5 rounded-full bg-gray-400" style={{ boxShadow: "0 0 4px rgba(156,163,175,0.8)" }} /> Гвардия
+                <svg width="10" height="11" viewBox="0 0 14 16"><path d="M7 0 L14 4 L14 10 Q14 14 7 16 Q0 14 0 10 L0 4 Z" fill="#9ca3af" /></svg> Гвардия
               </span>
               <span className="flex items-center gap-1">
                 <span className="inline-block w-1.5 h-1.5 rounded-full bg-green-400" /> Может ходить
