@@ -13,6 +13,7 @@ import {
   placeReserve,
   finishPlacement,
 } from "@/lib/games/velderanState";
+import { executeBotTurns, isBotPlayer } from "@/lib/games/velderanBot";
 
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const session = await getServerSession(authOptions);
@@ -167,6 +168,26 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     newState = finishPlacement(state, playerNames);
   } else {
     return NextResponse.json({ error: "Неизвестное действие" }, { status: 400 });
+  }
+
+  // Auto-play bot turns if the next player is a bot
+  if (newState.phase !== "GAME_OVER") {
+    const botPlayerIds = new Set(
+      room.players.filter((p) => isBotPlayer(p.userId)).map((p) => p.id)
+    );
+    if (botPlayerIds.size > 0) {
+      const nextId = getCurrentPlayerId(newState);
+      // Also handle combat where bot is a participant
+      const needsBotAction =
+        botPlayerIds.has(nextId) ||
+        (newState.phase === "COMBAT" &&
+          newState.combat &&
+          (botPlayerIds.has(newState.combat.attackerPlayerId) ||
+            botPlayerIds.has(newState.combat.defenderPlayerId)));
+      if (needsBotAction) {
+        newState = executeBotTurns(newState, playerNames, botPlayerIds);
+      }
+    }
   }
 
   // Check game over
