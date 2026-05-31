@@ -57,6 +57,10 @@ interface Message {
   attachments?: string | null;
   reactions?: Reaction[];
   replyTo?: ReplyTo | null;
+  reads?: { userId: string }[];
+  threadId?: string | null;
+  threadCount?: number;
+  _count?: { threadReplies: number };
   user: MessageUser;
 }
 
@@ -104,6 +108,16 @@ export default function MessageArea({
   const [searchQuery, setSearchQuery] = useState("");
   const [searchResults, setSearchResults] = useState<Message[]>([]);
   const [searching, setSearching] = useState(false);
+  const [activeThread, setActiveThread] = useState<{ id: string; user: string; content: string } | null>(null);
+  const [threadMessages, setThreadMessages] = useState<Message[]>([]);
+  const [threadInput, setThreadInput] = useState("");
+  const [showSchedule, setShowSchedule] = useState(false);
+  const [scheduleDate, setScheduleDate] = useState("");
+  const [scheduleTime, setScheduleTime] = useState("");
+  const [scheduledList, setScheduledList] = useState<{ id: string; content: string; scheduledAt: string; channel?: { name: string } }[]>([]);
+  const [showFormatBar, setShowFormatBar] = useState(true);
+  const [slowmodeWait, setSlowmodeWait] = useState(0);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   const canPin = currentUserRole === "OWNER" || currentUserRole === "ADMIN" || currentUserRole === "MODERATOR" || currentUserRole === "SITE_ADMIN";
 
@@ -318,9 +332,119 @@ export default function MessageArea({
     }, 2000);
   };
 
+  // Mark messages as read when visible
+  useEffect(() => {
+    if (messages.length === 0) return;
+    const unread = messages.filter(m => m.user.id !== currentUserId && !(m.reads || []).some(r => r.userId === currentUserId));
+    if (unread.length === 0) return;
+    fetch("/api/messages/read", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ messageIds: unread.map(m => m.id) }),
+    }).then(() => {
+      setMessages(prev => prev.map(m => {
+        if (unread.some(u => u.id === m.id)) {
+          return { ...m, reads: [...(m.reads || []), { userId: currentUserId }] };
+        }
+        return m;
+      }));
+    }).catch(() => {});
+  }, [messages.length, currentUserId]);
+
+  // Slowmode countdown
+  useEffect(() => {
+    if (slowmodeWait <= 0) return;
+    const t = setInterval(() => setSlowmodeWait(prev => Math.max(0, prev - 1)), 1000);
+    return () => clearInterval(t);
+  }, [slowmodeWait]);
+
+  // Thread functions
+  const openThread = async (msg: Message) => {
+    setActiveThread({ id: msg.id, user: msg.user.name, content: msg.content.slice(0, 80) });
+    const res = await fetch(`/api/messages?channelId=${channelId}&threadId=${msg.id}`);
+    if (res.ok) {
+      const data = await res.json();
+      setThreadMessages(data.messages);
+    }
+  };
+
+  const sendThreadReply = async () => {
+    if (!threadInput.trim() || !activeThread) return;
+    const content = threadInput;
+    setThreadInput("");
+    const res = await fetch("/api/messages", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ content, channelId, threadId: activeThread.id }),
+    });
+    if (res.ok) {
+      const msg = await res.json();
+      setThreadMessages(prev => [...prev, msg]);
+      setMessages(prev => prev.map(m => m.id === activeThread.id ? { ...m, threadCount: (m.threadCount || 0) + 1, _count: { ...m._count, threadReplies: ((m._count?.threadReplies || 0) + 1) } } : m));
+    }
+  };
+
+  // Scheduled messages
+  const loadScheduled = async () => {
+    const res = await fetch("/api/messages/scheduled");
+    if (res.ok) setScheduledList(await res.json());
+  };
+
+  const scheduleMessage = async () => {
+    if (!newMessage.trim() || !scheduleDate || !scheduleTime) return;
+    const dt = new Date(`${scheduleDate}T${scheduleTime}`);
+    if (dt.getTime() <= Date.now()) { alert("Время должно быть в будущем"); return; }
+    await fetch("/api/messages/scheduled", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ content: newMessage, channelId, scheduledAt: dt.toISOString() }),
+    });
+    setNewMessage("");
+    setShowSchedule(false);
+    loadScheduled();
+  };
+
+  const deleteScheduled = async (id: string) => {
+    await fetch(`/api/messages/scheduled?id=${id}`, { method: "DELETE" });
+    loadScheduled();
+  };
+
+  // Format helpers
+  const insertFormat = (prefix: string, suffix: string) => {
+    const ta = textareaRef.current;
+    if (!ta) return;
+    const start = ta.selectionStart;
+    const end = ta.selectionEnd;
+    const text = newMessage;
+    const selected = text.slice(start, end);
+    const newText = text.slice(0, start) + prefix + selected + suffix + text.slice(end);
+    setNewMessage(newText);
+    setTimeout(() => { ta.focus(); ta.selectionStart = start + prefix.length; ta.selectionEnd = end + prefix.length; }, 0);
+  };
+
+  // Render formatted content: **bold**, *italic*, `code`, - lists, #channel mentions
+  const renderContent = (text: string) => {
+    const parts: React.ReactNode[] = [];
+    const regex = /(\*\*(.+?)\*\*|\*(.+?)\*|`(.+?)`|^- (.+)$|#(\S+))/gm;
+    let lastIndex = 0;
+    let match;
+    let key = 0;
+    while ((match = regex.exec(text)) !== null) {
+      if (match.index > lastIndex) parts.push(text.slice(lastIndex, match.index));
+      if (match[2]) parts.push(<strong key={key++}>{match[2]}</strong>);
+      else if (match[3]) parts.push(<em key={key++}>{match[3]}</em>);
+      else if (match[4]) parts.push(<code key={key++} className="bg-neutral-200 dark:bg-white/10 px-1 rounded text-xs">{match[4]}</code>);
+      else if (match[5]) parts.push(<span key={key++} className="flex items-start gap-1"><span className="text-violet-500 dark:text-cyan-400">•</span>{match[5]}</span>);
+      else if (match[6]) parts.push(<span key={key++} className="text-violet-500 dark:text-cyan-400 cursor-pointer hover:underline">#{match[6]}</span>);
+      lastIndex = match.index + match[0].length;
+    }
+    if (lastIndex < text.length) parts.push(text.slice(lastIndex));
+    return parts.length > 0 ? parts : text;
+  };
+
   const sendMessage = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newMessage.trim() || sending) return;
+    if (!newMessage.trim() || sending || slowmodeWait > 0) return;
 
     setSending(true);
     socketRef.current?.emit("stop-typing", { channelId });
@@ -342,6 +466,10 @@ export default function MessageArea({
       if (!res.ok) {
         const data = await res.json();
         setNewMessage(content);
+        if (res.status === 429 && data.error) {
+          const secs = parseInt(data.error.match(/\d+/)?.[0] || "5");
+          setSlowmodeWait(secs);
+        }
         alert(data.error || "Ошибка отправки");
       }
     } catch {
@@ -651,7 +779,7 @@ export default function MessageArea({
                   </div>
                 ) : (
                   <>
-                    {msg.content && <p className="text-neutral-700 dark:text-gray-300 text-sm mt-0.5 break-words whitespace-pre-wrap">{msg.content}</p>}
+                    {msg.content && <p className="text-neutral-700 dark:text-gray-300 text-sm mt-0.5 break-words whitespace-pre-wrap">{renderContent(msg.content)}</p>}
                     {parseAttachments(msg.attachments).map((att, i) => (
                       att.isVoice ? (
                         <div key={i} className="mt-1.5">
@@ -741,7 +869,25 @@ export default function MessageArea({
                         Удалить
                       </button>
                     )}
+                    {/* Thread */}
+                    <button onClick={() => openThread(msg)} className="text-[11px] text-neutral-400 hover:text-violet-500 dark:hover:text-cyan-400">
+                      Тред
+                    </button>
                   </div>
+                )}
+
+                {/* Thread indicator */}
+                {(msg._count?.threadReplies || msg.threadCount || 0) > 0 && (
+                  <button onClick={() => openThread(msg)} className="text-[11px] text-violet-500 dark:text-cyan-400 mt-0.5 hover:underline">
+                    💬 {msg._count?.threadReplies || msg.threadCount} ответов
+                  </button>
+                )}
+
+                {/* Read receipts */}
+                {msg.user.id === currentUserId && !msg.deleted && (
+                  <span className="text-[10px] text-neutral-400 mt-0.5" title={`Прочитано: ${(msg.reads || []).filter(r => r.userId !== currentUserId).length}`}>
+                    {(msg.reads || []).filter(r => r.userId !== currentUserId).length > 0 ? "✓✓" : "✓"}
+                  </span>
                 )}
               </div>
             </motion.div>
@@ -792,60 +938,160 @@ export default function MessageArea({
           Канал новостей — только администраторы и модераторы могут писать
         </div>
       ) : !isBanned ? (
-        <div className="p-3 border-t border-[var(--cn-border)]">
-          {recordingVoice ? (
-            <VoiceRecorder onRecorded={handleVoiceRecorded} />
-          ) : (
-            <form onSubmit={sendMessage} className="flex gap-2 items-end">
-              <PlusMenu
-                channelId={channelId}
-                channelMembers={channelMembers}
-                currentUserId={currentUserId}
-                onCreated={() => setToolsRefresh((n) => n + 1)}
-              />
-              <button
-                type="button"
-                onClick={() => fileInputRef.current?.click()}
-                disabled={uploading}
-                className="p-2.5 text-neutral-400 hover:text-violet-500 dark:hover:text-cyan-400 transition-colors disabled:opacity-50"
-                aria-label="Attach file"
-              >
-                {uploading ? (
-                  <div className="w-5 h-5 border-2 border-current border-t-transparent rounded-full animate-spin" />
-                ) : (
-                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" />
-                  </svg>
-                )}
-              </button>
-              <input ref={fileInputRef} type="file" className="hidden" onChange={handleFileUpload} accept="image/*,.pdf,.doc,.docx,.txt" />
-              <textarea
-                value={newMessage}
-                onChange={(e) => { setNewMessage(e.target.value); emitTyping(); e.target.style.height = "auto"; e.target.style.height = Math.min(e.target.scrollHeight, 120) + "px"; }}
-                onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendMessage(e); } }}
-                placeholder={`Написать в #${channelName}...`}
-                className="input-field flex-1 !py-2.5 resize-none overflow-y-auto"
-                rows={1}
-                style={{ maxHeight: 120 }}
-                aria-label={`Message ${channelName}`}
-              />
-              {newMessage.trim() ? (
-                <button type="submit" className="btn-primary !px-4 !py-2.5" aria-label="Send message">
-                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
-                  </svg>
-                </button>
-              ) : (
-                <VoiceRecorder onRecorded={handleVoiceRecorded} disabled={uploading} />
-              )}
-            </form>
+        <div className="border-t border-[var(--cn-border)]">
+          {/* Format toolbar */}
+          {showFormatBar && (
+            <div className="flex items-center gap-1 px-3 pt-2 pb-0">
+              <button type="button" onClick={() => insertFormat("**", "**")} className="px-1.5 py-0.5 text-xs font-bold text-neutral-500 hover:text-neutral-800 dark:hover:text-white hover:bg-neutral-100 dark:hover:bg-white/10 rounded" title="Жирный">B</button>
+              <button type="button" onClick={() => insertFormat("*", "*")} className="px-1.5 py-0.5 text-xs italic text-neutral-500 hover:text-neutral-800 dark:hover:text-white hover:bg-neutral-100 dark:hover:bg-white/10 rounded" title="Курсив">I</button>
+              <button type="button" onClick={() => insertFormat("`", "`")} className="px-1.5 py-0.5 text-xs font-mono text-neutral-500 hover:text-neutral-800 dark:hover:text-white hover:bg-neutral-100 dark:hover:bg-white/10 rounded" title="Код">&lt;/&gt;</button>
+              <button type="button" onClick={() => insertFormat("- ", "")} className="px-1.5 py-0.5 text-xs text-neutral-500 hover:text-neutral-800 dark:hover:text-white hover:bg-neutral-100 dark:hover:bg-white/10 rounded" title="Список">•</button>
+              <button type="button" onClick={() => insertFormat("#", "")} className="px-1.5 py-0.5 text-xs text-neutral-500 hover:text-neutral-800 dark:hover:text-white hover:bg-neutral-100 dark:hover:bg-white/10 rounded" title="Канал">#</button>
+              <div className="flex-1" />
+              <button type="button" onClick={() => { setShowSchedule(!showSchedule); if (!showSchedule) loadScheduled(); }} className="px-1.5 py-0.5 text-xs text-neutral-500 hover:text-violet-500 dark:hover:text-cyan-400 hover:bg-neutral-100 dark:hover:bg-white/10 rounded" title="Запланировать">⏰</button>
+              <button type="button" onClick={() => setShowFormatBar(false)} className="px-1 py-0.5 text-xs text-neutral-400 hover:text-neutral-600 rounded" title="Скрыть">✕</button>
+            </div>
           )}
+          {!showFormatBar && (
+            <button type="button" onClick={() => setShowFormatBar(true)} className="px-3 pt-1 text-[10px] text-neutral-400 hover:text-neutral-600">
+              Aa форматирование
+            </button>
+          )}
+
+          {/* Slowmode indicator */}
+          {slowmodeWait > 0 && (
+            <div className="px-3 py-1 text-xs text-amber-500">
+              Слоумод: подождите {slowmodeWait} сек.
+            </div>
+          )}
+
+          {/* Schedule panel */}
+          {showSchedule && (
+            <div className="px-3 py-2 border-b border-[var(--cn-border)] bg-[var(--cn-accent-dim)]">
+              <div className="flex items-center gap-2 mb-2">
+                <span className="text-xs font-medium text-neutral-600 dark:text-gray-300">Запланировать отправку:</span>
+                <input type="date" value={scheduleDate} onChange={e => setScheduleDate(e.target.value)} className="input-field !py-1 !px-2 text-xs" />
+                <input type="time" value={scheduleTime} onChange={e => setScheduleTime(e.target.value)} className="input-field !py-1 !px-2 text-xs" />
+                <button type="button" onClick={scheduleMessage} disabled={!newMessage.trim() || !scheduleDate || !scheduleTime} className="btn-primary !py-1 !px-3 text-xs disabled:opacity-50">Запланировать</button>
+              </div>
+              {scheduledList.length > 0 && (
+                <div className="space-y-1">
+                  <span className="text-[10px] text-neutral-400">Запланированные:</span>
+                  {scheduledList.map(s => (
+                    <div key={s.id} className="flex items-center gap-2 text-xs text-neutral-500">
+                      <span>{new Date(s.scheduledAt).toLocaleString("ru")}</span>
+                      <span className="truncate flex-1">{s.content.slice(0, 50)}</span>
+                      <button onClick={() => deleteScheduled(s.id)} className="text-red-400 hover:text-red-600">✕</button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
+          <div className="p-3">
+            {recordingVoice ? (
+              <VoiceRecorder onRecorded={handleVoiceRecorded} />
+            ) : (
+              <form onSubmit={sendMessage} className="flex gap-2 items-end">
+                <PlusMenu
+                  channelId={channelId}
+                  channelMembers={channelMembers}
+                  currentUserId={currentUserId}
+                  onCreated={() => setToolsRefresh((n) => n + 1)}
+                />
+                <button
+                  type="button"
+                  onClick={() => fileInputRef.current?.click()}
+                  disabled={uploading}
+                  className="p-2.5 text-neutral-400 hover:text-violet-500 dark:hover:text-cyan-400 transition-colors disabled:opacity-50"
+                  aria-label="Attach file"
+                >
+                  {uploading ? (
+                    <div className="w-5 h-5 border-2 border-current border-t-transparent rounded-full animate-spin" />
+                  ) : (
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" />
+                    </svg>
+                  )}
+                </button>
+                <input ref={fileInputRef} type="file" className="hidden" onChange={handleFileUpload} accept="image/*,.pdf,.doc,.docx,.txt" />
+                <textarea
+                  ref={textareaRef}
+                  value={newMessage}
+                  onChange={(e) => { setNewMessage(e.target.value); emitTyping(); e.target.style.height = "auto"; e.target.style.height = Math.min(e.target.scrollHeight, 120) + "px"; }}
+                  onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendMessage(e); } }}
+                  placeholder={slowmodeWait > 0 ? `Слоумод: ${slowmodeWait} сек...` : `Написать в #${channelName}...`}
+                  className="input-field flex-1 !py-2.5 resize-none overflow-y-auto"
+                  rows={1}
+                  style={{ maxHeight: 120 }}
+                  disabled={slowmodeWait > 0}
+                  aria-label={`Message ${channelName}`}
+                />
+                {newMessage.trim() ? (
+                  <button type="submit" disabled={slowmodeWait > 0} className="btn-primary !px-4 !py-2.5 disabled:opacity-50" aria-label="Send message">
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
+                    </svg>
+                  </button>
+                ) : (
+                  <VoiceRecorder onRecorded={handleVoiceRecorded} disabled={uploading} />
+                )}
+              </form>
+            )}
+          </div>
         </div>
       ) : (
         <div className="p-3 border-t border-[var(--cn-border)] text-center text-red-400/60 text-sm">
           Отправка сообщений ограничена
         </div>
       )}
+
+      {/* Thread Panel */}
+      <AnimatePresence>
+        {activeThread && (
+          <motion.div
+            initial={{ x: "100%" }}
+            animate={{ x: 0 }}
+            exit={{ x: "100%" }}
+            transition={{ type: "spring", damping: 25, stiffness: 200 }}
+            className="absolute right-0 top-0 bottom-0 w-80 bg-[var(--cn-sidebar)] border-l border-[var(--cn-border)] flex flex-col z-30 shadow-xl"
+          >
+            <div className="p-3 border-b border-[var(--cn-border)] flex items-center gap-2">
+              <span className="font-medium text-sm text-neutral-800 dark:text-white flex-1 truncate">Тред: {activeThread.user}</span>
+              <button onClick={() => setActiveThread(null)} className="text-neutral-400 hover:text-neutral-600 dark:hover:text-white">
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+              </button>
+            </div>
+            <div className="p-3 border-b border-[var(--cn-border)] bg-[var(--cn-accent-dim)]">
+              <p className="text-xs text-neutral-600 dark:text-gray-400">{activeThread.content}</p>
+            </div>
+            <div className="flex-1 overflow-y-auto p-3 space-y-2">
+              {threadMessages.map(tm => (
+                <div key={tm.id} className="flex gap-2">
+                  <GlowAvatar user={tm.user} size={24} />
+                  <div>
+                    <span className="text-xs font-medium text-neutral-800 dark:text-white">{tm.user.name}</span>
+                    <p className="text-xs text-neutral-600 dark:text-gray-300 mt-0.5">{renderContent(tm.content)}</p>
+                  </div>
+                </div>
+              ))}
+            </div>
+            <div className="p-3 border-t border-[var(--cn-border)]">
+              <div className="flex gap-2">
+                <input
+                  value={threadInput}
+                  onChange={e => setThreadInput(e.target.value)}
+                  onKeyDown={e => { if (e.key === "Enter") { e.preventDefault(); sendThreadReply(); } }}
+                  placeholder="Ответить в треде..."
+                  className="input-field flex-1 !py-2 text-sm"
+                />
+                <button onClick={sendThreadReply} disabled={!threadInput.trim()} className="btn-primary !px-3 !py-2 text-sm disabled:opacity-50">→</button>
+              </div>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* Image Lightbox */}
       <ImageLightbox src={lightboxSrc} onClose={() => setLightboxSrc(null)} />

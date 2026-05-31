@@ -358,6 +358,33 @@ app.prepare().then(() => {
     }
   }, 60_000);
 
+  // Scheduled message sender: every 30 seconds
+  setInterval(async () => {
+    try {
+      const { PrismaClient } = await import("@prisma/client");
+      const p = new PrismaClient();
+      const due = await p.scheduledMessage.findMany({
+        where: { sent: false, scheduledAt: { lte: new Date() } },
+        take: 20,
+      });
+      for (const sm of due) {
+        await p.message.create({
+          data: { content: sm.content, channelId: sm.channelId, userId: sm.userId },
+        });
+        await p.scheduledMessage.update({ where: { id: sm.id }, data: { sent: true } });
+        io.to(`channel:${sm.channelId}`).emit("new-message", {
+          id: sm.id, content: sm.content, channelId: sm.channelId,
+          createdAt: new Date().toISOString(),
+          user: await p.user.findUnique({ where: { id: sm.userId }, select: { id: true, name: true, username: true, avatar: true, role: true, avatarGlowEnabled: true, avatarGlowColors: true } }),
+          reactions: [], reads: [], replyTo: null, _count: { threadReplies: 0 },
+        });
+      }
+      await p.$disconnect();
+    } catch (err) {
+      console.error("[Scheduled] Error:", err);
+    }
+  }, 30_000);
+
   httpServer.listen(port, () => {
     console.log(`> Ready on http://${hostname}:${port}`);
   });
