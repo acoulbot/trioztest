@@ -47,7 +47,12 @@ export default function MapEditorPage() {
   const [message, setMessage] = useState("");
   const [editingNode, setEditingNode] = useState<string | null>(null);
   const [editName, setEditName] = useState("");
+  const [zoom, setZoom] = useState(1);
+  const [pan, setPan] = useState({ x: 0, y: 0 });
+  const [isPanning, setIsPanning] = useState(false);
+  const panStart = useRef({ x: 0, y: 0, panX: 0, panY: 0 });
   const mapContainerRef = useRef<HTMLDivElement>(null);
+  const mapWrapperRef = useRef<HTMLDivElement>(null);
 
   const user = session?.user as { id?: string; username?: string } | undefined;
   const isAdmin = user && ((user.username || "").includes("acoulbot") || (user.id || "").includes("acoulbot"));
@@ -82,11 +87,41 @@ export default function MapEditorPage() {
   }, [status, isAdmin, router, loadConfig]);
 
   const handleMapClick = () => {
-    if (draggingNode || editingNode) return;
+    if (draggingNode || editingNode || isPanning) return;
     if (!drawMode) {
       setSelectedNode(null);
     }
   };
+
+  const zoomIn = () => setZoom((z) => Math.min(z + 0.25, 4));
+  const zoomOut = () => setZoom((z) => Math.max(z - 0.25, 0.5));
+  const zoomReset = () => { setZoom(1); setPan({ x: 0, y: 0 }); };
+
+  const handleMiddleMouseDown = (e: React.MouseEvent) => {
+    if (e.button === 1) {
+      e.preventDefault();
+      setIsPanning(true);
+      panStart.current = { x: e.clientX, y: e.clientY, panX: pan.x, panY: pan.y };
+    }
+  };
+
+  useEffect(() => {
+    const onMouseMove = (e: MouseEvent) => {
+      if (!isPanning) return;
+      const dx = e.clientX - panStart.current.x;
+      const dy = e.clientY - panStart.current.y;
+      setPan({ x: panStart.current.panX + dx, y: panStart.current.panY + dy });
+    };
+    const onMouseUp = () => setIsPanning(false);
+    if (isPanning) {
+      window.addEventListener("mousemove", onMouseMove);
+      window.addEventListener("mouseup", onMouseUp);
+    }
+    return () => {
+      window.removeEventListener("mousemove", onMouseMove);
+      window.removeEventListener("mouseup", onMouseUp);
+    };
+  }, [isPanning, pan]);
 
   const handleNodeClick = (e: React.MouseEvent, nodeId: string) => {
     e.stopPropagation();
@@ -246,20 +281,39 @@ export default function MapEditorPage() {
 
       <div className="flex flex-1 overflow-hidden">
         {/* Map area */}
-        <div className="flex-1 relative flex items-center justify-center overflow-hidden bg-neutral-950">
+        <div
+          ref={mapWrapperRef}
+          className="flex-1 relative flex items-center justify-center overflow-hidden bg-neutral-950"
+          onMouseDown={handleMiddleMouseDown}
+          onWheel={(e) => e.preventDefault()}
+        >
           <div
             ref={mapContainerRef}
-            className="relative w-full"
-            style={{ aspectRatio: "2400/1792", maxHeight: "100%" }}
+            className="relative"
+            style={{
+              width: "100%",
+              maxWidth: `calc((100vh - 48px) * 2400 / 1792)`,
+              aspectRatio: "2400/1792",
+              transform: `translate(${pan.x}px, ${pan.y}px) scale(${zoom})`,
+              transformOrigin: "center center",
+              transition: isPanning ? "none" : "transform 0.15s ease-out",
+            }}
             onClick={handleMapClick}
           >
             {/* Base map */}
-            <Image src="/games/velderan/map-editor.png" alt="Карта" fill className="object-cover" priority unoptimized />
+            <Image src="/games/velderan/map-editor.png" alt="Карта" fill className="object-contain" priority unoptimized />
 
             {/* Template overlay */}
             {showTemplate && (
-              <Image src="/games/velderan/map-template.png" alt="Шаблон" fill className="object-cover opacity-60 pointer-events-none" unoptimized />
+              <Image src="/games/velderan/map-template.png" alt="Шаблон" fill className="object-contain opacity-60 pointer-events-none" unoptimized />
             )}
+
+          {/* Zoom controls */}
+          <div className="absolute bottom-3 left-3 flex items-center gap-1 z-50">
+            <button onClick={zoomOut} className="w-8 h-8 bg-black/70 text-white rounded-lg hover:bg-black/90 text-lg font-bold">−</button>
+            <button onClick={zoomReset} className="px-2 h-8 bg-black/70 text-white rounded-lg hover:bg-black/90 text-xs">{Math.round(zoom * 100)}%</button>
+            <button onClick={zoomIn} className="w-8 h-8 bg-black/70 text-white rounded-lg hover:bg-black/90 text-lg font-bold">+</button>
+          </div>
 
             {/* SVG edges */}
             <svg className="absolute inset-0 w-full h-full pointer-events-none" viewBox="0 0 100 100" preserveAspectRatio="none">
