@@ -16,6 +16,24 @@ const config: Config = {
       colors: {
         background: "var(--background)",
         foreground: "var(--foreground)",
+        // Semantic, theme-aware tokens (resolve per active theme via CSS vars).
+        // `accent` is channel-based so opacity modifiers work: text-accent/30, bg-accent/10.
+        accent: {
+          DEFAULT: "rgb(var(--accent) / <alpha-value>)",
+          hover: "rgb(var(--accent-hover) / <alpha-value>)",
+        },
+        card: {
+          DEFAULT: "var(--card-bg)",
+          border: "var(--card-border)",
+        },
+        muted: {
+          DEFAULT: "var(--muted)",
+          bg: "var(--muted-bg)",
+        },
+        tag: {
+          DEFAULT: "var(--tag-bg)",
+          text: "var(--tag-text)",
+        },
         dark: {
           900: "#0a0a0f",
           800: "#12121a",

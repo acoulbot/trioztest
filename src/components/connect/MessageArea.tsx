@@ -819,7 +819,7 @@ export default function MessageArea({
               {searchResults.map(sr => (
                 <div key={sr.id} className="px-4 py-2 hover:bg-black/5 dark:hover:bg-white/5 border-t border-[var(--cn-border)] cursor-pointer" onClick={() => { setShowSearch(false); setSearchQuery(""); setSearchResults([]); }}>
                   <div className="flex items-center gap-2 mb-0.5">
-                    <span className="text-xs font-medium text-violet-600 dark:text-cyan-400">{sr.user.name}</span>
+                    <span className="text-xs font-medium text-accent">{sr.user.name}</span>
                     <span className="text-[10px] text-neutral-400">{new Date(sr.createdAt).toLocaleDateString("ru")}</span>
                   </div>
                   <p className="text-sm text-[var(--cn-text)] line-clamp-2">{sr.content}</p>
@@ -848,7 +848,7 @@ export default function MessageArea({
             pinnedMessages.map(pm => (
               <div key={pm.id} className="px-4 py-2 flex items-start gap-2 hover:bg-black/5 dark:hover:bg-white/5 border-b border-[var(--cn-border)] last:border-0">
                 <div className="flex-1 min-w-0">
-                  <span className="text-xs font-medium text-violet-600 dark:text-cyan-400">{pm.user.name}</span>
+                  <span className="text-xs font-medium text-accent">{pm.user.name}</span>
                   <p className="text-sm text-[var(--cn-text)] line-clamp-2">{pm.content || "[файл]"}</p>
                 </div>
                 {canPin && (
@@ -999,7 +999,7 @@ export default function MessageArea({
                         onClick={() => toggleReaction(msg.id, emoji)}
                         className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs border transition-colors ${
                           data.userReacted
-                            ? "bg-violet-50 dark:bg-cyan-400/10 border-violet-200 dark:border-cyan-400/30 text-violet-600 dark:text-cyan-400"
+                            ? "bg-violet-50 dark:bg-cyan-400/10 border-violet-200 dark:border-cyan-400/30 text-accent"
                             : "bg-[var(--cn-accent-dim)] border-[var(--cn-border)] text-neutral-500 hover:bg-[var(--cn-hover)]"
                         }`}
                       >

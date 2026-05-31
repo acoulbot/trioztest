@@ -413,7 +413,7 @@ export function ChannelToolsPanel({
           onClick={() => setTab("polls")}
           className={`px-3 py-1 rounded-lg text-xs font-medium transition-colors ${
             tab === "polls"
-              ? "bg-violet-500/10 dark:bg-cyan-400/10 text-violet-600 dark:text-cyan-400"
+              ? "bg-violet-500/10 dark:bg-cyan-400/10 text-accent"
               : "text-neutral-400 hover:text-neutral-600 dark:hover:text-gray-300"
           }`}
         >
@@ -423,7 +423,7 @@ export function ChannelToolsPanel({
           onClick={() => setTab("tasks")}
           className={`px-3 py-1 rounded-lg text-xs font-medium transition-colors ${
             tab === "tasks"
-              ? "bg-violet-500/10 dark:bg-cyan-400/10 text-violet-600 dark:text-cyan-400"
+              ? "bg-violet-500/10 dark:bg-cyan-400/10 text-accent"
               : "text-neutral-400 hover:text-neutral-600 dark:hover:text-gray-300"
           }`}
         >

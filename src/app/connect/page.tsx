@@ -241,7 +241,7 @@ function CreateChannelModal({ groupId, onClose, onCreated }: { groupId: string; 
           onKeyDown={(e) => { if (e.key === "Enter" && name.trim() && !loading) handleCreate(); }}
           placeholder="Название канала..." className="w-full bg-neutral-50 dark:bg-neutral-700 border border-neutral-200 dark:border-white/10 rounded-xl px-3 py-2.5 text-sm text-neutral-900 dark:text-white placeholder:text-neutral-400" autoFocus />
         <div className="flex gap-2">
-          <button onClick={() => setType("TEXT")} className={`flex-1 px-3 py-2 rounded-xl text-sm transition-all ${type === "TEXT" ? "bg-violet-50 dark:bg-cyan-400/20 text-violet-600 dark:text-cyan-400 border border-violet-200 dark:border-cyan-400/30" : "bg-neutral-50 dark:bg-neutral-700 text-neutral-500 dark:text-gray-400 border border-neutral-200 dark:border-white/5"}`}>
+          <button onClick={() => setType("TEXT")} className={`flex-1 px-3 py-2 rounded-xl text-sm transition-all ${type === "TEXT" ? "bg-violet-50 dark:bg-cyan-400/20 text-accent border border-violet-200 dark:border-cyan-400/30" : "bg-neutral-50 dark:bg-neutral-700 text-neutral-500 dark:text-gray-400 border border-neutral-200 dark:border-white/5"}`}>
             Текстовый
           </button>
           <button onClick={() => setType("VOICE")} className={`flex-1 px-3 py-2 rounded-xl text-sm transition-all ${type === "VOICE" ? "bg-emerald-50 dark:bg-emerald-400/20 text-emerald-600 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-400/30" : "bg-neutral-50 dark:bg-neutral-700 text-neutral-500 dark:text-gray-400 border border-neutral-200 dark:border-white/5"}`}>
@@ -287,7 +287,7 @@ function InviteModal({ groupId, onClose }: { groupId: string; onClose: () => voi
             <p className="text-sm text-neutral-500">Код приглашения:</p>
             <div className="flex gap-2">
               <input type="text" value={inviteCode} readOnly className="flex-1 bg-neutral-50 dark:bg-neutral-700 border border-neutral-200 dark:border-white/10 rounded-xl px-3 py-2.5 text-sm text-neutral-900 dark:text-white font-mono" />
-              <button onClick={() => { navigator.clipboard.writeText(inviteCode); setCopied(true); setTimeout(() => setCopied(false), 2000); }} className={`px-4 py-2.5 rounded-xl text-sm font-medium transition-all ${copied ? "bg-green-100 dark:bg-green-400/20 text-green-600 dark:text-green-400" : "bg-violet-100 dark:bg-cyan-400/20 text-violet-600 dark:text-cyan-400 hover:bg-violet-200 dark:hover:bg-cyan-400/30"}`}>
+              <button onClick={() => { navigator.clipboard.writeText(inviteCode); setCopied(true); setTimeout(() => setCopied(false), 2000); }} className={`px-4 py-2.5 rounded-xl text-sm font-medium transition-all ${copied ? "bg-green-100 dark:bg-green-400/20 text-green-600 dark:text-green-400" : "bg-violet-100 dark:bg-cyan-400/20 text-accent hover:bg-violet-200 dark:hover:bg-cyan-400/30"}`}>
                 {copied ? "Скопировано!" : "Копировать"}
               </button>
             </div>
@@ -1055,7 +1055,7 @@ function ConnectPageInner() {
                   if (key === "communities") { setSelectedGroup(null); setMobileView("groups"); }
                 }}
                 className={`flex-1 flex flex-col items-center justify-center gap-0.5 h-full transition-colors active:scale-95
-                  ${activeSection === key ? "text-violet-600 dark:text-cyan-400" : "text-neutral-400 dark:text-neutral-500"}`}
+                  ${activeSection === key ? "text-accent" : "text-neutral-400 dark:text-neutral-500"}`}
               >
                 {icon}
                 <span className="text-[10px] font-medium">{label}</span>
@@ -1070,7 +1070,7 @@ function ConnectPageInner() {
             style={{ height: 48 }}>
             <button
               onClick={() => { setSelectedGroup(null); setMobileView("groups"); }}
-              className="flex items-center gap-1.5 text-violet-600 dark:text-cyan-400 text-sm font-medium active:opacity-60"
+              className="flex items-center gap-1.5 text-accent text-sm font-medium active:opacity-60"
             >
               <svg width={18} height={18} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
                 <path d="M19 12H5m0 0l7 7m-7-7l7-7" />
@@ -1089,7 +1089,7 @@ function ConnectPageInner() {
             style={{ height: 48 }}>
             <button
               onClick={() => setMobileView("channels")}
-              className="flex items-center gap-1.5 text-violet-600 dark:text-cyan-400 text-sm font-medium active:opacity-60"
+              className="flex items-center gap-1.5 text-accent text-sm font-medium active:opacity-60"
             >
               <svg width={18} height={18} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
                 <path d="M19 12H5m0 0l7 7m-7-7l7-7" />

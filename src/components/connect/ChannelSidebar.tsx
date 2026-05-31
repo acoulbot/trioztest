@@ -737,7 +737,7 @@ export default function ChannelSidebar({
       {/* ── Bottom actions ── */}
       <div className="p-2 border-t border-neutral-200 dark:border-white/5 space-y-1">
         {canManage && (
-          <button onClick={onInvite} className="w-full px-3 py-1.5 text-left text-sm text-violet-600 dark:text-cyan-400 hover:bg-violet-50 dark:hover:bg-cyan-400/10 rounded-lg transition-colors flex items-center gap-2">
+          <button onClick={onInvite} className="w-full px-3 py-1.5 text-left text-sm text-accent hover:bg-violet-50 dark:hover:bg-cyan-400/10 rounded-lg transition-colors flex items-center gap-2">
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
             </svg>

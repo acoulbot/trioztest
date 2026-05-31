@@ -158,7 +158,7 @@ export default function SearchDialog({ open, onClose }: SearchDialogProps) {
                 onClick={() => setTab(t.key)}
                 className={`px-3 py-1 text-xs rounded-lg transition-colors ${
                   tab === t.key
-                    ? "bg-violet-100 dark:bg-cyan-400/15 text-violet-600 dark:text-cyan-400"
+                    ? "bg-violet-100 dark:bg-cyan-400/15 text-accent"
                     : "text-neutral-500 dark:text-gray-400 hover:bg-neutral-100 dark:hover:bg-white/5"
                 }`}
               >

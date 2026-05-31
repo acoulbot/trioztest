@@ -85,7 +85,7 @@ export default function BottomNav() {
             className={`flex flex-col items-center justify-center gap-0.5 flex-1 h-full
               transition-colors duration-200 active:scale-95
               ${isActive
-                ? "text-violet-600 dark:text-cyan-400"
+                ? "text-accent"
                 : "text-neutral-400 dark:text-neutral-500"
               }`}
           >

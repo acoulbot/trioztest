@@ -11,8 +11,9 @@
   --muted-bg: #f3f4f6;
   --tag-bg: #e9eaed;
   --tag-text: #374151;
-  --accent: #7c3aed;
-  --accent-hover: #6d28d9;
+  /* Accent stored as RGB channels so Tailwind can apply opacity (text-accent/30) */
+  --accent: 124 58 237;
+  --accent-hover: 109 40 217;
 
   /* Connect panel variables (light) */
   --cn-rail:        #f0f0f0;
@@ -38,8 +39,8 @@
   --muted-bg: #fdf0e2;
   --tag-bg: #fdebd0;
   --tag-text: #92400e;
-  --accent: #ea580c;
-  --accent-hover: #c2410c;
+  --accent: 234 88 12;
+  --accent-hover: 194 65 12;
 
   --cn-rail:        #f0e8de;
   --cn-sidebar:     #f7f1ea;
@@ -64,8 +65,8 @@
   --muted-bg: rgba(255,255,255,0.05);
   --tag-bg: rgba(255,255,255,0.08);
   --tag-text: #d1d5db;
-  --accent: #00f0ff;
-  --accent-hover: #00d4e0;
+  --accent: 0 240 255;
+  --accent-hover: 0 212 224;
 
   --cn-rail:        #070709;
   --cn-sidebar:     #0f0f17;
@@ -90,8 +91,8 @@
   --muted-bg: rgba(192,132,252,0.05);
   --tag-bg: rgba(192,132,252,0.08);
   --tag-text: #e0aaff;
-  --accent: #c084fc;
-  --accent-hover: #a855f7;
+  --accent: 192 132 252;
+  --accent-hover: 168 85 247;
 
   --cn-rail:        #0a0812;
   --cn-sidebar:     #120d1e;
@@ -204,13 +205,13 @@ body {
 
 @layer components {
   .glass-card {
-    @apply bg-white dark:bg-white/5 backdrop-blur-xl border border-neutral-200 dark:border-white/10 rounded-2xl shadow-sm dark:shadow-none;
+    @apply bg-card backdrop-blur-xl border border-card-border rounded-2xl shadow-sm dark:shadow-none;
   }
 
   .glass-card-hover {
     @apply glass-card transition-all duration-500
       hover:bg-neutral-50 dark:hover:bg-white/10
-      hover:border-violet-300 dark:hover:border-cyan-400/30
+      hover:border-accent/40
       hover:shadow-md dark:hover:shadow-[0_0_30px_rgba(0,240,255,0.15)];
   }
 
@@ -238,8 +239,8 @@ body {
   }
 
   .btn-secondary {
-    @apply px-6 py-3 border border-violet-400/30 dark:border-cyan-400/30 text-violet-600 dark:text-cyan-400 rounded-xl
-    transition-all duration-300 hover:bg-violet-50 dark:hover:bg-cyan-400/10 hover:border-violet-400/60 dark:hover:border-cyan-400/60;
+    @apply px-6 py-3 border border-accent/30 text-accent rounded-xl
+    transition-all duration-300 hover:bg-accent/10 hover:border-accent/60;
   }
 
   .btn-danger {

@@ -321,7 +321,7 @@ export default function SignInPage() {
                 Введите код
               </h1>
               <p className="text-neutral-500 dark:text-gray-400 text-sm mt-1">
-                Отправлен на <span className="text-violet-600 dark:text-cyan-400">{email}</span>
+                Отправлен на <span className="text-accent">{email}</span>
               </p>
             </>
           )}
@@ -413,7 +413,7 @@ export default function SignInPage() {
                   <button
                     type="button"
                     onClick={() => { setStep("reset-password"); setResetStep("email"); setError(""); setCode(""); setNewPassword(""); }}
-                    className="text-xs text-violet-600 dark:text-cyan-400 hover:text-violet-500 dark:hover:text-cyan-300 transition-colors"
+                    className="text-xs text-accent hover:text-violet-500 dark:hover:text-cyan-300 transition-colors"
                   >
                     Забыли пароль?
                   </button>
@@ -438,7 +438,7 @@ export default function SignInPage() {
                   setError("");
                   setStep("form");
                 }}
-                className="text-sm text-violet-600 dark:text-cyan-400 hover:text-violet-500 dark:hover:text-cyan-300 transition-colors"
+                className="text-sm text-accent hover:text-violet-500 dark:hover:text-cyan-300 transition-colors"
               >
                 {authType === "register" ? "Уже есть аккаунт? Войти" : "Нет аккаунта? Зарегистрироваться"}
               </button>
@@ -459,7 +459,7 @@ export default function SignInPage() {
                 <button
                   onClick={resendCode}
                   disabled={countdown > 0}
-                  className="text-sm text-violet-600 dark:text-cyan-400 hover:text-violet-500 dark:hover:text-cyan-300 transition-colors disabled:text-neutral-400 dark:disabled:text-gray-600 disabled:cursor-not-allowed"
+                  className="text-sm text-accent hover:text-violet-500 dark:hover:text-cyan-300 transition-colors disabled:text-neutral-400 dark:disabled:text-gray-600 disabled:cursor-not-allowed"
                 >
                   {countdown > 0
                     ? `Отправить повторно (${countdown}с)`
@@ -488,7 +488,7 @@ export default function SignInPage() {
               </h1>
               <p className="text-neutral-500 dark:text-gray-400 text-sm mt-1">
                 {resetStep === "email" && "Введите email для получения кода"}
-                {resetStep === "code" && <>Код отправлен на <span className="text-violet-600 dark:text-cyan-400">{email}</span></>}
+                {resetStep === "code" && <>Код отправлен на <span className="text-accent">{email}</span></>}
                 {resetStep === "newpass" && "Введите новый пароль"}
               </p>
             </div>
@@ -536,7 +536,7 @@ export default function SignInPage() {
                     <button
                       onClick={handleForgotPassword}
                       disabled={countdown > 0}
-                      className="text-sm text-violet-600 dark:text-cyan-400 hover:text-violet-500 dark:hover:text-cyan-300 transition-colors disabled:text-neutral-400 dark:disabled:text-gray-600 disabled:cursor-not-allowed"
+                      className="text-sm text-accent hover:text-violet-500 dark:hover:text-cyan-300 transition-colors disabled:text-neutral-400 dark:disabled:text-gray-600 disabled:cursor-not-allowed"
                     >
                       {countdown > 0 ? `Отправить повторно (${countdown}с)` : "Отправить код повторно"}
                     </button>

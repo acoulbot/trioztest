@@ -115,7 +115,7 @@ export default function VoicePlayer({ url, duration: initialDuration, isOwn, e2e
               ? "bg-red-100 dark:bg-red-900/30 text-red-500"
               : isOwn
                 ? "bg-white/20 hover:bg-white/30 text-white"
-                : "bg-violet-100 dark:bg-cyan-400/20 hover:bg-violet-200 dark:hover:bg-cyan-400/30 text-violet-600 dark:text-cyan-400"
+                : "bg-violet-100 dark:bg-cyan-400/20 hover:bg-violet-200 dark:hover:bg-cyan-400/30 text-accent"
         }`}
       >
         {decrypting ? (

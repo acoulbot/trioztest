@@ -60,7 +60,7 @@ export default function Navbar() {
                   href={link.href}
                   className={`relative px-3 py-2 text-sm rounded-lg transition-all duration-200 ${
                     active
-                      ? "text-violet-600 dark:text-cyan-400 font-medium"
+                      ? "text-accent font-medium"
                       : "text-neutral-600 dark:text-gray-400 hover:text-neutral-900 dark:hover:text-white hover:bg-neutral-100 dark:hover:bg-white/5"
                   }`}
                 >
@@ -227,7 +227,7 @@ export default function Navbar() {
                     onClick={() => setMenuOpen(false)}
                     className={`block px-3 py-2 rounded-lg transition-colors text-sm ${
                       active
-                        ? "bg-violet-50 dark:bg-cyan-400/10 text-violet-600 dark:text-cyan-400 font-medium"
+                        ? "bg-violet-50 dark:bg-cyan-400/10 text-accent font-medium"
                         : "text-neutral-700 dark:text-gray-300 hover:text-violet-600 dark:hover:text-cyan-400 hover:bg-neutral-50 dark:hover:bg-white/5"
                     }`}
                   >
