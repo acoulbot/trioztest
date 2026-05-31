@@ -13,7 +13,10 @@ function getCtx(): AudioContext | null {
   if (!_enabled) return null;
   if (typeof window === "undefined") return null;
   if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return null;
-  if (!_ctx) _ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
+  if (!_ctx) {
+    const w = window as unknown as { AudioContext: typeof AudioContext; webkitAudioContext?: typeof AudioContext };
+    _ctx = new (w.AudioContext || w.webkitAudioContext!)();
+  }
   return _ctx;
 }
 

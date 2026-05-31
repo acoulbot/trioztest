@@ -160,7 +160,6 @@ export function VoiceProvider({ children }: { children: React.ReactNode }) {
           iceTransportPolicy: hasTurn ? "relay" : "all",
           iceCandidatePoolSize: 2,
         };
-        console.log(`[Voice] ICE config: ${hasTurn ? "relay (TURN)" : "all (STUN only)"}`, data.iceServers.length, "servers");
       }
     }).catch(() => {});
   }, []);
@@ -263,22 +262,12 @@ export function VoiceProvider({ children }: { children: React.ReactNode }) {
 
     pc.onicecandidate = ({ candidate }) => {
       if (candidate) {
-        console.log(`[Voice] ICE candidate: ${candidate.type} ${candidate.protocol} ${candidate.address}:${candidate.port}`);
         socketRef.current?.emit("ice-candidate", { to: remoteSocketId, candidate: candidate.toJSON() });
       }
     };
 
-    pc.onicegatheringstatechange = () => {
-      console.log(`[Voice] ICE gathering: ${pc.iceGatheringState}`);
-    };
-
-    pc.oniceconnectionstatechange = () => {
-      console.log(`[Voice] ICE connection: ${pc.iceConnectionState}`);
-    };
-
     pc.onconnectionstatechange = () => {
       const state = pc.connectionState;
-      console.log(`[Voice] Peer ${remoteSocketId} connection: ${state}`);
       if (state === "connected") {
         // Connection established — ensure audio is playing
         const audio = remoteAudiosRef.current.get(remoteSocketId);
@@ -502,7 +491,6 @@ export function VoiceProvider({ children }: { children: React.ReactNode }) {
       socketRef.current = socket;
 
       socket.on("connect", () => {
-        console.log("[Voice] Socket connected:", socket.id);
         const userName = session.user.name || "Пользователь";
         socket.emit("join-voice", { channelId: chId, userId: session.user.id, userName });
         setIsConnected(true);
@@ -525,7 +513,6 @@ export function VoiceProvider({ children }: { children: React.ReactNode }) {
       });
 
       socket.io.on("reconnect", () => {
-        console.log("[Voice] Socket reconnected");
         setVoiceStatus("connected");
         const userName = session.user.name || "Пользователь";
         socket.emit("join-voice", { channelId: chId, userId: session.user.id, userName });

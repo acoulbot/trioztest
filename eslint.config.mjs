@@ -5,7 +5,7 @@ export default [
   {
     rules: {
       "@typescript-eslint/no-unused-vars": ["warn", { argsIgnorePattern: "^_" }],
-      "@typescript-eslint/no-explicit-any": "off",
+      "@typescript-eslint/no-explicit-any": "error",
       "react-hooks/set-state-in-effect": "warn",
       "react-hooks/purity": "warn",
     },

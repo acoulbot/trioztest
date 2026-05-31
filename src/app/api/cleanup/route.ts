@@ -11,7 +11,6 @@ export async function POST() {
 
   try {
     const result = await cleanupExpiredFiles();
-    console.log("[Cleanup] Manual run:", result);
     return NextResponse.json({ ok: true, ...result });
   } catch (error) {
     console.error("[Cleanup] Error:", error);
