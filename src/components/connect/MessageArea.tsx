@@ -182,6 +182,7 @@ export default function MessageArea({
   const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const isAtBottomRef = useRef(true);
+  const scrollFetchLock = useRef(false);
 
   const fetchMessages = useCallback(async (cursor?: string) => {
     const url = `/api/messages?channelId=${channelId}&limit=50${cursor ? `&cursor=${cursor}` : ""}`;
@@ -272,7 +273,10 @@ export default function MessageArea({
     });
 
     socket.on("user-typing", ({ userId, userName }: { userId: string; userName: string }) => {
-      setTypingUsers((prev) => new Map(prev).set(userId, userName));
+      setTypingUsers((prev) => {
+        if (prev.size >= 5 && !prev.has(userId)) return prev; // throttle: max 5 tracked
+        return new Map(prev).set(userId, userName);
+      });
     });
 
     socket.on("user-stop-typing", ({ userId }: { userId: string }) => {
@@ -340,8 +344,11 @@ export default function MessageArea({
     const distFromBottom = el.scrollHeight - el.scrollTop - el.clientHeight;
     isAtBottomRef.current = distFromBottom < 100;
     setShowScrollBtn(distFromBottom > 300);
-    if (el.scrollTop === 0 && hasMore && nextCursor) {
-      fetchMessages(nextCursor);
+    if (el.scrollTop < 50 && hasMore && nextCursor && !scrollFetchLock.current) {
+      scrollFetchLock.current = true;
+      fetchMessages(nextCursor).finally(() => {
+        setTimeout(() => { scrollFetchLock.current = false; }, 300);
+      });
     }
   };
 

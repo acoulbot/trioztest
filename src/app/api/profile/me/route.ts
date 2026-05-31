@@ -21,6 +21,7 @@ export async function GET() {
       role: true,
       avatarGlowEnabled: true,
       avatarGlowColors: true,
+      profileBanner: true,
       tosAccepted: true,
       statusType: true,
       customStatus: true,
@@ -68,6 +69,14 @@ export async function PATCH(req: Request) {
     }
   }
 
+  if ("profileBanner" in body) {
+    if (body.profileBanner === null) {
+      data.profileBanner = null;
+    } else if (typeof body.profileBanner === "string") {
+      data.profileBanner = body.profileBanner;
+    }
+  }
+
   if (Object.keys(data).length === 0) {
     return NextResponse.json({ error: "Нет данных для обновления" }, { status: 400 });
   }
@@ -80,6 +89,7 @@ export async function PATCH(req: Request) {
       avatar: true,
       avatarGlowEnabled: true,
       avatarGlowColors: true,
+      profileBanner: true,
     },
   });
 

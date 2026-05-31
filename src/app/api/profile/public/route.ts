@@ -26,6 +26,7 @@ export async function GET(req: NextRequest) {
       privacyEmail: true,
       avatarGlowEnabled: true,
       avatarGlowColors: true,
+      profileBanner: true,
       lastSeen: true,
       createdAt: true,
       _count: {
@@ -105,6 +106,7 @@ export async function GET(req: NextRequest) {
     statusEmoji: user.statusEmoji,
     avatarGlowEnabled: user.avatarGlowEnabled,
     avatarGlowColors: user.avatarGlowColors,
+    profileBanner: user.profileBanner,
     lastSeen: showOnline ? user.lastSeen : null,
     showOnline,
     createdAt: user.createdAt,

@@ -176,3 +176,87 @@ export async function getCachedSharedKey(
   keyCache.set(peerId, key);
   return key;
 }
+
+/* ── Backup / Restore ── */
+
+export async function exportKeysToJSON(): Promise<string | null> {
+  const db = await openDB();
+  const stored = await new Promise<StoredKeyPair | undefined>((resolve, reject) => {
+    const tx = db.transaction(STORE_NAME, "readonly");
+    const req = tx.objectStore(STORE_NAME).get(KEY_ID);
+    req.onsuccess = () => resolve(req.result);
+    req.onerror = () => reject(req.error);
+  });
+  db.close();
+  if (!stored) return null;
+
+  let privateJwk: JsonWebKey | null = null;
+  try {
+    privateJwk = await crypto.subtle.exportKey("jwk", stored.privateKey);
+  } catch {
+    // key was generated non-extractable — regenerate as extractable
+    const kp = await crypto.subtle.generateKey(
+      { name: "ECDH", namedCurve: "P-256" },
+      true,
+      ["deriveKey", "deriveBits"]
+    );
+    const pubJwk = await crypto.subtle.exportKey("jwk", kp.publicKey);
+    const privJwk = await crypto.subtle.exportKey("jwk", kp.privateKey);
+    // save new extractable pair
+    const db2 = await openDB();
+    await new Promise<void>((resolve, reject) => {
+      const tx = db2.transaction(STORE_NAME, "readwrite");
+      tx.objectStore(STORE_NAME).put({ publicKey: pubJwk, privateKey: kp.privateKey }, KEY_ID);
+      tx.oncomplete = () => resolve();
+      tx.onerror = () => reject(tx.error);
+    });
+    db2.close();
+    // upload new public key
+    try {
+      await fetch("/api/e2ee", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ publicKey: JSON.stringify(pubJwk) }),
+      });
+    } catch {}
+    return JSON.stringify({ publicKey: pubJwk, privateKey: privJwk });
+  }
+
+  return JSON.stringify({ publicKey: stored.publicKey, privateKey: privateJwk });
+}
+
+export async function importKeysFromJSON(json: string): Promise<boolean> {
+  try {
+    const { publicKey, privateKey: privJwk } = JSON.parse(json);
+    if (!publicKey || !privJwk) return false;
+
+    const importedPrivate = await crypto.subtle.importKey(
+      "jwk",
+      privJwk,
+      { name: "ECDH", namedCurve: "P-256" },
+      true,
+      ["deriveKey", "deriveBits"]
+    );
+
+    const db = await openDB();
+    await new Promise<void>((resolve, reject) => {
+      const tx = db.transaction(STORE_NAME, "readwrite");
+      tx.objectStore(STORE_NAME).put({ publicKey, privateKey: importedPrivate }, KEY_ID);
+      tx.oncomplete = () => resolve();
+      tx.onerror = () => reject(tx.error);
+    });
+    db.close();
+
+    // update public key on server
+    await fetch("/api/e2ee", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ publicKey: JSON.stringify(publicKey) }),
+    });
+
+    keyCache.clear();
+    return true;
+  } catch {
+    return false;
+  }
+}
