@@ -4,6 +4,7 @@ import { authOptions } from "@/lib/auth";
 import prisma from "@/lib/prisma";
 import { createInitialState, getCurrentPlayerId, VelderanGameState } from "@/lib/games/velderanState";
 import { executeBotTurns, isBotPlayer } from "@/lib/games/velderanBot";
+import { loadMapConfigFromFiles } from "@/lib/games/velderanMapServer";
 
 export async function GET(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const session = await getServerSession(authOptions);
@@ -77,6 +78,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
       faction: p.faction || "empire",
       turnOrder: p.turnOrder,
     }));
+    loadMapConfigFromFiles();
     let initialState: VelderanGameState = createInitialState(playersData);
 
     // If the first player is a bot, auto-play their turns

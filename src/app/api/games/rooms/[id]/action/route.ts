@@ -15,6 +15,7 @@ import {
   finishPlacement,
 } from "@/lib/games/velderanState";
 import { executeBotTurns, isBotPlayer } from "@/lib/games/velderanBot";
+import { loadMapConfigFromFiles } from "@/lib/games/velderanMapServer";
 
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const session = await getServerSession(authOptions);
@@ -42,6 +43,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     return NextResponse.json({ error: "Вы не в этой игре" }, { status: 403 });
   }
 
+  loadMapConfigFromFiles();
   const state: VelderanGameState = JSON.parse(room.gameState || "{}");
   if (!state.turnOrder) {
     return NextResponse.json({ error: "Состояние игры повреждено" }, { status: 500 });

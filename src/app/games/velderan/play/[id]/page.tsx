@@ -357,10 +357,10 @@ export default function PlayPage() {
       </div>
 
       <div className="flex flex-1 overflow-hidden">
-        {/* Map area — fit to screen */}
-        <div className="flex-1 relative flex items-center justify-center overflow-hidden">
-          <div className="relative w-full" style={{ aspectRatio: "2400/1792", maxHeight: "100%" }}>
-          <Image src="/games/velderan/map.png" alt="Карта" fill className="object-cover" unoptimized />
+        {/* Map area — fit to screen with padding */}
+        <div className="flex-1 relative flex items-center justify-center overflow-hidden p-4">
+          <div className="relative" style={{ width: "90%", maxWidth: "calc((100vh - 80px) * 2400 / 1792)", aspectRatio: "2400/1792", maxHeight: "calc(100vh - 80px)" }}>
+          <Image src="/games/velderan/map-editor.png" alt="Карта" fill className="object-contain" unoptimized />
 
           {/* Nodes */}
           {getActiveNodes().map((node) => {

@@ -267,3 +267,4 @@ export function getNeighbors(nodeId: string): string[] {
 export function getNodeById(id: string): MapNode | undefined {
   return getActiveNodes().find((n) => n.id === id);
 }
+
