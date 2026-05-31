@@ -187,60 +187,53 @@ export default function MapEditorPage() {
       </div>
 
       <div className="flex flex-1 overflow-hidden">
-        {/* Map */}
-        <div ref={mapRef} className="flex-1 relative overflow-auto">
-          <div className="relative" style={{ width: "2400px", height: "1792px" }}>
+        {/* Map — fit to screen, aspect ratio 2400:1792 */}
+        <div ref={mapRef} className="flex-1 relative flex items-center justify-center overflow-hidden bg-neutral-950">
+          <div className="relative w-full h-full" style={{ aspectRatio: "2400/1792", maxHeight: "100%", maxWidth: "100%", margin: "auto" }}>
             <Image
               src="/games/velderan/map.png"
               alt="Карта"
-              width={2400}
-              height={1792}
-              className="absolute inset-0"
+              fill
+              className="object-contain"
               priority
               unoptimized
             />
 
-            {/* Edges (paths) */}
-            <svg className="absolute inset-0" width={2400} height={1792} style={{ pointerEvents: "none" }}>
+            {/* SVG overlay for edges — uses viewBox to match % coords */}
+            <svg className="absolute inset-0 w-full h-full pointer-events-none" viewBox="0 0 100 100" preserveAspectRatio="none">
               {edges.map((edge, i) => {
                 const from = MAP_NODES.find((n) => n.id === edge.from);
                 const to = MAP_NODES.find((n) => n.id === edge.to);
                 if (!from || !to) return null;
-                const x1 = (from.x / 100) * 2400;
-                const y1 = (from.y / 100) * 1792;
-                const x2 = (to.x / 100) * 2400;
-                const y2 = (to.y / 100) * 1792;
                 return (
                   <line
                     key={i}
-                    x1={x1}
-                    y1={y1}
-                    x2={x2}
-                    y2={y2}
+                    x1={from.x}
+                    y1={from.y}
+                    x2={to.x}
+                    y2={to.y}
                     stroke={edge.sea ? "#38bdf8" : "#fbbf24"}
-                    strokeWidth={3}
-                    strokeDasharray="10 6"
+                    strokeWidth={0.15}
+                    strokeDasharray="0.5 0.3"
                     opacity={0.8}
                   />
                 );
               })}
             </svg>
 
-            {/* Nodes */}
+            {/* Nodes — positioned with % for responsive scaling */}
             {MAP_NODES.map((node) => {
               const type = getNodeType(node.id);
               const isSelected = selectedNode === node.id;
               const isCity = type === "city";
               const factionColor = node.faction ? FACTION_COLORS[node.faction] : undefined;
               const icon = NODE_ICONS[type] || "❓";
-              const px = (node.x / 100) * 2400;
-              const py = (node.y / 100) * 1792;
 
               return (
                 <div
                   key={node.id}
                   className="absolute transform -translate-x-1/2 -translate-y-1/2 cursor-pointer group"
-                  style={{ left: `${px}px`, top: `${py}px`, zIndex: isSelected ? 50 : 10 }}
+                  style={{ left: `${node.x}%`, top: `${node.y}%`, zIndex: isSelected ? 50 : 10 }}
                   onClick={() => handleNodeClick(node.id)}
                   onDoubleClick={() => setEditingNode(node.id)}
                 >
@@ -251,19 +244,19 @@ export default function MapEditorPage() {
                         : "hover:scale-110"
                     }`}
                     style={{
-                      width: isCity ? "28px" : "24px",
-                      height: isCity ? "28px" : "24px",
+                      width: isCity ? "20px" : "16px",
+                      height: isCity ? "20px" : "16px",
                       backgroundColor: isCity
                         ? factionColor || "#666"
                         : "rgba(0,0,0,0.7)",
                       border: `2px solid ${isCity ? "#fff" : factionColor || "#888"}`,
                     }}
                   >
-                    <span style={{ fontSize: isCity ? "12px" : "10px" }}>{icon}</span>
+                    <span style={{ fontSize: isCity ? "8px" : "7px" }}>{icon}</span>
                   </div>
 
                   {/* Tooltip */}
-                  <div className="absolute left-1/2 -translate-x-1/2 -top-8 bg-black/90 text-white text-xs px-2 py-1 rounded whitespace-nowrap opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity">
+                  <div className="absolute left-1/2 -translate-x-1/2 -top-6 bg-black/90 text-white text-[10px] px-1.5 py-0.5 rounded whitespace-nowrap opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity z-50">
                     {getNodeName(node.id)} ({type})
                   </div>
                 </div>
@@ -381,7 +374,8 @@ export default function MapEditorPage() {
             <p className="text-gray-300 font-medium mb-2">Статистика</p>
             <p className="text-gray-500">Города: {MAP_NODES.filter((n) => n.type === "city").length}</p>
             <p className="text-gray-500">Битвы: {MAP_NODES.filter((n) => n.type === "battle").length}</p>
-            <p className="text-gray-500">Спец.: {MAP_NODES.filter((n) => !["city", "battle"].includes(n.type)).length}</p>
+            <p className="text-gray-500">Порты: {MAP_NODES.filter((n) => n.type === "port").length}</p>
+            <p className="text-gray-500">Святилища: {MAP_NODES.filter((n) => n.type === "shrine").length}</p>
             <p className="text-gray-500">Пути суша: {edges.filter((e) => !e.sea).length}</p>
             <p className="text-gray-500">Пути море: {edges.filter((e) => e.sea).length}</p>
           </div>

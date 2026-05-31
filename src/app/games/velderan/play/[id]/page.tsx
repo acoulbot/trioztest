@@ -333,8 +333,9 @@ export default function PlayPage() {
       </div>
 
       <div className="flex flex-1 overflow-hidden">
-        {/* Map area */}
-        <div className="flex-1 relative overflow-hidden">
+        {/* Map area — fit to screen */}
+        <div className="flex-1 relative flex items-center justify-center overflow-hidden">
+          <div className="relative w-full h-full" style={{ aspectRatio: "2400/1792", maxHeight: "100%", maxWidth: "100%", margin: "auto" }}>
           <Image src="/games/velderan/map.png" alt="Карта" fill className="object-contain" unoptimized />
 
           {/* Nodes */}
@@ -467,6 +468,7 @@ export default function PlayPage() {
               </div>
             );
           })}
+          </div>
         </div>
 
         {/* Right sidebar */}
