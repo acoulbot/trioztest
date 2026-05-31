@@ -10,6 +10,18 @@ import { FACTION_COLORS, getNeighbors, setMapEdges, setCustomNodes, getActiveNod
 import type { MapEdge, MapNode } from "@/lib/games/velderanMap";
 import type { VelderanGameState, GameUnit, CombatState, InventoryUnit } from "@/lib/games/velderanState";
 
+const NODE_TYPE_LABELS: Record<string, string> = {
+  city: "Город",
+  battle: "Место сражения",
+  shrine: "Святилище",
+  port: "Порт",
+  windrose: "Морской путь",
+  pirate: "Пиратская бухта",
+  ghost: "Призрачный храм",
+  camp: "Лагерь наёмников",
+  smuggler: "Логово контрабандистов",
+};
+
 interface Player {
   id: string;
   userId: string;
@@ -272,6 +284,19 @@ export default function PlayPage() {
     }
   };
 
+  const doUndoPlacement = async (unitId: string) => {
+    const res = await fetch(`/api/games/rooms/${roomId}/action`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "undo_placement", unitId }),
+    });
+    if (res.ok) {
+      setGameState(await res.json());
+      setSelectedUnit(null);
+      setSelectedInvUnit(null);
+    }
+  };
+
   const doFinishPlacement = async () => {
     const res = await fetch(`/api/games/rooms/${roomId}/action`, {
       method: "POST",
@@ -434,7 +459,7 @@ export default function PlayPage() {
                           ? "bg-amber-500/30 border-2 border-amber-400"
                           : "cursor-pointer hover:bg-white/10"
                   }`}
-                  title={node.name}
+                  title={node.name && !node.name.match(/^[a-z]\d+$/i) ? node.name : NODE_TYPE_LABELS[node.type] || node.type}
                 />
 
                 {/* Units on this node */}
@@ -450,14 +475,20 @@ export default function PlayPage() {
                           key={unit.id}
                           onClick={(e) => {
                             e.stopPropagation();
-                            if (unit.playerId === myPlayerId && isMyTurn && gameState.phase === "MOVE") {
+                            if (unit.playerId === myPlayerId && isMyTurn && gameState.phase === "PLACEMENT") {
+                              doUndoPlacement(unit.id);
+                            } else if (unit.playerId === myPlayerId && isMyTurn && gameState.phase === "MOVE") {
                               selectUnit(unit.id);
                             }
                           }}
                           className={`relative flex items-center justify-center transition-all ${
                             isSelected ? "scale-[1.6] z-10" : "hover:scale-125"
                           } ${unit.playerId === myPlayerId ? "cursor-pointer" : ""}`}
-                          title={`${playerNames[unit.playerId]} — ${isGuard ? "Гвардия" : "Отряд"} (${unit.movesLeft} ходов)`}
+                          title={
+                            gameState.phase === "PLACEMENT" && unit.playerId === myPlayerId && isMyTurn
+                              ? `Нажмите, чтобы убрать ${isGuard ? "гвардию" : "отряд"} обратно в инвентарь`
+                              : `${playerNames[unit.playerId]} — ${isGuard ? "Гвардия" : "Отряд"} (${unit.movesLeft} ходов)`
+                          }
                         >
                           {isGuard ? (
                             /* Guard: shield shape */
