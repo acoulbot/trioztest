@@ -13,57 +13,10 @@ import VoiceRecorder from "@/components/ui/VoiceRecorder";
 import VoicePlayer from "@/components/ui/VoicePlayer";
 import DayNightBackground from "@/components/connect/DayNightBackground";
 import { PlusMenu, ChannelToolsPanel } from "@/components/connect/ChannelTools";
+import type { Message, ForwardTarget } from "./messageTypes";
+import { renderContent, parseAttachments } from "./messageFormat";
+import ForwardModal from "./ForwardModal";
 
-interface MessageUser {
-  id: string;
-  name: string;
-  username?: string;
-  avatar: string | null;
-  role: string;
-  avatarGlowEnabled?: boolean;
-  avatarGlowColors?: string | null;
-}
-
-interface Attachment {
-  url: string;
-  name: string;
-  size: number;
-  type: string;
-  isImage: boolean;
-  isVoice?: boolean;
-  duration?: number;
-}
-
-interface Reaction {
-  id: string;
-  emoji: string;
-  userId: string;
-  user: { id: string; name: string };
-}
-
-interface ReplyTo {
-  id: string;
-  content: string;
-  user: { id: string; name: string };
-}
-
-interface Message {
-  id: string;
-  content: string;
-  createdAt: string;
-  edited?: boolean;
-  editedAt?: string | null;
-  deleted?: boolean;
-  pinned?: boolean;
-  attachments?: string | null;
-  reactions?: Reaction[];
-  replyTo?: ReplyTo | null;
-  reads?: { userId: string }[];
-  threadId?: string | null;
-  threadCount?: number;
-  _count?: { threadReplies: number };
-  user: MessageUser;
-}
 
 interface MessageAreaProps {
   channelId: string;
@@ -100,7 +53,7 @@ export default function MessageArea({
   const [hasMore, setHasMore] = useState(false);
   const [forwardToast, setForwardToast] = useState(false);
   const [forwardMsg, setForwardMsg] = useState<{ content: string; userName: string } | null>(null);
-  const [forwardTargets, setForwardTargets] = useState<{ type: "channel" | "dm"; id: string; name: string; icon?: string | null }[]>([]);
+  const [forwardTargets, setForwardTargets] = useState<ForwardTarget[]>([]);
   const [forwardSearch, setForwardSearch] = useState("");
   const [forwardSending, setForwardSending] = useState(false);
   const [mentionSuggestions, setMentionSuggestions] = useState<{id:string;name:string|null}[]>([]);
@@ -462,26 +415,6 @@ export default function MessageArea({
     setTimeout(() => { ta.focus(); ta.selectionStart = start + prefix.length; ta.selectionEnd = end + prefix.length; }, 0);
   };
 
-  // Render formatted content: **bold**, *italic*, `code`, - lists, #channel mentions, @mentions
-  const renderContent = (text: string) => {
-    const parts: React.ReactNode[] = [];
-    const regex = /(\*\*(.+?)\*\*|\*(.+?)\*|`(.+?)`|^- (.+)$|#(\S+)|@(everyone|[A-Za-z0-9_а-яА-ЯёЁ]+))/gm;
-    let lastIndex = 0;
-    let match;
-    let key = 0;
-    while ((match = regex.exec(text)) !== null) {
-      if (match.index > lastIndex) parts.push(text.slice(lastIndex, match.index));
-      if (match[2]) parts.push(<strong key={key++}>{match[2]}</strong>);
-      else if (match[3]) parts.push(<em key={key++}>{match[3]}</em>);
-      else if (match[4]) parts.push(<code key={key++} className="bg-neutral-200 dark:bg-white/10 px-1 rounded text-xs">{match[4]}</code>);
-      else if (match[5]) parts.push(<span key={key++} className="flex items-start gap-1"><span className="text-violet-500 dark:text-cyan-400">•</span>{match[5]}</span>);
-      else if (match[6]) parts.push(<span key={key++} className="text-violet-500 dark:text-cyan-400 cursor-pointer hover:underline">#{match[6]}</span>);
-      else if (match[7]) parts.push(<span key={key++} className="bg-violet-500/20 dark:bg-cyan-400/20 text-violet-600 dark:text-cyan-300 px-1 rounded font-medium">@{match[7]}</span>);
-      lastIndex = match.index + match[0].length;
-    }
-    if (lastIndex < text.length) parts.push(text.slice(lastIndex));
-    return parts.length > 0 ? parts : text;
-  };
 
   const sendMessage = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -647,10 +580,6 @@ export default function MessageArea({
     });
   };
 
-  const parseAttachments = (raw: string | null | undefined): Attachment[] => {
-    if (!raw) return [];
-    try { return JSON.parse(raw); } catch { return []; }
-  };
 
   const openForwardModal = async (msg: Message) => {
     setForwardMsg({ content: msg.content, userName: msg.user.name });
@@ -1284,58 +1213,15 @@ export default function MessageArea({
       <ImageLightbox src={lightboxSrc} onClose={() => setLightboxSrc(null)} />
 
       {/* Forward modal */}
-      <AnimatePresence>
-        {forwardMsg && (
-          <motion.div
-            initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-            className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm"
-            onClick={() => { setForwardMsg(null); setForwardSearch(""); }}
-          >
-            <motion.div
-              initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.9, opacity: 0 }}
-              className="w-80 max-h-[70vh] rounded-2xl bg-white dark:bg-neutral-900 border border-neutral-200 dark:border-white/10 shadow-2xl overflow-hidden flex flex-col"
-              onClick={(e) => e.stopPropagation()}
-            >
-              <div className="px-4 pt-4 pb-2">
-                <div className="flex items-center justify-between mb-2">
-                  <span className="text-sm font-semibold text-neutral-900 dark:text-white">Переслать сообщение</span>
-                  <button onClick={() => { setForwardMsg(null); setForwardSearch(""); }} className="text-neutral-400 hover:text-neutral-600 dark:hover:text-neutral-300">
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
-                  </button>
-                </div>
-                <div className="text-[11px] text-neutral-400 mb-2 truncate">от {forwardMsg.userName}: {forwardMsg.content.slice(0, 60)}{forwardMsg.content.length > 60 ? "..." : ""}</div>
-                <input
-                  type="text"
-                  value={forwardSearch}
-                  onChange={(e) => setForwardSearch(e.target.value)}
-                  placeholder="Поиск канала или диалога..."
-                  className="input-field !py-2 !text-sm w-full"
-                  autoFocus
-                />
-              </div>
-              <div className="flex-1 overflow-y-auto px-2 pb-3 space-y-0.5">
-                {forwardTargets
-                  .filter(t => t.name.toLowerCase().includes(forwardSearch.toLowerCase()))
-                  .map(t => (
-                    <button
-                      key={`${t.type}-${t.id}`}
-                      onClick={() => doForward(t)}
-                      disabled={forwardSending}
-                      className="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-left hover:bg-violet-50 dark:hover:bg-white/5 transition-colors disabled:opacity-50"
-                    >
-                      <span className="text-base flex-shrink-0">{t.type === "channel" ? "#" : "💬"}</span>
-                      <span className="text-sm text-neutral-900 dark:text-white truncate">{t.name}</span>
-                      <span className="text-[10px] text-neutral-400 ml-auto flex-shrink-0">{t.type === "channel" ? "канал" : "ЛС"}</span>
-                    </button>
-                  ))}
-                {forwardTargets.filter(t => t.name.toLowerCase().includes(forwardSearch.toLowerCase())).length === 0 && (
-                  <div className="text-center text-xs text-neutral-400 py-4">Ничего не найдено</div>
-                )}
-              </div>
-            </motion.div>
-          </motion.div>
-        )}
-      </AnimatePresence>
+      <ForwardModal
+        forwardMsg={forwardMsg}
+        search={forwardSearch}
+        onSearchChange={setForwardSearch}
+        targets={forwardTargets}
+        sending={forwardSending}
+        onForward={doForward}
+        onClose={() => { setForwardMsg(null); setForwardSearch(""); }}
+      />
 
       {/* Forward toast */}
       {forwardToast && (
@@ -1367,3 +1253,4 @@ export default function MessageArea({
     </div>
   );
 }
+
