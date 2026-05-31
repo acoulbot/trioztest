@@ -292,13 +292,23 @@ function botMove(
   // ── Use god cards ──
   if (newState.phase === "MOVE" && getCurrentPlayerId(newState) === botId && newState.godCards) {
     const cards = newState.godCards[botId] || [];
-    while (cards.length > 0 && newState.phase === "MOVE" && getCurrentPlayerId(newState) === botId) {
-      // Find a random enemy unit as target
-      const enemies = newState.units.filter((u) => u.playerId !== botId);
-      const targetUnitId = enemies.length > 0 ? enemies[Math.floor(Math.random() * enemies.length)].id : undefined;
-      newState = playGodCard(newState, botId, 0, targetUnitId, playerNames);
-      // Re-check god cards
-      if (newState.godCards && newState.godCards[botId]) break; // played one, don't spam all
+    if (cards.length > 0 && newState.phase === "MOVE" && getCurrentPlayerId(newState) === botId) {
+      const card = cards[0];
+      let targetId: string | undefined;
+      if (card.godId === 3 || card.godId === 9) {
+        const enemies = newState.units.filter((u) => u.playerId !== botId);
+        targetId = enemies.length > 0 ? enemies[Math.floor(Math.random() * enemies.length)].id : undefined;
+      } else if (card.godId === 5) {
+        const enemyPlayers = newState.turnOrder.filter(
+          (pid) => pid !== botId && !newState.eliminatedPlayers.includes(pid)
+        );
+        targetId = enemyPlayers.length > 0 ? enemyPlayers[Math.floor(Math.random() * enemyPlayers.length)] : undefined;
+      } else if (card.godId === 8) {
+        const myUnits = newState.units.filter((u) => u.playerId === botId && u.type === "ARMY");
+        targetId = myUnits.length > 0 ? myUnits[Math.floor(Math.random() * myUnits.length)].id : undefined;
+      }
+      // godId 6 (Shent'Ar) and 7 (Giordg) don't need a target — they are passive
+      newState = playGodCard(newState, botId, 0, targetId, playerNames);
     }
   }
 

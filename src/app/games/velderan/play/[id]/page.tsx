@@ -8,7 +8,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { FACTION_COLORS, getNeighbors, setMapEdges, setCustomNodes, getActiveNodes } from "@/lib/games/velderanMap";
 import type { MapEdge, MapNode } from "@/lib/games/velderanMap";
-import type { VelderanGameState, GameUnit, CombatState, InventoryUnit, GodCard, SpecialLocationState } from "@/lib/games/velderanState";
+import type { VelderanGameState, GameUnit, CombatState, CombatResult, InventoryUnit, GodCard, SpecialLocationState } from "@/lib/games/velderanState";
 import DiceRoller from "@/components/games/DiceRoller";
 import {
   playSwordClash, playWarHorn, playDiceRoll, playGodSummon,
@@ -252,6 +252,10 @@ export default function PlayPage() {
     notifTimer.current = setTimeout(() => setNotification(null), 3500);
   }, []);
 
+  // Combat result modal state
+  const [combatResult, setCombatResult] = useState<CombatResult | null>(null);
+  const prevCombatResultRef = useRef<CombatResult | undefined>(undefined);
+
   // Event notifications on phase/combat changes
   useEffect(() => {
     if (!gameState) return;
@@ -282,6 +286,20 @@ export default function PlayPage() {
       showNotif(`🏰 Ход: ${curName}`);
     }
   }, [gameState?.phase, gameState?.combat, gameState?.currentPlayerIndex, playerNames, showNotif]);
+
+  // Show combat result modal when lastCombatResult changes
+  useEffect(() => {
+    if (!gameState?.lastCombatResult) return;
+    if (prevCombatResultRef.current === gameState.lastCombatResult) return;
+    // Only trigger if the result is new (different winnerId/loserId/cards)
+    const prev = prevCombatResultRef.current;
+    const cur = gameState.lastCombatResult;
+    if (prev && prev.winnerId === cur.winnerId && prev.loserId === cur.loserId && prev.winnerCard === cur.winnerCard && prev.loserCard === cur.loserCard) return;
+    prevCombatResultRef.current = cur;
+    setCombatResult(cur);
+    // Auto-dismiss after 5 seconds
+    setTimeout(() => setCombatResult(null), 5000);
+  }, [gameState?.lastCombatResult]);
 
   const selectUnit = (unitId: string) => {
     if (!gameState || !isMyTurn || gameState.phase !== "MOVE") return;
@@ -470,6 +488,61 @@ export default function PlayPage() {
           </div>
         </div>
       )}
+      {/* Combat result modal */}
+      <AnimatePresence>
+        {combatResult && (
+          <motion.div
+            initial={{ opacity: 0, scale: 0.8 }}
+            animate={{ opacity: 1, scale: 1 }}
+            exit={{ opacity: 0, scale: 0.8 }}
+            className="fixed inset-0 z-[200] flex items-center justify-center pointer-events-auto"
+            onClick={() => setCombatResult(null)}
+          >
+            <div className="absolute inset-0 bg-black/60" />
+            <motion.div
+              initial={{ y: -30 }}
+              animate={{ y: 0 }}
+              className="relative bg-gradient-to-b from-neutral-800 to-neutral-900 border-2 rounded-2xl px-8 py-6 shadow-2xl max-w-sm w-full mx-4"
+              style={{
+                borderColor: combatResult.winnerId === myPlayerId ? "#22c55e" : combatResult.loserId === myPlayerId ? "#ef4444" : "#eab308",
+              }}
+            >
+              <div className="text-center">
+                <div className="text-3xl mb-2">
+                  {combatResult.winnerId === myPlayerId ? "🏆" : combatResult.loserId === myPlayerId ? "💀" : "⚔️"}
+                </div>
+                <div className="text-xl font-bold mb-1" style={{
+                  color: combatResult.winnerId === myPlayerId ? "#22c55e" : combatResult.loserId === myPlayerId ? "#ef4444" : "#eab308",
+                }}>
+                  {combatResult.winnerId === myPlayerId ? "Победа!" : combatResult.loserId === myPlayerId ? "Поражение!" : "Сражение завершено"}
+                </div>
+                <div className="text-gray-300 text-sm mb-3">
+                  {playerNames[combatResult.winnerId] || "?"} побеждает {playerNames[combatResult.loserId] || "?"}
+                </div>
+                <div className="flex items-center justify-center gap-4 mb-3">
+                  <div className="text-center">
+                    <div className="text-xs text-gray-500">Победитель</div>
+                    <div className="text-2xl font-bold text-green-400">{combatResult.winnerCard}</div>
+                  </div>
+                  <div className="text-gray-500 text-lg">vs</div>
+                  <div className="text-center">
+                    <div className="text-xs text-gray-500">Проигравший</div>
+                    <div className="text-2xl font-bold text-red-400">{combatResult.loserCard}</div>
+                  </div>
+                </div>
+                <div className="text-xs text-gray-400">
+                  {combatResult.reason === "guess" ? "Угадал номинал карты!" :
+                   combatResult.reason === "both_guess" ? "Оба угадали — побеждает старшая карта" :
+                   "Старшая карта в диапазоне ±1"}
+                </div>
+                {combatResult.converted && (
+                  <div className="text-xs text-purple-400 mt-1">Шент&apos;Ар: отряд перешёл на сторону победителя!</div>
+                )}
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
       {/* Top bar */}
       <div className="flex items-center justify-between px-4 py-2 bg-neutral-900/90 border-b border-white/5 flex-shrink-0">
         <div className="flex items-center gap-3">
@@ -881,24 +954,45 @@ export default function PlayPage() {
             <div className="p-3 border-b border-white/5">
               <h3 className="text-sm font-bold text-purple-400 mb-2">🔮 Карты богов</h3>
               <div className="flex flex-wrap gap-1.5">
-                {gameState.godCards[myPlayerId].map((gc: GodCard, idx: number) => (
-                  <button key={idx}
-                    disabled={!isMyTurn || gameState.phase !== "MOVE"}
-                    onClick={() => {
-                      const enemies = gameState.units.filter((u: GameUnit) => u.playerId !== myPlayerId);
-                      const targetId = enemies.length > 0 ? enemies[0].id : undefined;
-                      doUseGodCard(idx, targetId);
-                    }}
-                    className={`px-2.5 py-1.5 rounded-lg text-[10px] border ${
-                      isMyTurn && gameState.phase === "MOVE"
-                        ? "border-purple-500/30 bg-purple-500/10 text-purple-300 hover:bg-purple-500/30 cursor-pointer"
-                        : "border-white/5 bg-white/5 text-gray-600 cursor-not-allowed"
-                    }`}
-                    title={`Использовать карту бога ${gc.godName}`}
-                  >
-                    ✨ {gc.godName}
-                  </button>
-                ))}
+                {gameState.godCards[myPlayerId].map((gc: GodCard, idx: number) => {
+                  const godDescriptions: Record<number, string> = {
+                    3: "Утопить врага на море",
+                    5: "Пропустить ход врагу",
+                    6: "Конвертировать побеждённого",
+                    7: "Защита: переигровка при проигрыше",
+                    8: "Телепорт своего отряда",
+                    9: "Телепорт врага",
+                  };
+                  return (
+                    <button key={idx}
+                      disabled={!isMyTurn || gameState.phase !== "MOVE"}
+                      onClick={() => {
+                        let targetId: string | undefined;
+                        if (gc.godId === 3 || gc.godId === 9) {
+                          const enemies = gameState.units.filter((u: GameUnit) => u.playerId !== myPlayerId);
+                          targetId = enemies.length > 0 ? enemies[0].id : undefined;
+                        } else if (gc.godId === 5) {
+                          const enemyPlayers = gameState.turnOrder.filter(
+                            (pid: string) => pid !== myPlayerId && !gameState.eliminatedPlayers.includes(pid)
+                          );
+                          targetId = enemyPlayers.length > 0 ? enemyPlayers[0] : undefined;
+                        } else if (gc.godId === 8) {
+                          const myUnits = gameState.units.filter((u: GameUnit) => u.playerId === myPlayerId && u.type === "ARMY");
+                          targetId = myUnits.length > 0 ? myUnits[0].id : undefined;
+                        }
+                        doUseGodCard(idx, targetId);
+                      }}
+                      className={`px-2.5 py-1.5 rounded-lg text-[10px] border ${
+                        isMyTurn && gameState.phase === "MOVE"
+                          ? "border-purple-500/30 bg-purple-500/10 text-purple-300 hover:bg-purple-500/30 cursor-pointer"
+                          : "border-white/5 bg-white/5 text-gray-600 cursor-not-allowed"
+                      }`}
+                      title={godDescriptions[gc.godId] || `Использовать карту бога ${gc.godName}`}
+                    >
+                      ✨ {gc.godName}
+                    </button>
+                  );
+                })}
               </div>
             </div>
           )}
