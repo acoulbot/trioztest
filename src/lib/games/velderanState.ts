@@ -29,6 +29,11 @@ export interface GodResult {
   shrineId: string;
 }
 
+export interface InventoryUnit {
+  id: string;
+  type: "ARMY" | "GUARD";
+}
+
 export interface VelderanGameState {
   round: number;
   currentPlayerIndex: number;
@@ -40,7 +45,8 @@ export interface VelderanGameState {
   turnOrder: string[]; // array of GamePlayer.id in turn order
   eliminatedPlayers: string[]; // GamePlayer.ids
   winner?: string; // GamePlayer.id
-  reserve: Record<string, number>; // playerId → army count in reserve
+  reserve: Record<string, number>; // playerId → army count in reserve (legacy, kept for compat)
+  inventory: Record<string, InventoryUnit[]>; // playerId → unplaced units
   cityOwners: Record<string, string>; // nodeId → playerId (captured cities)
 }
 
@@ -58,38 +64,16 @@ const GODS: Record<number, { name: string; effect: string }> = {
   12: { name: "Выбор", effect: "Вы выбираете любое божество в помощь" },
 };
 
+const TOTAL_ARMIES = 8;
+const TOTAL_GUARDS = 3;
+
 export function createInitialState(
   players: { id: string; faction: string; turnOrder: number }[]
 ): VelderanGameState {
   const sorted = [...players].sort((a, b) => a.turnOrder - b.turnOrder);
   const units: GameUnit[] = [];
+  const inventory: Record<string, InventoryUnit[]> = {};
   let unitCounter = 0;
-
-  for (const player of sorted) {
-    const factionCities = getActiveNodes().filter(
-      (n) => n.type === "city" && n.faction === player.faction
-    );
-
-    // Place 2 armies + 1 guard per city
-    for (const city of factionCities) {
-      for (let i = 0; i < 2; i++) {
-        units.push({
-          id: `u${unitCounter++}`,
-          playerId: player.id,
-          type: "ARMY",
-          position: city.id,
-          movesLeft: 2,
-        });
-      }
-      units.push({
-        id: `u${unitCounter++}`,
-        playerId: player.id,
-        type: "GUARD",
-        position: city.id,
-        movesLeft: 1,
-      });
-    }
-  }
 
   // Initialize city ownership
   const cityOwners: Record<string, string> = {};
@@ -102,10 +86,22 @@ export function createInitialState(
     }
   }
 
-  // Initialize reserve (2 per player)
+  // Each player gets 8 armies + 3 guards total
+  // All start in inventory — player places them during PLACEMENT phase
+  for (const player of sorted) {
+    const inv: InventoryUnit[] = [];
+    for (let i = 0; i < TOTAL_ARMIES; i++) {
+      inv.push({ id: `u${unitCounter++}`, type: "ARMY" });
+    }
+    for (let i = 0; i < TOTAL_GUARDS; i++) {
+      inv.push({ id: `u${unitCounter++}`, type: "GUARD" });
+    }
+    inventory[player.id] = inv;
+  }
+
   const reserve: Record<string, number> = {};
   for (const player of sorted) {
-    reserve[player.id] = 2;
+    reserve[player.id] = 0;
   }
 
   return {
@@ -113,10 +109,11 @@ export function createInitialState(
     currentPlayerIndex: 0,
     phase: "PLACEMENT",
     units,
-    log: ["Игра началась! Расставьте подкрепления из резерва."],
+    log: ["Игра началась! Расставьте фишки из инвентаря на свои города (по 1 на город)."],
     turnOrder: sorted.map((p) => p.id),
     eliminatedPlayers: [],
     reserve,
+    inventory,
     cityOwners,
   };
 }
@@ -129,15 +126,18 @@ export function getPlayerUnits(state: VelderanGameState, playerId: string): Game
   return state.units.filter((u) => u.playerId === playerId);
 }
 
-export function placeReserve(
+export function placeFromInventory(
   state: VelderanGameState,
   playerId: string,
   cityNodeId: string,
+  inventoryUnitId: string,
   playerNames: Record<string, string>
 ): VelderanGameState {
   const newState = structuredClone(state);
-  const reserve = newState.reserve[playerId] || 0;
-  if (reserve <= 0) return newState;
+  if (!newState.inventory) newState.inventory = {};
+  const inv = newState.inventory[playerId] || [];
+  const invIdx = inv.findIndex((u) => u.id === inventoryUnitId);
+  if (invIdx < 0) return newState;
 
   const node = getActiveNodes().find((n) => n.id === cityNodeId);
   if (!node || node.type !== "city") return newState;
@@ -145,30 +145,84 @@ export function placeReserve(
   // Can only place on own cities
   if (newState.cityOwners[cityNodeId] !== playerId) return newState;
 
-  // Max 2 units per node
   const unitsAtNode = newState.units.filter(
     (u) => u.position === cityNodeId && u.playerId === playerId
   );
-  if (unitsAtNode.length >= 2) return newState;
 
-  const maxId = newState.units.reduce((max, u) => {
-    const num = parseInt(u.id.replace("u", "")) || 0;
-    return Math.max(max, num);
-  }, 0);
+  // Round 1: max 1 unit per city
+  if (newState.round === 1 && unitsAtNode.length >= 1) return newState;
+  // Round 2+: max 2 units per city
+  if (newState.round > 1 && unitsAtNode.length >= 2) return newState;
 
+  const invUnit = inv[invIdx];
   newState.units.push({
-    id: `u${maxId + 1}`,
+    id: invUnit.id,
     playerId,
-    type: "ARMY",
+    type: invUnit.type,
     position: cityNodeId,
-    movesLeft: 2,
+    movesLeft: invUnit.type === "ARMY" ? 2 : 1,
   });
-  newState.reserve[playerId] = reserve - 1;
+  newState.inventory[playerId] = inv.filter((_, i) => i !== invIdx);
 
   const playerName = playerNames[playerId] || "Игрок";
-  newState.log.push(`${playerName} выставил отряд из резерва в ${node.name}.`);
+  const typeName = invUnit.type === "GUARD" ? "Гвардию" : "Отряд";
+  newState.log.push(`${playerName} поставил ${typeName} в ${node.name}.`);
 
   return newState;
+}
+
+/** Legacy placeReserve — now places from inventory */
+export function placeReserve(
+  state: VelderanGameState,
+  playerId: string,
+  cityNodeId: string,
+  playerNames: Record<string, string>
+): VelderanGameState {
+  const newState = structuredClone(state);
+  if (!newState.inventory) newState.inventory = {};
+  const inv = newState.inventory[playerId] || [];
+
+  // Try to place first available army from inventory
+  const armyIdx = inv.findIndex((u) => u.type === "ARMY");
+  if (armyIdx < 0) {
+    // Fallback: use reserve counter (legacy)
+    const reserve = newState.reserve[playerId] || 0;
+    if (reserve <= 0) return newState;
+
+    const node = getActiveNodes().find((n) => n.id === cityNodeId);
+    if (!node || node.type !== "city") return newState;
+    if (newState.cityOwners[cityNodeId] !== playerId) return newState;
+
+    const unitsAtNode = newState.units.filter(
+      (u) => u.position === cityNodeId && u.playerId === playerId
+    );
+    if (newState.round === 1 && unitsAtNode.length >= 1) return newState;
+    if (newState.round > 1 && unitsAtNode.length >= 2) return newState;
+
+    const maxId = newState.units.reduce((max, u) => {
+      const num = parseInt(u.id.replace("u", "")) || 0;
+      return Math.max(max, num);
+    }, 0);
+    newState.units.push({
+      id: `u${maxId + 1}`,
+      playerId,
+      type: "ARMY",
+      position: cityNodeId,
+      movesLeft: 2,
+    });
+    newState.reserve[playerId] = reserve - 1;
+    const playerName = playerNames[playerId] || "Игрок";
+    newState.log.push(`${playerName} выставил отряд из резерва в ${node.name}.`);
+    return newState;
+  }
+
+  return placeFromInventory(newState, playerId, cityNodeId, inv[armyIdx].id, playerNames);
+}
+
+function hasPlaceableUnits(state: VelderanGameState, playerId: string): boolean {
+  if (!state.inventory) return (state.reserve[playerId] || 0) > 0;
+  const inv = state.inventory[playerId] || [];
+  return inv.length > 0 || (state.reserve[playerId] || 0) > 0;
 }
 
 export function finishPlacement(
@@ -176,31 +230,30 @@ export function finishPlacement(
   playerNames: Record<string, string>
 ): VelderanGameState {
   const newState = structuredClone(state);
-  const currentId = getCurrentPlayerId(newState);
-  const playerName = playerNames[currentId] || "Игрок";
 
   // Move to next player for placement or move to MOVE phase
   let nextIdx = newState.currentPlayerIndex;
   let allPlaced = true;
 
-  // Check if all subsequent players also have 0 reserve
+  // Check if any subsequent player still has placeable units
   for (let i = 0; i < newState.turnOrder.length; i++) {
     const idx = (newState.currentPlayerIndex + 1 + i) % newState.turnOrder.length;
     const pid = newState.turnOrder[idx];
     if (newState.eliminatedPlayers.includes(pid)) continue;
-    if ((newState.reserve[pid] || 0) > 0) {
+    if (hasPlaceableUnits(newState, pid)) {
       nextIdx = idx;
       allPlaced = false;
       break;
     }
   }
 
-  if (allPlaced || (newState.reserve[currentId] || 0) <= 0) {
-    // Check if current player is the last one who could place
-    const anyReserve = newState.turnOrder.some(
-      (pid) => !newState.eliminatedPlayers.includes(pid) && (newState.reserve[pid] || 0) > 0
+  const currentId = getCurrentPlayerId(newState);
+  if (allPlaced || !hasPlaceableUnits(newState, currentId)) {
+    // Check if any active player can still place
+    const anyCanPlace = newState.turnOrder.some(
+      (pid) => !newState.eliminatedPlayers.includes(pid) && hasPlaceableUnits(newState, pid)
     );
-    if (!anyReserve) {
+    if (!anyCanPlace) {
       newState.phase = "MOVE";
       newState.currentPlayerIndex = 0;
       // Skip eliminated
@@ -225,6 +278,10 @@ export function canMoveUnit(state: VelderanGameState, unitId: string, targetNode
 
   const neighbors = getNeighbors(unit.position);
   if (!neighbors.includes(targetNodeId)) return false;
+
+  // Only guards can enter shrines
+  const targetNode = getActiveNodes().find((n) => n.id === targetNodeId);
+  if (targetNode?.type === "shrine" && unit.type !== "GUARD") return false;
 
   // Max 2 same-player units per node
   const unitsAtTarget = state.units.filter(
@@ -453,12 +510,10 @@ export function endTurn(
   playerNames: Record<string, string>
 ): VelderanGameState {
   const newState = structuredClone(state);
-  // Ensure reserve/cityOwners exist (backward compat)
+  // Ensure reserve/cityOwners/inventory exist (backward compat)
   if (!newState.reserve) newState.reserve = {};
   if (!newState.cityOwners) newState.cityOwners = {};
-
-  const currentId = getCurrentPlayerId(newState);
-  const playerName = playerNames[currentId] || "Игрок";
+  if (!newState.inventory) newState.inventory = {};
 
   // Find next active player
   let nextIdx = newState.currentPlayerIndex;
@@ -475,27 +530,33 @@ export function endTurn(
       unit.movesLeft = unit.type === "ARMY" ? 2 : 1;
     }
 
-    // Reinforcements: 2 reserves per own city without enemy
+    // Reinforcements: +2 armies to inventory per player (per rules: 2 фишки за круг)
+    let anyHasReinforcements = false;
+    const maxId = newState.units.reduce((max, u) => {
+      const num = parseInt(u.id.replace("u", "")) || 0;
+      return Math.max(max, num);
+    }, 0);
+    let nextUnitId = maxId + 1;
+
     for (const pid of newState.turnOrder) {
       if (newState.eliminatedPlayers.includes(pid)) continue;
       const ownCities = Object.entries(newState.cityOwners).filter(
         ([, owner]) => owner === pid
       );
-      const reinforcements = Math.min(ownCities.length, 2);
-      newState.reserve[pid] = (newState.reserve[pid] || 0) + reinforcements;
-      if (reinforcements > 0) {
-        const pName = playerNames[pid] || "Игрок";
-        newState.log.push(`${pName} получил +${reinforcements} в резерв (${ownCities.length} городов).`);
+      if (ownCities.length === 0) continue;
+      const reinforcements = 2; // 2 фишки за круг
+      if (!newState.inventory[pid]) newState.inventory[pid] = [];
+      for (let i = 0; i < reinforcements; i++) {
+        newState.inventory[pid].push({ id: `u${nextUnitId++}`, type: "ARMY" });
       }
+      anyHasReinforcements = true;
+      const pName = playerNames[pid] || "Игрок";
+      newState.log.push(`${pName} получил +${reinforcements} отрядов в инвентарь.`);
     }
 
     newState.log.push(`Раунд ${newState.round}. Расставьте подкрепления.`);
 
-    // Go to placement phase if anyone has reserves
-    const anyReserve = newState.turnOrder.some(
-      (pid) => !newState.eliminatedPlayers.includes(pid) && (newState.reserve[pid] || 0) > 0
-    );
-    if (anyReserve) {
+    if (anyHasReinforcements) {
       newState.phase = "PLACEMENT";
     }
   }
