@@ -1,7 +1,60 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import type { Channel } from "./sidebarTypes";
+
+function CustomSelect({ label, value, onChange, options }: {
+  label: string;
+  value: string;
+  onChange: (v: string) => void;
+  options: { value: string; label: string }[];
+}) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+  const selected = options.find(o => o.value === value);
+
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, []);
+
+  return (
+    <div ref={ref} className="relative">
+      <label className="text-xs font-medium text-neutral-500 dark:text-neutral-400 mb-1 block">{label}</label>
+      <button
+        type="button"
+        onClick={() => setOpen(!open)}
+        className="w-full flex items-center justify-between px-3 py-2 bg-neutral-50 dark:bg-white/5 border border-neutral-200 dark:border-white/10 rounded-xl text-sm text-neutral-900 dark:text-white outline-none hover:border-violet-500 dark:hover:border-cyan-400 transition-colors"
+      >
+        <span className="truncate">{selected?.label || "—"}</span>
+        <svg className={`w-4 h-4 ml-2 shrink-0 text-neutral-400 transition-transform ${open ? "rotate-180" : ""}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+        </svg>
+      </button>
+      {open && (
+        <div className="absolute z-50 mt-1 w-full max-h-48 overflow-y-auto bg-white dark:bg-neutral-800 border border-neutral-200 dark:border-white/10 rounded-xl shadow-xl">
+          {options.map(o => (
+            <button
+              key={o.value}
+              type="button"
+              onClick={() => { onChange(o.value); setOpen(false); }}
+              className={`w-full text-left px-3 py-2 text-sm transition-colors ${
+                o.value === value
+                  ? "bg-violet-50 dark:bg-cyan-900/30 text-violet-700 dark:text-cyan-300"
+                  : "text-neutral-700 dark:text-neutral-200 hover:bg-neutral-100 dark:hover:bg-white/5"
+              }`}
+            >
+              {o.label}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
 
 export function ChannelSettingsModal({ channel, groupId, allChannels, onClose, onUpdated }: {
   channel: Channel;
@@ -99,19 +152,15 @@ export function ChannelSettingsModal({ channel, groupId, allChannels, onClose, o
             </div>
 
             {possibleParents.length > 0 && (
-              <div>
-                <label className="text-xs font-medium text-neutral-500 dark:text-neutral-400 mb-1 block">Родительский канал</label>
-                <select
-                  value={parentId}
-                  onChange={e => setParentId(e.target.value)}
-                  className="w-full px-3 py-2 bg-neutral-50 dark:bg-white/5 border border-neutral-200 dark:border-white/10 rounded-xl text-sm text-neutral-900 dark:text-white outline-none focus:border-violet-500 dark:focus:border-cyan-400"
-                >
-                  <option value="">Нет (корневой)</option>
-                  {possibleParents.map(p => (
-                    <option key={p.id} value={p.id}>{p.icon || "💬"} {p.name}</option>
-                  ))}
-                </select>
-              </div>
+              <CustomSelect
+                label="Родительский канал"
+                value={parentId}
+                onChange={setParentId}
+                options={[
+                  { value: "", label: "Нет (корневой)" },
+                  ...possibleParents.map(p => ({ value: p.id, label: `${p.icon || "💬"} ${p.name}` })),
+                ]}
+              />
             )}
 
             <div className="flex items-center justify-between">
@@ -145,18 +194,22 @@ export function ChannelSettingsModal({ channel, groupId, allChannels, onClose, o
 
             {/* Slowmode */}
             <div>
-              <label className="text-xs font-medium text-neutral-500 dark:text-neutral-400 mb-1 block">Слоумод (секунды между сообщениями)</label>
-              <select value={slowmode} onChange={e => setSlowmode(Number(e.target.value))} className="w-full px-3 py-2 bg-neutral-50 dark:bg-white/5 border border-neutral-200 dark:border-white/10 rounded-xl text-sm text-neutral-900 dark:text-white outline-none">
-                <option value={0}>Выкл</option>
-                <option value={5}>5 сек</option>
-                <option value={10}>10 сек</option>
-                <option value={15}>15 сек</option>
-                <option value={30}>30 сек</option>
-                <option value={60}>1 мин</option>
-                <option value={120}>2 мин</option>
-                <option value={300}>5 мин</option>
-                <option value={600}>10 мин</option>
-              </select>
+              <CustomSelect
+                label="Слоумод (секунды между сообщениями)"
+                value={String(slowmode)}
+                onChange={v => setSlowmode(Number(v))}
+                options={[
+                  { value: "0", label: "Выкл" },
+                  { value: "5", label: "5 сек" },
+                  { value: "10", label: "10 сек" },
+                  { value: "15", label: "15 сек" },
+                  { value: "30", label: "30 сек" },
+                  { value: "60", label: "1 мин" },
+                  { value: "120", label: "2 мин" },
+                  { value: "300", label: "5 мин" },
+                  { value: "600", label: "10 мин" },
+                ]}
+              />
               <p className="text-[11px] text-neutral-400 mt-1">Не влияет на админов и модераторов</p>
             </div>
           </div>
