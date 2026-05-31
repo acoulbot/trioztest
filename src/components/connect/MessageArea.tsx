@@ -77,9 +77,9 @@ export default function MessageArea({
   const isNewsChannel = channelType === "NEWS";
   const canWriteNews = isNewsChannel && (currentUserRole === "OWNER" || currentUserRole === "ADMIN" || currentUserRole === "MODERATOR" || currentUserRole === "SITE_ADMIN");
   const currentUserIdRef = useRef(currentUserId);
-  currentUserIdRef.current = currentUserId;
   const currentUserNameRef = useRef(currentUserName);
-  currentUserNameRef.current = currentUserName;
+  useEffect(() => { currentUserIdRef.current = currentUserId; }, [currentUserId]);
+  useEffect(() => { currentUserNameRef.current = currentUserName; }, [currentUserName]);
   const [messages, setMessages] = useState<Message[]>([]);
   const [newMessage, setNewMessage] = useState("");
   const [editingId, setEditingId] = useState<string | null>(null);

@@ -66,7 +66,7 @@ interface DMPanelProps {
 
 export default function DMPanel({ currentUserId, onClose, initialFriendId }: DMPanelProps) {
   const currentUserIdRef = useRef(currentUserId);
-  currentUserIdRef.current = currentUserId;
+  useEffect(() => { currentUserIdRef.current = currentUserId; }, [currentUserId]);
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [selectedConv, setSelectedConv] = useState<string | null>(null);
   const [initialHandled, setInitialHandled] = useState(false);
