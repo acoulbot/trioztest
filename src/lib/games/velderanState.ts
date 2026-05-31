@@ -1144,7 +1144,11 @@ export function endTurn(
 
     newState.log.push(`Раунд ${newState.round}. Расставьте подкрепления.`);
 
-    if (anyHasReinforcements) {
+    // Enter PLACEMENT if any player has units to place and cities with open slots
+    const anyCanPlace = newState.turnOrder.some(
+      (pid) => !newState.eliminatedPlayers.includes(pid) && hasPlaceableUnits(newState, pid)
+    );
+    if (anyCanPlace) {
       newState.phase = "PLACEMENT";
     }
   }

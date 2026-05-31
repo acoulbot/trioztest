@@ -10,6 +10,11 @@ import { FACTION_COLORS, getNeighbors, setMapEdges, setCustomNodes, getActiveNod
 import type { MapEdge, MapNode } from "@/lib/games/velderanMap";
 import type { VelderanGameState, GameUnit, CombatState, InventoryUnit, GodCard, SpecialLocationState } from "@/lib/games/velderanState";
 import DiceRoller from "@/components/games/DiceRoller";
+import {
+  playSwordClash, playWarHorn, playDiceRoll, playGodSummon,
+  playVictory, playPlace, playMove, playCardFlip, playDefeat,
+  playTurnChange, playTeleport, playCityCapture, playError,
+} from "@/lib/games/velderanSounds";
 
 const NODE_TYPE_LABELS: Record<string, string> = {
   city: "Город",
@@ -217,6 +222,13 @@ export default function PlayPage() {
     }
   }, [gameState?.phase, isMyTurn]);
 
+  // Victory sound
+  useEffect(() => {
+    if (gameState?.phase === "GAME_OVER" && gameState.winner) {
+      playVictory();
+    }
+  }, [gameState?.phase, gameState?.winner]);
+
   const playerNames: Record<string, string> = {};
   const playerFactions: Record<string, string> = {};
   if (room) {
@@ -253,6 +265,7 @@ export default function PlayPage() {
 
   const doMove = async (targetNodeId: string) => {
     if (!selectedUnit) return;
+    playMove();
     const res = await fetch(`/api/games/rooms/${roomId}/action`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -261,6 +274,13 @@ export default function PlayPage() {
     if (res.ok) {
       const newState = await res.json();
       setGameState(newState);
+      // Sound based on result
+      if (newState.combat) playWarHorn();
+      if (newState.phase === "GOD_SUMMON") playGodSummon();
+      const captureLog = (newState.log || []).slice(-3).join(" ");
+      if (captureLog.includes("захвачен")) playCityCapture();
+    } else {
+      playError();
     }
     setSelectedUnit(null);
     setValidMoves([]);
@@ -272,25 +292,42 @@ export default function PlayPage() {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ action: "end_turn" }),
     });
-    if (res.ok) setGameState(await res.json());
+    if (res.ok) {
+      playTurnChange();
+      setGameState(await res.json());
+    }
   };
 
   const doCombatCard = async (card: number, guess: number) => {
+    playCardFlip();
     const res = await fetch(`/api/games/rooms/${roomId}/action`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ action: "combat_card", card, guess }),
     });
-    if (res.ok) setGameState(await res.json());
+    if (res.ok) {
+      const newState = await res.json();
+      setGameState(newState);
+      // Play result sounds
+      if (!newState.combat) {
+        const lastLogs = (newState.log || []).slice(-5).join(" ");
+        if (lastLogs.includes("уничтожен") || lastLogs.includes("погиб")) playDefeat();
+        else playSwordClash();
+      }
+    }
   };
 
   const doRollGod = async () => {
+    playDiceRoll();
     const res = await fetch(`/api/games/rooms/${roomId}/action`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ action: "roll_god" }),
     });
-    if (res.ok) setGameState(await res.json());
+    if (res.ok) {
+      playGodSummon();
+      setGameState(await res.json());
+    }
   };
 
   const doPlaceReserve = async (cityNodeId: string) => {
@@ -299,7 +336,10 @@ export default function PlayPage() {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ action: "place_reserve", cityNodeId }),
     });
-    if (res.ok) setGameState(await res.json());
+    if (res.ok) {
+      playPlace();
+      setGameState(await res.json());
+    }
   };
 
   const doPlaceInventory = async (cityNodeId: string, inventoryUnitId: string) => {
@@ -309,6 +349,7 @@ export default function PlayPage() {
       body: JSON.stringify({ action: "place_inventory", cityNodeId, inventoryUnitId }),
     });
     if (res.ok) {
+      playPlace();
       setGameState(await res.json());
       setSelectedInvUnit(null);
     }
@@ -340,6 +381,7 @@ export default function PlayPage() {
   };
 
   const doSpecialAttack = async (locationNodeId: string, targetUnitId: string) => {
+    playWarHorn();
     const res = await fetch(`/api/games/rooms/${roomId}/action`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -349,6 +391,7 @@ export default function PlayPage() {
   };
 
   const doSmugglerTeleport = async (locationNodeId: string, targetPortId: string) => {
+    playTeleport();
     const res = await fetch(`/api/games/rooms/${roomId}/action`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -358,6 +401,7 @@ export default function PlayPage() {
   };
 
   const doUseGodCard = async (cardIndex: number, targetUnitId?: string) => {
+    playGodSummon();
     const res = await fetch(`/api/games/rooms/${roomId}/action`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
