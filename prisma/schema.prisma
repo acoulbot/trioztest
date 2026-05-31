@@ -49,6 +49,7 @@ model User {
   dmConversations2  DirectConversation[] @relation("DMUser2")
   directMessages    DirectMessage[]
   notifications     Notification[]
+  channelMutes      ChannelMute[]
   polls             Poll[]          @relation("UserPolls")
   pollVotes         PollVote[]
   tasksCreated      ChannelTask[]   @relation("TaskCreator")
@@ -101,6 +102,7 @@ model GroupMember {
   role          String              @default("MEMBER")
   rulesAccepted Boolean             @default(false)
   sortOrder     Int                 @default(0)
+  muted         Boolean             @default(false)
   user          User                @relation(fields: [userId], references: [id], onDelete: Cascade)
   group         Group               @relation(fields: [groupId], references: [id], onDelete: Cascade)
   tags          GroupMemberRole[]
@@ -139,6 +141,7 @@ model Channel {
   polls          Poll[]
   tasks          ChannelTask[]
   allowedRoles   ChannelRoleAccess[]
+  mutes          ChannelMute[]
   createdAt      DateTime             @default(now())
   updatedAt      DateTime             @updatedAt
 
@@ -536,4 +539,16 @@ model Notification {
 
   @@index([userId, read])
   @@index([createdAt])
+}
+
+model ChannelMute {
+  id        String   @id @default(cuid())
+  userId    String
+  channelId String
+  muted     Boolean  @default(false)
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  channel   Channel  @relation(fields: [channelId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, channelId])
+  @@index([userId])
 }

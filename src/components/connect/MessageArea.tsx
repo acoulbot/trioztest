@@ -182,18 +182,30 @@ export default function MessageArea({
     fetchMessages();
   }, [channelId, fetchMessages]);
 
-  // Fetch channel members for tools (polls/tasks assignment)
+  // Mute state ref
+  const isMutedRef = useRef(false);
+
+  // Fetch channel members for tools (polls/tasks assignment) + mute state
   useEffect(() => {
     fetch(`/api/channels/${channelId}`)
       .then((r) => r.ok ? r.json() : null)
       .then((ch) => {
         if (!ch?.groupId) return;
-        return fetch(`/api/groups/${ch.groupId}`).then((r) => r.ok ? r.json() : null);
-      })
-      .then((g) => {
-        if (g?.members) {
-          setChannelMembers(g.members.map((m: { user: { id: string; name: string | null } }) => ({ id: m.user.id, name: m.user.name })));
-        }
+        // Fetch members + mute state in parallel
+        Promise.all([
+          fetch(`/api/groups/${ch.groupId}`).then((r) => r.ok ? r.json() : null),
+          fetch(`/api/channels/mute?groupId=${ch.groupId}`).then((r) => r.ok ? r.json() : null),
+        ]).then(([g, muteData]) => {
+          if (g?.members) {
+            setChannelMembers(g.members.map((m: { user: { id: string; name: string | null } }) => ({ id: m.user.id, name: m.user.name })));
+          }
+          if (muteData) {
+            const groupMuted = muteData.groupMuted ?? false;
+            const channelMuted = muteData.channels?.[channelId];
+            // Muted if: channel explicitly muted, or group muted and channel not explicitly unmuted
+            isMutedRef.current = channelMuted === true || (groupMuted && channelMuted !== false);
+          }
+        });
       })
       .catch(() => {});
   }, [channelId]);
@@ -212,8 +224,8 @@ export default function MessageArea({
         if (prev.find((m) => m.id === msg.id)) return prev;
         return [...prev, msg];
       });
-      // Play notification only for messages from others
-      if (msg.user.id !== currentUserIdRef.current) {
+      // Play notification only for messages from others (unless muted)
+      if (msg.user.id !== currentUserIdRef.current && !isMutedRef.current) {
         const uname = currentUserNameRef.current;
         const isMention = uname && (
           msg.content.toLowerCase().includes(`@${uname.toLowerCase()}`) ||

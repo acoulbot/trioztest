@@ -151,15 +151,27 @@ export async function POST(req: NextRequest) {
 
   if (mentions && Array.isArray(mentions) && mentions.length > 0) {
     const senderName = message.user?.name || "Пользователь";
+    const channel = await prisma.channel.findUnique({ where: { id: channelId }, select: { groupId: true } });
     for (const mentionedId of mentions) {
       if (mentionedId !== session.user.id) {
-        createNotification({
-          userId: mentionedId,
-          type: "mention",
-          title: `${senderName} упомянул вас`,
-          body: sanitizedContent.slice(0, 100),
-          link: "/connect",
-        }).catch(() => {});
+        // Check mute settings
+        let isMuted = false;
+        if (channel?.groupId) {
+          const [gm, cm] = await Promise.all([
+            prisma.groupMember.findUnique({ where: { userId_groupId: { userId: mentionedId, groupId: channel.groupId } }, select: { muted: true } }),
+            prisma.channelMute.findUnique({ where: { userId_channelId: { userId: mentionedId, channelId } }, select: { muted: true } }),
+          ]);
+          isMuted = cm?.muted === true || (gm?.muted === true && cm?.muted !== false);
+        }
+        if (!isMuted) {
+          createNotification({
+            userId: mentionedId,
+            type: "mention",
+            title: `${senderName} упомянул вас`,
+            body: sanitizedContent.slice(0, 100),
+            link: "/connect",
+          }).catch(() => {});
+        }
       }
     }
   }
