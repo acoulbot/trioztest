@@ -368,8 +368,12 @@ export default function MessageArea({
   };
 
   // Mark messages as read when visible
+  const lastMsgIdRef = useRef<string | null>(null);
   useEffect(() => {
     if (messages.length === 0) return;
+    const lastId = messages[messages.length - 1]?.id;
+    if (lastId === lastMsgIdRef.current) return;
+    lastMsgIdRef.current = lastId;
     const unread = messages.filter(m => m.user.id !== currentUserId && !(m.reads || []).some(r => r.userId === currentUserId));
     if (unread.length === 0) return;
     fetch("/api/messages/read", {
@@ -384,7 +388,7 @@ export default function MessageArea({
         return m;
       }));
     }).catch(() => {});
-  }, [messages.length, currentUserId]);
+  }, [messages, currentUserId, channelId]);
 
   // Slowmode countdown
   useEffect(() => {
@@ -921,11 +925,14 @@ export default function MessageArea({
                   <span className="text-xs text-neutral-400 dark:text-gray-600">
                     {new Date(msg.createdAt).toLocaleTimeString("ru-RU", { hour: "2-digit", minute: "2-digit" })}
                   </span>
-                  {msg.user.id === currentUserId && !msg.deleted && (
-                    <span className="text-[10px] text-neutral-400" title={`Прочитано: ${(msg.reads || []).filter(r => r.userId !== currentUserId).length}`}>
-                      {(msg.reads || []).filter(r => r.userId !== currentUserId).length > 0 ? <span className="text-violet-500 dark:text-cyan-400">✓✓</span> : "✓"}
-                    </span>
-                  )}
+                  {msg.user.id === currentUserId && !msg.deleted && (() => {
+                    const readCount = (msg.reads || []).filter(r => r.userId !== currentUserId).length;
+                    return (
+                      <span className="text-[10px] text-neutral-400" title={`Прочитано: ${readCount}`}>
+                        {readCount > 0 ? <span className="text-violet-500 dark:text-cyan-400">✓✓ {readCount}</span> : "✓"}
+                      </span>
+                    );
+                  })()}
                   {msg.edited && <span className="text-[10px] text-neutral-400">(ред.)</span>}
                 </div>}
 
