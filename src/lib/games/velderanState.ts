@@ -171,6 +171,33 @@ export function placeFromInventory(
   return newState;
 }
 
+/** Undo a placement — move a unit from the map back to inventory */
+export function undoPlacement(
+  state: VelderanGameState,
+  playerId: string,
+  unitId: string,
+  playerNames: Record<string, string>
+): VelderanGameState {
+  if (state.phase !== "PLACEMENT") return state;
+  const newState = structuredClone(state);
+  const unitIdx = newState.units.findIndex(
+    (u) => u.id === unitId && u.playerId === playerId
+  );
+  if (unitIdx < 0) return newState;
+
+  const unit = newState.units[unitIdx];
+  if (!newState.inventory) newState.inventory = {};
+  if (!newState.inventory[playerId]) newState.inventory[playerId] = [];
+  newState.inventory[playerId].push({ id: unit.id, type: unit.type });
+  newState.units.splice(unitIdx, 1);
+
+  const playerName = playerNames[playerId] || "Игрок";
+  const typeName = unit.type === "GUARD" ? "Гвардию" : "Отряд";
+  newState.log.push(`${playerName} убрал ${typeName} обратно в инвентарь.`);
+
+  return newState;
+}
+
 /** Legacy placeReserve — now places from inventory */
 export function placeReserve(
   state: VelderanGameState,

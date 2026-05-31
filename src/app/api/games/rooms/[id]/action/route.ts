@@ -12,6 +12,7 @@ import {
   rollDiceForGod,
   placeReserve,
   placeFromInventory,
+  undoPlacement,
   finishPlacement,
 } from "@/lib/games/velderanState";
 import { executeBotTurns, isBotPlayer } from "@/lib/games/velderanBot";
@@ -173,6 +174,19 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       return NextResponse.json({ error: "Укажите город и фишку" }, { status: 400 });
     }
     newState = placeFromInventory(state, player.id, cityNodeId, inventoryUnitId, playerNames);
+  } else if (action === "undo_placement") {
+    if (state.phase !== "PLACEMENT") {
+      return NextResponse.json({ error: "Сейчас не фаза расстановки" }, { status: 400 });
+    }
+    const currentId = getCurrentPlayerId(state);
+    if (player.id !== currentId) {
+      return NextResponse.json({ error: "Не ваш ход" }, { status: 400 });
+    }
+    const { unitId } = body;
+    if (!unitId) {
+      return NextResponse.json({ error: "Укажите фишку" }, { status: 400 });
+    }
+    newState = undoPlacement(state, player.id, unitId, playerNames);
   } else if (action === "finish_placement") {
     if (state.phase !== "PLACEMENT") {
       return NextResponse.json({ error: "Сейчас не фаза расстановки" }, { status: 400 });
