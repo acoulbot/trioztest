@@ -40,6 +40,12 @@ interface Conversation {
   lastMessageAt: string | null;
 }
 
+interface DMReplyTo {
+  id: string;
+  content: string;
+  user: { id: string; name: string };
+}
+
 interface Message {
   id: string;
   content: string;
@@ -47,6 +53,7 @@ interface Message {
   edited: boolean;
   deleted: boolean;
   attachments: string | null;
+  replyTo?: DMReplyTo | null;
   createdAt: string;
   user: { id: string; name: string; username: string; avatar: string | null; role: string; avatarGlowEnabled: boolean; avatarGlowColors: string | null };
 }
@@ -68,14 +75,17 @@ export default function DMPanel({ currentUserId, onClose, initialFriendId }: DMP
   const [nextCursor, setNextCursor] = useState<string | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editContent, setEditContent] = useState("");
+  const [replyTo, setReplyTo] = useState<{ id: string; name: string; content: string } | null>(null);
   const [sending, setSending] = useState(false);
   const [voiceUploading, setVoiceUploading] = useState(false);
+  const [fileUploading, setFileUploading] = useState(false);
   const [e2eeReady, setE2eeReady] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const socketRef = useRef<Socket | null>(null);
   const privateKeyRef = useRef<CryptoKey | null>(null);
   const peerPublicKeyRef = useRef<JsonWebKey | null>(null);
   const decryptedCache = useRef<Map<string, string>>(new Map());
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Initialize E2EE keypair
   useEffect(() => {
@@ -295,7 +305,7 @@ export default function DMPanel({ currentUserId, onClose, initialFriendId }: DMP
       const res = await fetch(`/api/dm/${selectedConv}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ content: finalContent }),
+        body: JSON.stringify({ content: finalContent, replyToId: replyTo?.id || null }),
       });
       if (res.ok) {
         const msg = await res.json();
@@ -305,6 +315,7 @@ export default function DMPanel({ currentUserId, onClose, initialFriendId }: DMP
           return [...prev, displayMsg];
         });
         decryptedCache.current.set(msg.id, content);
+        setReplyTo(null);
         setConversations((prev) =>
           prev.map((c) => c.id === selectedConv ? { ...c, lastMessage: { ...msg, content }, lastMessageAt: msg.createdAt } : c)
             .sort((a, b) => new Date(b.lastMessageAt || 0).getTime() - new Date(a.lastMessageAt || 0).getTime())
@@ -358,6 +369,53 @@ export default function DMPanel({ currentUserId, onClose, initialFriendId }: DMP
       }
     } finally {
       setVoiceUploading(false);
+    }
+  };
+
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !selectedConv) return;
+    setFileUploading(true);
+    try {
+      let uploadFile: File | Blob = file;
+      let encIv: string | undefined;
+
+      if (e2eeReady && privateKeyRef.current && peerPublicKeyRef.current) {
+        const arrayBuf = await file.arrayBuffer();
+        const { encrypted, iv } = await encryptFile(arrayBuf, privateKeyRef.current, peerPublicKeyRef.current);
+        uploadFile = new Blob([encrypted], { type: "application/octet-stream" });
+        encIv = iv;
+      }
+
+      const fd = new FormData();
+      fd.append("file", uploadFile, encIv ? `${file.name}.enc` : file.name);
+      if (encIv) fd.append("e2eeIv", encIv);
+      const uploadRes = await fetch("/api/messages/upload", { method: "POST", body: fd });
+      if (!uploadRes.ok) {
+        const data = await uploadRes.json();
+        alert(data.error || "Ошибка загрузки");
+        return;
+      }
+      const attachment = await uploadRes.json();
+      if (encIv) {
+        attachment.e2eeIv = encIv;
+        attachment.isE2EE = true;
+      }
+      const res = await fetch(`/api/dm/${selectedConv}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ content: "", attachments: [attachment] }),
+      });
+      if (res.ok) {
+        const msg = await res.json();
+        setMessages((prev) => {
+          if (prev.find((m) => m.id === msg.id)) return prev;
+          return [...prev, msg];
+        });
+      }
+    } finally {
+      setFileUploading(false);
+      if (fileInputRef.current) fileInputRef.current.value = "";
     }
   };
 
@@ -490,12 +548,17 @@ export default function DMPanel({ currentUserId, onClose, initialFriendId }: DMP
                 </button>
               )}
               {messages.map((msg) => (
-                <div key={msg.id} className={`flex items-end gap-2 ${msg.userId === currentUserId ? "flex-row-reverse" : ""}`}>
+                <div key={msg.id} className={`group/dm flex items-end gap-2 ${msg.userId === currentUserId ? "flex-row-reverse" : ""}`}>
                   <div className={`max-w-[70%] rounded-2xl px-3.5 py-2 ${
                     msg.userId === currentUserId
                       ? "bg-violet-500 dark:bg-cyan-600 text-white"
                       : "bg-neutral-100 dark:bg-white/10 text-neutral-900 dark:text-white"
                   }`}>
+                    {msg.replyTo && (
+                      <div className={`text-[11px] mb-1 pb-1 border-b ${msg.userId === currentUserId ? "border-white/20 text-white/70" : "border-neutral-200 dark:border-white/10 text-neutral-500 dark:text-neutral-400"}`}>
+                        <span className="font-medium">{msg.replyTo.user.name}:</span> <span className="truncate inline-block max-w-[150px] align-bottom">{msg.replyTo.content?.slice(0, 50) || "[файл]"}</span>
+                      </div>
+                    )}
                     {msg.deleted ? (
                       <p className="text-xs italic opacity-60">Сообщение удалено</p>
                     ) : editingId === msg.id ? (
@@ -536,14 +599,21 @@ export default function DMPanel({ currentUserId, onClose, initialFriendId }: DMP
                       </>
                     )}
                   </div>
-                  {msg.userId === currentUserId && !msg.deleted && !editingId && (
-                    <div className="flex gap-0.5 opacity-0 hover:opacity-100 transition-opacity">
-                      <button onClick={() => { setEditingId(msg.id); setEditContent(msg.content); }} className="p-1 text-neutral-400 hover:text-violet-500 dark:hover:text-cyan-400">
-                        <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>
+                  {!msg.deleted && !editingId && (
+                    <div className="flex gap-0.5 opacity-0 group-hover/dm:opacity-100 transition-opacity">
+                      <button onClick={() => setReplyTo({ id: msg.id, name: msg.user.name, content: msg.content.slice(0, 50) })} className="p-1 text-neutral-400 hover:text-violet-500 dark:hover:text-cyan-400" title="Ответить">
+                        <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6" /></svg>
                       </button>
-                      <button onClick={() => deleteMessage(msg.id)} className="p-1 text-neutral-400 hover:text-red-500">
-                        <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
-                      </button>
+                      {msg.userId === currentUserId && (
+                        <>
+                          <button onClick={() => { setEditingId(msg.id); setEditContent(msg.content); }} className="p-1 text-neutral-400 hover:text-violet-500 dark:hover:text-cyan-400" title="Редактировать">
+                            <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>
+                          </button>
+                          <button onClick={() => deleteMessage(msg.id)} className="p-1 text-neutral-400 hover:text-red-500" title="Удалить">
+                            <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                          </button>
+                        </>
+                      )}
                     </div>
                   )}
                 </div>
@@ -552,16 +622,48 @@ export default function DMPanel({ currentUserId, onClose, initialFriendId }: DMP
             </div>
 
             <TypingIndicator names={dmTypingName ? [dmTypingName] : []} />
-            <div className="p-3 border-t border-neutral-200 dark:border-white/5">
-              <form onSubmit={sendMessage} className="flex items-center gap-2">
-                <input
+            {replyTo && (
+              <div className="px-3 pt-2 pb-1 border-t border-neutral-200 dark:border-white/5 flex items-center gap-2 bg-violet-50 dark:bg-cyan-900/10">
+                <svg className="w-4 h-4 text-violet-500 dark:text-cyan-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6" /></svg>
+                <span className="flex-1 text-xs text-neutral-600 dark:text-neutral-300 truncate">
+                  Ответ для <strong>{replyTo.name}</strong>: {replyTo.content}
+                </span>
+                <button onClick={() => setReplyTo(null)} className="text-neutral-400 hover:text-neutral-600 dark:hover:text-white">
+                  <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+                </button>
+              </div>
+            )}
+            <div className={`p-3 ${replyTo ? "" : "border-t border-neutral-200 dark:border-white/5"}`}>
+              <form onSubmit={sendMessage} className="flex items-end gap-2">
+                <button
+                  type="button"
+                  onClick={() => fileInputRef.current?.click()}
+                  disabled={fileUploading}
+                  className="p-2 text-neutral-400 hover:text-violet-500 dark:hover:text-cyan-400 transition-colors disabled:opacity-50 flex-shrink-0"
+                  aria-label="Прикрепить файл"
+                >
+                  {fileUploading ? (
+                    <div className="w-5 h-5 border-2 border-current border-t-transparent rounded-full animate-spin" />
+                  ) : (
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" />
+                    </svg>
+                  )}
+                </button>
+                <input ref={fileInputRef} type="file" className="hidden" onChange={handleFileUpload} accept="image/*,audio/*,.pdf,.doc,.docx,.txt,.zip,.rar" />
+                <textarea
                   value={input}
                   onChange={(e) => {
                     setInput(e.target.value);
                     socketRef.current?.emit("dm-typing", { convId: selectedConv });
+                    e.target.style.height = "auto";
+                    e.target.style.height = Math.min(e.target.scrollHeight, 120) + "px";
                   }}
+                  onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendMessage(e); } }}
                   placeholder="Написать сообщение..."
-                  className="flex-1 px-3 py-2 bg-[var(--cn-accent-dim)] border border-[var(--cn-border)] rounded-xl text-sm text-[var(--cn-text)] placeholder:text-[var(--cn-muted)] outline-none focus:border-[var(--cn-accent)] transition-colors"
+                  className="flex-1 px-3 py-2 bg-[var(--cn-accent-dim)] border border-[var(--cn-border)] rounded-xl text-sm text-[var(--cn-text)] placeholder:text-[var(--cn-muted)] outline-none focus:border-[var(--cn-accent)] transition-colors resize-none overflow-y-auto"
+                  rows={1}
+                  style={{ maxHeight: 120 }}
                   maxLength={4000}
                 />
                 {input.trim() ? (

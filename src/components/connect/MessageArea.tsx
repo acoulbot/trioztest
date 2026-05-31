@@ -63,6 +63,7 @@ interface MessageAreaProps {
   channelId: string;
   channelName: string;
   channelIcon: string | null;
+  channelType?: string;
   currentUserId: string;
   currentUserName?: string;
   currentUserRole: string;
@@ -71,8 +72,10 @@ interface MessageAreaProps {
 }
 
 export default function MessageArea({
-  channelId, channelName, channelIcon, currentUserId, currentUserName = "", currentUserRole, isBanned, onBack,
+  channelId, channelName, channelIcon, channelType = "TEXT", currentUserId, currentUserName = "", currentUserRole, isBanned, onBack,
 }: MessageAreaProps) {
+  const isNewsChannel = channelType === "NEWS";
+  const canWriteNews = isNewsChannel && (currentUserRole === "OWNER" || currentUserRole === "ADMIN" || currentUserRole === "MODERATOR" || currentUserRole === "SITE_ADMIN");
   const [messages, setMessages] = useState<Message[]>([]);
   const [newMessage, setNewMessage] = useState("");
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -88,6 +91,36 @@ export default function MessageArea({
   const [recordingVoice, setRecordingVoice] = useState(false);
   const [showScrollBtn, setShowScrollBtn] = useState(false);
   const [lightboxSrc, setLightboxSrc] = useState<string | null>(null);
+  const [showPinned, setShowPinned] = useState(false);
+  const [pinnedMessages, setPinnedMessages] = useState<Message[]>([]);
+  const [showSearch, setShowSearch] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [searchResults, setSearchResults] = useState<Message[]>([]);
+  const [searching, setSearching] = useState(false);
+
+  const canPin = currentUserRole === "OWNER" || currentUserRole === "ADMIN" || currentUserRole === "MODERATOR" || currentUserRole === "SITE_ADMIN";
+
+  const fetchPinned = async () => {
+    const res = await fetch(`/api/messages/pin?channelId=${channelId}`);
+    if (res.ok) setPinnedMessages(await res.json());
+  };
+
+  const togglePin = async (messageId: string) => {
+    await fetch("/api/messages/pin", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ messageId }),
+    });
+    fetchPinned();
+  };
+
+  const performSearch = async (query: string) => {
+    if (query.trim().length < 2) { setSearchResults([]); return; }
+    setSearching(true);
+    const res = await fetch(`/api/messages/search?channelId=${channelId}&q=${encodeURIComponent(query.trim())}`);
+    if (res.ok) setSearchResults(await res.json());
+    setSearching(false);
+  };
 
   // Day-Night background (optional, controlled via profile settings)
   const [dayNightEnabled, setDayNightEnabled] = useState<boolean>(() => {
@@ -282,11 +315,16 @@ export default function MessageArea({
   };
 
   const pinMessage = async (messageId: string) => {
-    await fetch("/api/messages/pin", {
+    const res = await fetch("/api/messages/pin", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ messageId, channelId }),
+      body: JSON.stringify({ messageId }),
     });
+    if (res.ok) {
+      const { pinned } = await res.json();
+      setMessages(prev => prev.map(m => m.id === messageId ? { ...m, pinned } : m));
+      if (showPinned) fetchPinned();
+    }
   };
 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -391,9 +429,100 @@ export default function MessageArea({
             </svg>
           </button>
         )}
-        <span aria-hidden="true">{channelIcon || "\uD83D\uDCAC"}</span>
+        <span aria-hidden="true">{channelIcon || (isNewsChannel ? "\uD83D\uDCF0" : "\uD83D\uDCAC")}</span>
         <span className="font-medium text-neutral-900 dark:text-white text-sm">{channelName}</span>
+        {isNewsChannel && (
+          <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-amber-100 dark:bg-amber-900/30 text-amber-600 dark:text-amber-400 font-medium">
+            Новости
+          </span>
+        )}
+        <div className="ml-auto flex gap-1">
+          <button
+            onClick={() => { setShowSearch(!showSearch); if (showSearch) { setSearchQuery(""); setSearchResults([]); } }}
+            className={`p-1.5 rounded-lg transition-colors ${showSearch ? "text-violet-500 dark:text-cyan-400 bg-violet-50 dark:bg-cyan-900/20" : "text-neutral-400 hover:text-neutral-600 dark:hover:text-white"}`}
+            aria-label="Search"
+            title="Поиск"
+          >
+            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+            </svg>
+          </button>
+          <button
+            onClick={() => { setShowPinned(!showPinned); if (!showPinned) fetchPinned(); }}
+            className={`p-1.5 rounded-lg transition-colors ${showPinned ? "text-violet-500 dark:text-cyan-400 bg-violet-50 dark:bg-cyan-900/20" : "text-neutral-400 hover:text-neutral-600 dark:hover:text-white"}`}
+            aria-label="Pinned messages"
+            title="Закреплённые"
+          >
+            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z" />
+            </svg>
+          </button>
+        </div>
       </header>
+
+      {/* Search bar */}
+      {showSearch && (
+        <div className="border-b border-[var(--cn-border)] bg-[var(--cn-main)]">
+          <div className="px-4 py-2 flex gap-2 items-center">
+            <input
+              value={searchQuery}
+              onChange={e => { setSearchQuery(e.target.value); performSearch(e.target.value); }}
+              placeholder="Поиск по сообщениям..."
+              className="flex-1 px-3 py-1.5 bg-neutral-100 dark:bg-white/5 border border-neutral-200 dark:border-white/10 rounded-lg text-sm text-neutral-900 dark:text-white outline-none focus:ring-1 focus:ring-violet-500 dark:focus:ring-cyan-400"
+              autoFocus
+            />
+            <button onClick={() => { setShowSearch(false); setSearchQuery(""); setSearchResults([]); }} className="text-neutral-400 hover:text-neutral-600 dark:hover:text-white p-1">
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+            </button>
+          </div>
+          {searching && <p className="px-4 pb-2 text-xs text-neutral-400">Поиск...</p>}
+          {searchResults.length > 0 && (
+            <div className="max-h-[35vh] overflow-y-auto">
+              {searchResults.map(sr => (
+                <div key={sr.id} className="px-4 py-2 hover:bg-black/5 dark:hover:bg-white/5 border-t border-[var(--cn-border)] cursor-pointer" onClick={() => { setShowSearch(false); setSearchQuery(""); setSearchResults([]); }}>
+                  <div className="flex items-center gap-2 mb-0.5">
+                    <span className="text-xs font-medium text-violet-600 dark:text-cyan-400">{sr.user.name}</span>
+                    <span className="text-[10px] text-neutral-400">{new Date(sr.createdAt).toLocaleDateString("ru")}</span>
+                  </div>
+                  <p className="text-sm text-[var(--cn-text)] line-clamp-2">{sr.content}</p>
+                </div>
+              ))}
+            </div>
+          )}
+          {!searching && searchQuery.length >= 2 && searchResults.length === 0 && (
+            <p className="px-4 pb-2 text-xs text-neutral-400">Ничего не найдено</p>
+          )}
+        </div>
+      )}
+
+      {/* Pinned messages panel */}
+      {showPinned && (
+        <div className="border-b border-[var(--cn-border)] bg-[var(--cn-accent-dim)] max-h-[40vh] overflow-y-auto">
+          <div className="px-4 py-2 text-xs font-semibold text-neutral-500 dark:text-neutral-400 uppercase tracking-wider flex items-center justify-between">
+            <span>Закреплённые ({pinnedMessages.length})</span>
+            <button onClick={() => setShowPinned(false)} className="text-neutral-400 hover:text-neutral-600 dark:hover:text-white">
+              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+            </button>
+          </div>
+          {pinnedMessages.length === 0 ? (
+            <p className="px-4 pb-3 text-sm text-neutral-400">Нет закреплённых сообщений</p>
+          ) : (
+            pinnedMessages.map(pm => (
+              <div key={pm.id} className="px-4 py-2 flex items-start gap-2 hover:bg-black/5 dark:hover:bg-white/5 border-b border-[var(--cn-border)] last:border-0">
+                <div className="flex-1 min-w-0">
+                  <span className="text-xs font-medium text-violet-600 dark:text-cyan-400">{pm.user.name}</span>
+                  <p className="text-sm text-[var(--cn-text)] line-clamp-2">{pm.content || "[файл]"}</p>
+                </div>
+                {canPin && (
+                  <button onClick={() => togglePin(pm.id)} className="flex-shrink-0 p-1 text-neutral-400 hover:text-red-500" title="Открепить">
+                    <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+                  </button>
+                )}
+              </div>
+            ))
+          )}
+        </div>
+      )}
 
       {/* Messages */}
       <div
@@ -546,8 +675,8 @@ export default function MessageArea({
                         </div>
                       )}
                     </div>
-                    {/* Pin (admin only) */}
-                    {currentUserRole === "ADMIN" && (
+                    {/* Pin (admin/mod) */}
+                    {canPin && (
                       <button onClick={() => pinMessage(msg.id)} className="text-[11px] text-neutral-400 hover:text-amber-500">
                         {msg.pinned ? "Открепить" : "Закрепить"}
                       </button>
@@ -607,12 +736,16 @@ export default function MessageArea({
       )}
 
       {/* Input */}
-      {!isBanned ? (
+      {isNewsChannel && !canWriteNews ? (
+        <div className="p-3 border-t border-[var(--cn-border)] text-center text-neutral-400 text-sm">
+          Канал новостей — только администраторы и модераторы могут писать
+        </div>
+      ) : !isBanned ? (
         <div className="p-3 border-t border-[var(--cn-border)]">
           {recordingVoice ? (
             <VoiceRecorder onRecorded={handleVoiceRecorded} />
           ) : (
-            <form onSubmit={sendMessage} className="flex gap-2">
+            <form onSubmit={sendMessage} className="flex gap-2 items-end">
               <button
                 type="button"
                 onClick={() => fileInputRef.current?.click()}
@@ -629,12 +762,14 @@ export default function MessageArea({
                 )}
               </button>
               <input ref={fileInputRef} type="file" className="hidden" onChange={handleFileUpload} accept="image/*,.pdf,.doc,.docx,.txt" />
-              <input
-                type="text"
+              <textarea
                 value={newMessage}
-                onChange={(e) => { setNewMessage(e.target.value); emitTyping(); }}
+                onChange={(e) => { setNewMessage(e.target.value); emitTyping(); e.target.style.height = "auto"; e.target.style.height = Math.min(e.target.scrollHeight, 120) + "px"; }}
+                onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendMessage(e); } }}
                 placeholder={`Написать в #${channelName}...`}
-                className="input-field flex-1 !py-2.5"
+                className="input-field flex-1 !py-2.5 resize-none overflow-y-auto"
+                rows={1}
+                style={{ maxHeight: 120 }}
                 aria-label={`Message ${channelName}`}
               />
               {newMessage.trim() ? (
