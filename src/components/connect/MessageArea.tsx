@@ -11,6 +11,7 @@ import TypingIndicator from "@/components/ui/TypingIndicator";
 import VoiceRecorder from "@/components/ui/VoiceRecorder";
 import VoicePlayer from "@/components/ui/VoicePlayer";
 import DayNightBackground from "@/components/connect/DayNightBackground";
+import { PlusMenu, ChannelToolsPanel } from "@/components/connect/ChannelTools";
 
 interface MessageUser {
   id: string;
@@ -92,6 +93,8 @@ export default function MessageArea({
   const [nextCursor, setNextCursor] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
   const [sending, setSending] = useState(false);
+  const [toolsRefresh, setToolsRefresh] = useState(0);
+  const [channelMembers, setChannelMembers] = useState<{id:string;name:string|null}[]>([]);
   const [recordingVoice, setRecordingVoice] = useState(false);
   const [showScrollBtn, setShowScrollBtn] = useState(false);
   const [lightboxSrc, setLightboxSrc] = useState<string | null>(null);
@@ -178,6 +181,22 @@ export default function MessageArea({
     setNextCursor(null);
     fetchMessages();
   }, [channelId, fetchMessages]);
+
+  // Fetch channel members for tools (polls/tasks assignment)
+  useEffect(() => {
+    fetch(`/api/channels/${channelId}`)
+      .then((r) => r.ok ? r.json() : null)
+      .then((ch) => {
+        if (!ch?.groupId) return;
+        return fetch(`/api/groups/${ch.groupId}`).then((r) => r.ok ? r.json() : null);
+      })
+      .then((g) => {
+        if (g?.members) {
+          setChannelMembers(g.members.map((m: { user: { id: string; name: string | null } }) => ({ id: m.user.id, name: m.user.name })));
+        }
+      })
+      .catch(() => {});
+  }, [channelId]);
 
   // Socket.IO connection
   useEffect(() => {
@@ -750,6 +769,9 @@ export default function MessageArea({
         </div>
       )}
 
+      {/* Channel Tools Panel (polls & tasks) */}
+      <ChannelToolsPanel key={`tools-${channelId}-${toolsRefresh}`} channelId={channelId} currentUserId={currentUserId} members={channelMembers} />
+
       {/* Input */}
       {isNewsChannel && !canWriteNews ? (
         <div className="p-3 border-t border-[var(--cn-border)] text-center text-neutral-400 text-sm">
@@ -761,6 +783,12 @@ export default function MessageArea({
             <VoiceRecorder onRecorded={handleVoiceRecorded} />
           ) : (
             <form onSubmit={sendMessage} className="flex gap-2 items-end">
+              <PlusMenu
+                channelId={channelId}
+                channelMembers={channelMembers}
+                currentUserId={currentUserId}
+                onCreated={() => setToolsRefresh((n) => n + 1)}
+              />
               <button
                 type="button"
                 onClick={() => fileInputRef.current?.click()}

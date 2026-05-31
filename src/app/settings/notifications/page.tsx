@@ -195,9 +195,20 @@ export default function NotificationsPage() {
                         </span>
                         {!n.read && <div className="w-2 h-2 rounded-full bg-violet-500 flex-shrink-0" />}
                       </div>
-                      {n.body && (
-                        <p className="text-xs text-neutral-400 dark:text-gray-500 mt-0.5 truncate">{n.body}</p>
-                      )}
+                      {n.body && (() => {
+                        const imgMatch = n.body.match(/\[img\](.*?)\[\/img\]/);
+                        const text = n.body.replace(/\n?\[img\].*?\[\/img\]/, "").trim();
+                        return (
+                          <>
+                            {text && <p className="text-xs text-neutral-400 dark:text-gray-500 mt-0.5 line-clamp-2 whitespace-pre-wrap">{text}</p>}
+                            {imgMatch && (
+                              <div className="mt-1.5 rounded-lg overflow-hidden border border-neutral-200 dark:border-white/10" style={{ maxHeight: 120 }}>
+                                <img src={imgMatch[1]} alt="" className="w-full h-auto object-cover" style={{ maxHeight: 120 }} />
+                              </div>
+                            )}
+                          </>
+                        );
+                      })()}
                       <div className="flex items-center gap-2 mt-1">
                         <span className={`text-[10px] ${info.color}`}>{info.label}</span>
                         <span className="text-[10px] text-neutral-400">{timeAgo(n.createdAt)}</span>
