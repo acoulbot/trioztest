@@ -44,7 +44,7 @@ interface FriendsPanelProps {
 export default function FriendsPanel({ onMessageFriend }: FriendsPanelProps) {
   const [data, setData] = useState<FriendsData>({ friends: [], pending: [], sent: [] });
   const [tab, setTab] = useState<Tab>("friends");
-  const [expandedFriend, setExpandedFriend] = useState<string | null>(null);
+  const [selectedFriend, setSelectedFriend] = useState<Friend | null>(null);
   const [username, setUsername] = useState("");
   const [message, setMessage] = useState<{ text: string; type: "ok" | "err" } | null>(null);
   const [loading, setLoading] = useState(false);
@@ -159,53 +159,25 @@ export default function FriendsPanel({ onMessageFriend }: FriendsPanelProps) {
                 </div>
               ) : (
                 data.friends.map((f) => (
-                  <div key={f.id} className="rounded-lg hover:bg-[var(--cn-hover)] transition-colors">
-                    <button
-                      onClick={() => setExpandedFriend(expandedFriend === f.id ? null : f.id)}
-                      className="w-full flex items-center gap-2 px-2 py-2 text-left"
-                    >
-                      <div className="relative flex-shrink-0">
-                        <GlowAvatar
-                          user={{ id: f.id, name: f.name, avatar: f.avatar, role: f.role ?? "USER", avatarGlowEnabled: f.avatarGlowEnabled, avatarGlowColors: f.avatarGlowColors }}
-                          size={32}
-                          onlineColor={isOnline(f.lastSeen) ? "green" : "gray"}
-                        />
+                  <button
+                    key={f.id}
+                    onClick={() => setSelectedFriend(f)}
+                    className="w-full flex items-center gap-2 px-2 py-2 rounded-lg hover:bg-[var(--cn-hover)] transition-colors text-left"
+                  >
+                    <div className="relative flex-shrink-0">
+                      <GlowAvatar
+                        user={{ id: f.id, name: f.name, avatar: f.avatar, role: f.role ?? "USER", avatarGlowEnabled: f.avatarGlowEnabled, avatarGlowColors: f.avatarGlowColors }}
+                        size={32}
+                        onlineColor={isOnline(f.lastSeen) ? "green" : "gray"}
+                      />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="text-sm text-neutral-900 dark:text-white truncate">{f.name}</div>
+                      <div className="text-[10px] text-neutral-400">
+                        @{f.username} {!isOnline(f.lastSeen) && f.lastSeen && <span className="text-neutral-400/70">· {timeAgo(f.lastSeen)}</span>}
                       </div>
-                      <div className="flex-1 min-w-0">
-                        <div className="text-sm text-neutral-900 dark:text-white truncate">{f.name}</div>
-                        <div className="text-[10px] text-neutral-400">
-                          @{f.username} {!isOnline(f.lastSeen) && f.lastSeen && <span className="text-neutral-400/70">· {timeAgo(f.lastSeen)}</span>}
-                        </div>
-                      </div>
-                    </button>
-                    {expandedFriend === f.id && (
-                      <div className="flex gap-1 px-2 pb-2 animate-fade-in">
-                        <a
-                          href={`/user/${f.username}`}
-                          className="flex items-center gap-1 px-2 py-1 rounded-md text-[11px] text-neutral-500 dark:text-neutral-400 hover:bg-violet-50 dark:hover:bg-white/5 hover:text-violet-600 dark:hover:text-cyan-400 transition-colors"
-                        >
-                          <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" /></svg>
-                          Профиль
-                        </a>
-                        {onMessageFriend && (
-                          <button
-                            onClick={() => { onMessageFriend(f.id); setExpandedFriend(null); }}
-                            className="flex items-center gap-1 px-2 py-1 rounded-md text-[11px] text-neutral-500 dark:text-neutral-400 hover:bg-violet-50 dark:hover:bg-white/5 hover:text-violet-600 dark:hover:text-cyan-400 transition-colors"
-                          >
-                            <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z" /></svg>
-                            Написать
-                          </button>
-                        )}
-                        <button
-                          onClick={() => removeFriend(f.friendshipId)}
-                          className="flex items-center gap-1 px-2 py-1 rounded-md text-[11px] text-neutral-500 dark:text-neutral-400 hover:bg-red-50 dark:hover:bg-red-500/10 hover:text-red-500 transition-colors"
-                        >
-                          <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
-                          Удалить
-                        </button>
-                      </div>
-                    )}
-                  </div>
+                    </div>
+                  </button>
                 ))
               )}
             </motion.div>
@@ -289,6 +261,88 @@ export default function FriendsPanel({ onMessageFriend }: FriendsPanelProps) {
           )}
         </AnimatePresence>
       </div>
+
+      {/* Friend Profile Modal */}
+      <AnimatePresence>
+        {selectedFriend && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm"
+            onClick={() => setSelectedFriend(null)}
+          >
+            <motion.div
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.9, opacity: 0 }}
+              className="w-72 rounded-2xl bg-white dark:bg-neutral-900 border border-neutral-200 dark:border-white/10 shadow-2xl overflow-hidden"
+              onClick={(e) => e.stopPropagation()}
+            >
+              {/* Banner */}
+              <div className="h-20 bg-gradient-to-br from-violet-500/30 to-cyan-500/30 dark:from-violet-600/40 dark:to-cyan-600/40 relative">
+                <button
+                  onClick={() => setSelectedFriend(null)}
+                  className="absolute top-2 right-2 w-6 h-6 rounded-full bg-black/20 hover:bg-black/40 text-white flex items-center justify-center transition-colors"
+                >
+                  <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+                </button>
+              </div>
+
+              {/* Avatar */}
+              <div className="flex justify-center -mt-10">
+                <div className="ring-4 ring-white dark:ring-neutral-900 rounded-full">
+                  <GlowAvatar
+                    user={{ id: selectedFriend.id, name: selectedFriend.name, avatar: selectedFriend.avatar, role: selectedFriend.role ?? "USER", avatarGlowEnabled: selectedFriend.avatarGlowEnabled, avatarGlowColors: selectedFriend.avatarGlowColors }}
+                    size={72}
+                    onlineColor={isOnline(selectedFriend.lastSeen) ? "green" : "gray"}
+                  />
+                </div>
+              </div>
+
+              {/* Info */}
+              <div className="text-center px-4 pt-2 pb-1">
+                <div className="text-base font-semibold text-neutral-900 dark:text-white">{selectedFriend.name}</div>
+                <div className="text-xs text-neutral-400">@{selectedFriend.username}</div>
+                <div className="text-[10px] text-neutral-400 mt-1">
+                  {isOnline(selectedFriend.lastSeen) ? (
+                    <span className="text-green-500">В сети</span>
+                  ) : selectedFriend.lastSeen ? (
+                    <span>Был(а) {timeAgo(selectedFriend.lastSeen)}</span>
+                  ) : null}
+                </div>
+              </div>
+
+              {/* Actions */}
+              <div className="px-4 pb-4 pt-2 space-y-1.5">
+                <a
+                  href={`/user/${selectedFriend.username}`}
+                  className="w-full flex items-center justify-center gap-2 px-3 py-2 rounded-lg text-sm font-medium bg-violet-500/10 dark:bg-cyan-500/10 text-violet-600 dark:text-cyan-400 hover:bg-violet-500/20 dark:hover:bg-cyan-500/20 transition-colors"
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" /></svg>
+                  Открыть профиль
+                </a>
+                {onMessageFriend && (
+                  <button
+                    onClick={() => { onMessageFriend(selectedFriend.id); setSelectedFriend(null); }}
+                    className="w-full flex items-center justify-center gap-2 px-3 py-2 rounded-lg text-sm font-medium bg-violet-500/10 dark:bg-cyan-500/10 text-violet-600 dark:text-cyan-400 hover:bg-violet-500/20 dark:hover:bg-cyan-500/20 transition-colors"
+                  >
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z" /></svg>
+                    Написать
+                  </button>
+                )}
+                <button
+                  onClick={() => { removeFriend(selectedFriend.friendshipId); setSelectedFriend(null); }}
+                  className="w-full flex items-center justify-center gap-2 px-3 py-2 rounded-lg text-sm font-medium text-red-500 hover:bg-red-500/10 transition-colors"
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+                  Удалить из друзей
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }
