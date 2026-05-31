@@ -189,12 +189,12 @@ export default function MapEditorPage() {
       <div className="flex flex-1 overflow-hidden">
         {/* Map — fit to screen, aspect ratio 2400:1792 */}
         <div ref={mapRef} className="flex-1 relative flex items-center justify-center overflow-hidden bg-neutral-950">
-          <div className="relative w-full h-full" style={{ aspectRatio: "2400/1792", maxHeight: "100%", maxWidth: "100%", margin: "auto" }}>
+          <div className="relative w-full" style={{ aspectRatio: "2400/1792", maxHeight: "100%" }}>
             <Image
               src="/games/velderan/map.png"
               alt="Карта"
               fill
-              className="object-contain"
+              className="object-cover"
               priority
               unoptimized
             />
