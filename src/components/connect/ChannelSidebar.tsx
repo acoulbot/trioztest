@@ -104,6 +104,7 @@ function ChannelSettingsModal({ channel, groupId, allChannels, onClose, onUpdate
   const [isRestricted, setIsRestricted] = useState(false);
   const [roles, setRoles] = useState<{ id: string; name: string; color: string }[]>([]);
   const [selectedRoles, setSelectedRoles] = useState<Set<string>>(new Set());
+  const [slowmode, setSlowmode] = useState(0);
   const [saving, setSaving] = useState(false);
   const [loading, setLoading] = useState(true);
   const possibleParents = allChannels.filter(c => c.id !== channel.id && !c.parentId && (c.type === "TEXT" || c.type === "NEWS"));
@@ -114,6 +115,7 @@ function ChannelSettingsModal({ channel, groupId, allChannels, onClose, onUpdate
       fetch(`/api/groups/${groupId}/roles`).then(r => r.json()),
     ]).then(([chData, rolesData]) => {
       if (chData.isRestricted !== undefined) setIsRestricted(chData.isRestricted);
+      if (chData.slowmode !== undefined) setSlowmode(chData.slowmode);
       if (chData.roleIds) setSelectedRoles(new Set(chData.roleIds));
       if (Array.isArray(rolesData)) setRoles(rolesData);
       setLoading(false);
@@ -130,6 +132,7 @@ function ChannelSettingsModal({ channel, groupId, allChannels, onClose, onUpdate
         icon: icon.trim() || null,
         type,
         isRestricted,
+        slowmode,
         roleIds: isRestricted ? Array.from(selectedRoles) : [],
         parentId: parentId || null,
       }),
@@ -229,6 +232,23 @@ function ChannelSettingsModal({ channel, groupId, allChannels, onClose, onUpdate
             {isRestricted && roles.length === 0 && (
               <p className="text-xs text-neutral-400">Нет тегов. Создайте теги в настройках группы.</p>
             )}
+
+            {/* Slowmode */}
+            <div>
+              <label className="text-xs font-medium text-neutral-500 dark:text-neutral-400 mb-1 block">Слоумод (секунды между сообщениями)</label>
+              <select value={slowmode} onChange={e => setSlowmode(Number(e.target.value))} className="w-full px-3 py-2 bg-neutral-50 dark:bg-white/5 border border-neutral-200 dark:border-white/10 rounded-xl text-sm text-neutral-900 dark:text-white outline-none">
+                <option value={0}>Выкл</option>
+                <option value={5}>5 сек</option>
+                <option value={10}>10 сек</option>
+                <option value={15}>15 сек</option>
+                <option value={30}>30 сек</option>
+                <option value={60}>1 мин</option>
+                <option value={120}>2 мин</option>
+                <option value={300}>5 мин</option>
+                <option value={600}>10 мин</option>
+              </select>
+              <p className="text-[11px] text-neutral-400 mt-1">Не влияет на админов и модераторов</p>
+            </div>
           </div>
         )}
 

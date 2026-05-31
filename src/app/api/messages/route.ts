@@ -23,6 +23,12 @@ const MESSAGE_SELECT = {
       id: true, content: true, user: { select: { id: true, name: true } },
     },
   },
+  reads: {
+    select: { userId: true },
+  },
+  _count: {
+    select: { threadReplies: true },
+  },
 };
 
 export async function GET(req: Request) {
@@ -55,8 +61,10 @@ export async function GET(req: Request) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
+  const threadId = searchParams.get("threadId");
+
   const messages = await prisma.message.findMany({
-    where: { channelId },
+    where: threadId ? { threadId } : { channelId, threadId: null },
     include: MESSAGE_SELECT,
     orderBy: { createdAt: "desc" },
     take: limit + 1,
@@ -91,7 +99,7 @@ export async function POST(req: NextRequest) {
   const banned = await checkBan(session.user.id);
   if (banned) return banned;
 
-  const { content, channelId, attachments, replyToId, mentions } = await req.json();
+  const { content, channelId, attachments, replyToId, mentions, threadId } = await req.json();
   if ((!content || !content.trim()) && !attachments) {
     return NextResponse.json({ error: "Missing fields" }, { status: 400 });
   }
@@ -106,7 +114,7 @@ export async function POST(req: NextRequest) {
 
   const channel = await prisma.channel.findUnique({
     where: { id: channelId },
-    select: { groupId: true, type: true, isRestricted: true },
+    select: { groupId: true, type: true, isRestricted: true, slowmode: true },
   });
   if (!channel) {
     return NextResponse.json({ error: "Channel not found" }, { status: 404 });
@@ -119,6 +127,22 @@ export async function POST(req: NextRequest) {
   }
 
   const isPrivileged = membership.role === "OWNER" || membership.role === "ADMIN" || membership.role === "MODERATOR";
+
+  // Slowmode check
+  if (channel.slowmode > 0 && !isPrivileged) {
+    const lastMsg = await prisma.message.findFirst({
+      where: { channelId, userId: session.user.id },
+      orderBy: { createdAt: "desc" },
+      select: { createdAt: true },
+    });
+    if (lastMsg) {
+      const elapsed = (Date.now() - new Date(lastMsg.createdAt).getTime()) / 1000;
+      if (elapsed < channel.slowmode) {
+        const wait = Math.ceil(channel.slowmode - elapsed);
+        return NextResponse.json({ error: `Слоумод: подождите ${wait} сек.` }, { status: 429 });
+      }
+    }
+  }
 
   // NEWS channels: only OWNER/ADMIN/MODERATOR can post
   if (channel.type === "NEWS" && !isPrivileged) {
@@ -142,10 +166,19 @@ export async function POST(req: NextRequest) {
       userId: session.user.id,
       attachments: attachments ? JSON.stringify(attachments) : null,
       replyToId: replyToId || null,
+      threadId: threadId || null,
       mentions: mentions ? JSON.stringify(mentions) : null,
     },
     include: MESSAGE_SELECT,
   });
+
+  // Update thread parent counter
+  if (threadId) {
+    await prisma.message.update({
+      where: { id: threadId },
+      data: { threadCount: { increment: 1 } },
+    });
+  }
 
   emitToChannel(channelId, "new-message", message);
 

@@ -54,6 +54,8 @@ model User {
   pollVotes         PollVote[]
   tasksCreated      ChannelTask[]   @relation("TaskCreator")
   tasksAssigned     ChannelTask[]   @relation("TaskAssignee")
+  messageReads     MessageRead[]
+  scheduledMsgs    ScheduledMessage[]
   avatarGlowEnabled Boolean         @default(false)
   avatarGlowColors  String?
   e2eePublicKey     String?         @db.Text
@@ -131,6 +133,7 @@ model Channel {
   icon           String?
   groupId        String
   isRestricted   Boolean              @default(false)
+  slowmode       Int                  @default(0)
   serviceId      String?
   parentId       String?
   parent         Channel?             @relation("ChannelTree", fields: [parentId], references: [id], onDelete: SetNull)
@@ -142,6 +145,7 @@ model Channel {
   tasks          ChannelTask[]
   allowedRoles   ChannelRoleAccess[]
   mutes          ChannelMute[]
+  scheduledMsgs  ScheduledMessage[]
   createdAt      DateTime             @default(now())
   updatedAt      DateTime             @updatedAt
 
@@ -177,15 +181,21 @@ model Message {
   replyToId    String?
   replyTo      Message?  @relation("MessageReplies", fields: [replyToId], references: [id], onDelete: SetNull)
   replies      Message[] @relation("MessageReplies")
+  threadId     String?
+  threadParent Message?  @relation("MessageThreads", fields: [threadId], references: [id], onDelete: SetNull)
+  threadReplies Message[] @relation("MessageThreads")
+  threadCount  Int       @default(0)
   attachments  String?
   mentions     String?   @db.Text
   reactions    Reaction[]
+  reads        MessageRead[]
   user         User      @relation(fields: [userId], references: [id], onDelete: Cascade)
   channel      Channel   @relation(fields: [channelId], references: [id], onDelete: Cascade)
   createdAt    DateTime  @default(now())
 
   @@index([channelId, createdAt])
   @@index([replyToId])
+  @@index([threadId])
 }
 
 model Reaction {
@@ -550,5 +560,32 @@ model ChannelMute {
   channel   Channel  @relation(fields: [channelId], references: [id], onDelete: Cascade)
 
   @@unique([userId, channelId])
+  @@index([userId])
+}
+
+model MessageRead {
+  id        String   @id @default(cuid())
+  userId    String
+  messageId String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  message   Message  @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  readAt    DateTime @default(now())
+
+  @@unique([userId, messageId])
+  @@index([messageId])
+}
+
+model ScheduledMessage {
+  id          String   @id @default(cuid())
+  content     String
+  userId      String
+  channelId   String
+  scheduledAt DateTime
+  sent        Boolean  @default(false)
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  channel     Channel  @relation(fields: [channelId], references: [id], onDelete: Cascade)
+  createdAt   DateTime @default(now())
+
+  @@index([scheduledAt, sent])
   @@index([userId])
 }
