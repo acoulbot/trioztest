@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import { useSession } from "next-auth/react";
 import { useParams, useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
@@ -167,7 +167,11 @@ export default function PlayPage() {
   const [validMoves, setValidMoves] = useState<string[]>([]);
   const [edgesLoaded, setEdgesLoaded] = useState(false);
   const [showDiceRoller, setShowDiceRoller] = useState(false);
+  const [notification, setNotification] = useState<string | null>(null);
+  const notifTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const logRef = useRef<HTMLDivElement>(null);
+  const prevPhaseRef = useRef<string | null>(null);
+  const prevCombatRef = useRef<boolean>(false);
 
   const fetchRoom = useCallback(async () => {
     const res = await fetch(`/api/games/rooms/${roomId}`);
@@ -222,6 +226,18 @@ export default function PlayPage() {
     }
   }, [gameState?.phase, isMyTurn]);
 
+  const playerNames = useMemo(() => {
+    const names: Record<string, string> = {};
+    if (room) for (const p of room.players) names[p.id] = p.user.name;
+    return names;
+  }, [room]);
+
+  const playerFactions = useMemo(() => {
+    const factions: Record<string, string> = {};
+    if (room) for (const p of room.players) factions[p.id] = p.faction || "";
+    return factions;
+  }, [room]);
+
   // Victory sound
   useEffect(() => {
     if (gameState?.phase === "GAME_OVER" && gameState.winner) {
@@ -229,14 +245,43 @@ export default function PlayPage() {
     }
   }, [gameState?.phase, gameState?.winner]);
 
-  const playerNames: Record<string, string> = {};
-  const playerFactions: Record<string, string> = {};
-  if (room) {
-    for (const p of room.players) {
-      playerNames[p.id] = p.user.name;
-      playerFactions[p.id] = p.faction || "";
+  // Show notification helper
+  const showNotif = useCallback((text: string) => {
+    setNotification(text);
+    if (notifTimer.current) clearTimeout(notifTimer.current);
+    notifTimer.current = setTimeout(() => setNotification(null), 3500);
+  }, []);
+
+  // Event notifications on phase/combat changes
+  useEffect(() => {
+    if (!gameState) return;
+    const prevPhase = prevPhaseRef.current;
+    const prevCombat = prevCombatRef.current;
+    prevPhaseRef.current = gameState.phase;
+    prevCombatRef.current = !!gameState.combat;
+
+    if (!prevPhase) return;
+
+    if (gameState.combat && !prevCombat) {
+      const aName = playerNames[gameState.combat.attackerPlayerId] || "?";
+      const dName = playerNames[gameState.combat.defenderPlayerId] || "?";
+      showNotif(`⚔️ Сражение: ${aName} vs ${dName}`);
     }
-  }
+    if (gameState.phase === "GOD_SUMMON" && prevPhase !== "GOD_SUMMON") {
+      const curName = playerNames[gameState.turnOrder[gameState.currentPlayerIndex]] || "?";
+      showNotif(`🎲 ${curName} бросает кубики на божество!`);
+    }
+    if (gameState.phase === "PLACEMENT" && prevPhase !== "PLACEMENT") {
+      showNotif(`📦 Раунд ${gameState.round}: расстановка подкреплений`);
+    }
+    if (gameState.phase === "GAME_OVER" && prevPhase !== "GAME_OVER" && gameState.winner) {
+      showNotif(`👑 Победа: ${playerNames[gameState.winner] || "?"}`);
+    }
+    if (gameState.phase === "MOVE" && prevPhase !== "MOVE" && prevPhase !== "GOD_SUMMON") {
+      const curName = playerNames[gameState.turnOrder[gameState.currentPlayerIndex]] || "?";
+      showNotif(`🏰 Ход: ${curName}`);
+    }
+  }, [gameState?.phase, gameState?.combat, gameState?.currentPlayerIndex, playerNames, showNotif]);
 
   const selectUnit = (unitId: string) => {
     if (!gameState || !isMyTurn || gameState.phase !== "MOVE") return;
@@ -355,19 +400,6 @@ export default function PlayPage() {
     }
   };
 
-  const doUndoPlacement = async (unitId: string) => {
-    const res = await fetch(`/api/games/rooms/${roomId}/action`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ action: "undo_placement", unitId }),
-    });
-    if (res.ok) {
-      setGameState(await res.json());
-      setSelectedUnit(null);
-      setSelectedInvUnit(null);
-    }
-  };
-
   const doFinishPlacement = async () => {
     const res = await fetch(`/api/games/rooms/${roomId}/action`, {
       method: "POST",
@@ -429,7 +461,15 @@ export default function PlayPage() {
   }
 
   return (
-    <div className="h-screen bg-neutral-950 flex flex-col overflow-hidden">
+    <div className="h-screen bg-neutral-950 flex flex-col overflow-hidden relative">
+      {/* Event notification toast */}
+      {notification && (
+        <div className="absolute top-14 left-1/2 -translate-x-1/2 z-[100] pointer-events-none animate-pulse">
+          <div className="bg-black/90 border border-yellow-500/60 text-yellow-300 px-6 py-3 rounded-xl shadow-2xl text-sm font-bold whitespace-nowrap backdrop-blur-sm">
+            {notification}
+          </div>
+        </div>
+      )}
       {/* Top bar */}
       <div className="flex items-center justify-between px-4 py-2 bg-neutral-900/90 border-b border-white/5 flex-shrink-0">
         <div className="flex items-center gap-3">
@@ -576,20 +616,14 @@ export default function PlayPage() {
                           key={unit.id}
                           onClick={(e) => {
                             e.stopPropagation();
-                            if (unit.playerId === myPlayerId && isMyTurn && gameState.phase === "PLACEMENT") {
-                              doUndoPlacement(unit.id);
-                            } else if (unit.playerId === myPlayerId && isMyTurn && gameState.phase === "MOVE") {
+                            if (unit.playerId === myPlayerId && isMyTurn && gameState.phase === "MOVE") {
                               selectUnit(unit.id);
                             }
                           }}
                           className={`relative flex items-center justify-center transition-all ${
                             isSelected ? "scale-[1.6] z-10" : "hover:scale-125"
                           } ${unit.playerId === myPlayerId ? "cursor-pointer" : ""}`}
-                          title={
-                            gameState.phase === "PLACEMENT" && unit.playerId === myPlayerId && isMyTurn
-                              ? `Нажмите, чтобы убрать ${isGuard ? "гвардию" : "отряд"} обратно в инвентарь`
-                              : `${playerNames[unit.playerId]} — ${isGuard ? "Гвардия" : "Отряд"} (${unit.movesLeft} ходов)`
-                          }
+                          title={`${playerNames[unit.playerId]} — ${isGuard ? "Гвардия" : "Отряд"} (${unit.movesLeft} ходов)`}
                         >
                           {isGuard ? (
                             /* Guard: shield shape */
