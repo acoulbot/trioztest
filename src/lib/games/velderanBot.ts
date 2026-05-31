@@ -1,4 +1,4 @@
-import { VelderanGameState, getCurrentPlayerId, moveUnit, endTurn, placeFromInventory, finishPlacement, canMoveUnit, rollDiceForGod, playCombatCard, specialAttack, smugglerTeleport, useGodCard, getSpecialAttackTargets } from "./velderanState";
+import { VelderanGameState, getCurrentPlayerId, moveUnit, endTurn, placeFromInventory, finishPlacement, canMoveUnit, rollDiceForGod, playCombatCard, specialAttack, smugglerTeleport, playGodCard, getSpecialAttackTargets } from "./velderanState";
 import { getActiveNodes, getNeighbors } from "./velderanMap";
 
 const BOT_USER_PREFIX = "bot-velderan-";
@@ -296,7 +296,7 @@ function botMove(
       // Find a random enemy unit as target
       const enemies = newState.units.filter((u) => u.playerId !== botId);
       const targetUnitId = enemies.length > 0 ? enemies[Math.floor(Math.random() * enemies.length)].id : undefined;
-      newState = useGodCard(newState, botId, 0, targetUnitId, playerNames);
+      newState = playGodCard(newState, botId, 0, targetUnitId, playerNames);
       // Re-check god cards
       if (newState.godCards && newState.godCards[botId]) break; // played one, don't spam all
     }

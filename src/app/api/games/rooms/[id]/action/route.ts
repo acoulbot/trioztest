@@ -16,7 +16,7 @@ import {
   finishPlacement,
   specialAttack,
   smugglerTeleport,
-  useGodCard,
+  playGodCard,
   tryDiceGateMove,
   getSpecialAttackTargets,
 } from "@/lib/games/velderanState";
@@ -232,7 +232,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     if (cardIndex == null || cardIndex < 0) {
       return NextResponse.json({ error: "Укажите карту" }, { status: 400 });
     }
-    newState = useGodCard(state, player.id, cardIndex, targetUnitId, playerNames);
+    newState = playGodCard(state, player.id, cardIndex, targetUnitId, playerNames);
   } else {
     return NextResponse.json({ error: "Неизвестное действие" }, { status: 400 });
   }

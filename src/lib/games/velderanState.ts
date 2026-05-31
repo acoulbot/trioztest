@@ -666,8 +666,8 @@ function processSmuglerArrivals(state: VelderanGameState, playerNames: Record<st
   return state;
 }
 
-/** Use a god card from inventory */
-export function useGodCard(
+/** Play a god card from inventory */
+export function playGodCard(
   state: VelderanGameState,
   playerId: string,
   cardIndex: number,
