@@ -217,9 +217,17 @@ function CreateTaskForm({
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [assigneeId, setAssigneeId] = useState("");
+  const [assigneeQuery, setAssigneeQuery] = useState("");
+  const [showAssigneeList, setShowAssigneeList] = useState(false);
   const [priority, setPriority] = useState("normal");
   const [dueDate, setDueDate] = useState("");
   const [sending, setSending] = useState(false);
+
+  const filteredMembers = members.filter((m) => {
+    if (!assigneeQuery.trim()) return true;
+    const q = assigneeQuery.toLowerCase();
+    return (m.name || "").toLowerCase().includes(q);
+  });
 
   const submit = async () => {
     if (!title.trim()) return;
@@ -260,17 +268,40 @@ function CreateTaskForm({
         className="w-full px-3 py-2 bg-neutral-100 dark:bg-white/5 border border-neutral-200 dark:border-white/10 rounded-lg text-sm text-neutral-900 dark:text-white placeholder-neutral-400 resize-none"
       />
       <div className="grid grid-cols-2 gap-2">
-        <select
-          value={assigneeId}
-          onChange={(e) => setAssigneeId(e.target.value)}
-          className="px-3 py-2 bg-neutral-100 dark:bg-white/5 border border-neutral-200 dark:border-white/10 rounded-lg text-sm text-neutral-900 dark:text-white"
-        >
-          <option value="">Без назначения</option>
-          {members.filter((m) => m.id !== currentUserId).map((m) => (
-            <option key={m.id} value={m.id}>{m.name || "Без имени"}</option>
-          ))}
-          <option value={currentUserId}>Я</option>
-        </select>
+        <div className="relative">
+          <input
+            value={assigneeQuery}
+            onChange={(e) => { setAssigneeQuery(e.target.value); setShowAssigneeList(true); if (!e.target.value.trim()) { setAssigneeId(""); } }}
+            onFocus={() => setShowAssigneeList(true)}
+            placeholder={assigneeId ? (members.find(m => m.id === assigneeId)?.name || "Назначен") : "Поиск по нику..."}
+            className="w-full px-3 py-2 bg-neutral-100 dark:bg-white/5 border border-neutral-200 dark:border-white/10 rounded-lg text-sm text-neutral-900 dark:text-white placeholder-neutral-400"
+          />
+          {assigneeId && (
+            <button
+              type="button"
+              onClick={() => { setAssigneeId(""); setAssigneeQuery(""); }}
+              className="absolute right-2 top-1/2 -translate-y-1/2 text-neutral-400 hover:text-neutral-600 dark:hover:text-white text-xs"
+            >✕</button>
+          )}
+          {showAssigneeList && !assigneeId && (
+            <div className="absolute top-full left-0 right-0 mt-1 bg-white dark:bg-neutral-800 border border-neutral-200 dark:border-white/10 rounded-lg shadow-lg z-50 max-h-32 overflow-y-auto">
+              {filteredMembers.length === 0 ? (
+                <div className="px-3 py-2 text-xs text-neutral-400">Не найдено</div>
+              ) : (
+                filteredMembers.map((m) => (
+                  <button
+                    key={m.id}
+                    type="button"
+                    onClick={() => { setAssigneeId(m.id); setAssigneeQuery(m.name || ""); setShowAssigneeList(false); }}
+                    className="w-full text-left px-3 py-1.5 text-sm text-neutral-700 dark:text-gray-300 hover:bg-neutral-100 dark:hover:bg-white/10"
+                  >
+                    {m.name || "Без имени"} {m.id === currentUserId && <span className="text-neutral-400">(Я)</span>}
+                  </button>
+                ))
+              )}
+            </div>
+          )}
+        </div>
         <select
           value={priority}
           onChange={(e) => setPriority(e.target.value)}
