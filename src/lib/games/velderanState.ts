@@ -299,7 +299,22 @@ export function placeReserve(
 function hasPlaceableUnits(state: VelderanGameState, playerId: string): boolean {
   if (!state.inventory) return (state.reserve[playerId] || 0) > 0;
   const inv = state.inventory[playerId] || [];
-  return inv.length > 0 || (state.reserve[playerId] || 0) > 0;
+  if (inv.length === 0 && (state.reserve[playerId] || 0) === 0) return false;
+
+  // Check if there are any city slots available
+  const maxPerCity = state.round === 1 ? 1 : 2;
+  const ownCities = Object.entries(state.cityOwners || {})
+    .filter(([, owner]) => owner === playerId)
+    .map(([nodeId]) => nodeId);
+
+  for (const cityId of ownCities) {
+    const unitsAtCity = state.units.filter(
+      (u) => u.position === cityId && u.playerId === playerId
+    );
+    if (unitsAtCity.length < maxPerCity) return true;
+  }
+
+  return false;
 }
 
 export function finishPlacement(
