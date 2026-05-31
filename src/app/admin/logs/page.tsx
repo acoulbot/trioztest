@@ -1,6 +1,7 @@
 "use client";
 
 import { useSession } from "next-auth/react";
+import Spinner from "@/components/ui/Spinner";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
@@ -91,7 +92,7 @@ export default function AdminLogsPage() {
   if (status === "loading") {
     return (
       <div className="min-h-screen flex items-center justify-center bg-neutral-50 dark:bg-dark-900">
-        <div className="animate-spin w-8 h-8 border-2 border-cyan-400 border-t-transparent rounded-full" />
+        <Spinner />
       </div>
     );
   }
@@ -153,7 +154,7 @@ export default function AdminLogsPage() {
         <div className="glass-card overflow-hidden">
           {loading ? (
             <div className="p-8 text-center">
-              <div className="animate-spin w-8 h-8 border-2 border-cyan-400 border-t-transparent rounded-full mx-auto" />
+              <Spinner className="mx-auto" />
             </div>
           ) : logs.length === 0 ? (
             <div className="p-8 text-center text-gray-400">

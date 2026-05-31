@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import Spinner from "@/components/ui/Spinner";
 import { useParams } from "next/navigation";
 import { motion } from "framer-motion";
 import Link from "next/link";
@@ -33,7 +34,7 @@ export default function ArticlePage() {
   if (!article) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-dark-900">
-        <div className="animate-spin w-8 h-8 border-2 border-cyan-400 border-t-transparent rounded-full" />
+        <Spinner />
       </div>
     );
   }

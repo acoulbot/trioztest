@@ -1,6 +1,7 @@
 "use client";
 
 import { useSession, signOut } from "next-auth/react";
+import Spinner from "@/components/ui/Spinner";
 import { useRouter } from "next/navigation";
 import { useEffect, useState, useRef } from "react";
 import { motion } from "framer-motion";
@@ -233,7 +234,7 @@ export default function SettingsPage() {
   if (status === "loading" || !profile) {
     return (
       <div className="min-h-screen flex items-center justify-center">
-        <div className="animate-spin w-8 h-8 border-2 border-violet-500 dark:border-cyan-400 border-t-transparent rounded-full" />
+        <Spinner />
       </div>
     );
   }
@@ -279,7 +280,7 @@ export default function SettingsPage() {
                 title="Загрузить аватарку"
               >
                 {uploadingAvatar ? (
-                  <div className="w-3 h-3 border border-white border-t-transparent rounded-full animate-spin" />
+                  <Spinner size="sm" tone="white" />
                 ) : (
                   <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />

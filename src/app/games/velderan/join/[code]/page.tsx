@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import Spinner from "@/components/ui/Spinner";
 import { useSession } from "next-auth/react";
 import { useRouter, useParams } from "next/navigation";
 import { motion } from "framer-motion";
@@ -92,7 +93,7 @@ export default function JoinByCodePage() {
   if (!room) {
     return (
       <div className="min-h-screen bg-neutral-950 flex items-center justify-center">
-        <div className="animate-spin w-8 h-8 border-2 border-red-500 border-t-transparent rounded-full" />
+        <Spinner tone="danger" />
       </div>
     );
   }

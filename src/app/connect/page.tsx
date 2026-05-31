@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback, useRef } from "react";
+import Spinner from "@/components/ui/Spinner";
 import { useSession } from "next-auth/react";
 import { AnimatePresence } from "framer-motion";
 import Link from "next/link";
@@ -913,7 +914,7 @@ function ConnectPageInner() {
   if (status === "loading") {
     return (
       <div className="min-h-screen flex items-center justify-center bg-white dark:bg-neutral-950">
-        <div className="animate-spin w-8 h-8 border-2 border-violet-500 dark:border-cyan-400 border-t-transparent rounded-full" role="status" aria-label="Loading" />
+        <Spinner />
       </div>
     );
   }

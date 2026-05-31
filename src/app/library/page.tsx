@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import Spinner from "@/components/ui/Spinner";
 import { motion } from "framer-motion";
 import Link from "next/link";
 import EditableText from "@/components/EditableText";
@@ -85,7 +86,7 @@ export default function LibraryPage() {
             />
             {searching && (
               <div className="absolute right-4 top-1/2 -translate-y-1/2">
-                <div className="w-4 h-4 border-2 border-cyan-400 border-t-transparent rounded-full animate-spin" />
+                <Spinner size="sm" />
               </div>
             )}
           </div>

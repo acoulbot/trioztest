@@ -1,6 +1,7 @@
 "use client";
 
 import { useSession } from "next-auth/react";
+import Spinner from "@/components/ui/Spinner";
 import { useRouter } from "next/navigation";
 import { useEffect, useState, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
@@ -295,7 +296,7 @@ export default function AdminServicesPage() {
   if (status === "loading") {
     return (
       <div className="min-h-screen flex items-center justify-center bg-neutral-50 dark:bg-dark-900">
-        <div className="animate-spin w-8 h-8 border-2 border-cyan-400 border-t-transparent rounded-full" />
+        <Spinner />
       </div>
     );
   }
@@ -443,7 +444,7 @@ export default function AdminServicesPage() {
                   </span>
                   {togglingId === service.id ? (
                     <div className="w-11 h-6 flex items-center justify-center">
-                      <div className="w-4 h-4 border-2 border-cyan-400 border-t-transparent rounded-full animate-spin" />
+                      <Spinner size="sm" />
                     </div>
                   ) : (
                     <Toggle

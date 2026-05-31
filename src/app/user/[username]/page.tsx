@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import Spinner from "@/components/ui/Spinner";
 import { useSession } from "next-auth/react";
 import { useParams, useRouter } from "next/navigation";
 import { motion } from "framer-motion";
@@ -109,7 +110,7 @@ export default function UserProfilePage() {
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-neutral-50 dark:bg-neutral-950">
-        <div className="animate-spin w-8 h-8 border-2 border-violet-500 dark:border-cyan-400 border-t-transparent rounded-full" />
+        <Spinner />
       </div>
     );
   }

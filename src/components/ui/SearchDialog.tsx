@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef, useCallback } from "react";
+import Spinner from "@/components/ui/Spinner";
 import { motion, AnimatePresence } from "framer-motion";
 import Link from "next/link";
 import GlowAvatar from "@/components/ui/GlowAvatar";
@@ -143,7 +144,7 @@ export default function SearchDialog({ open, onClose }: SearchDialogProps) {
               autoComplete="off"
             />
             {loading && (
-              <div className="w-4 h-4 border-2 border-violet-500 dark:border-cyan-400 border-t-transparent rounded-full animate-spin flex-shrink-0" />
+              <Spinner size="sm" className="flex-shrink-0" />
             )}
             <kbd className="hidden sm:block text-[10px] text-neutral-400 bg-neutral-100 dark:bg-neutral-800 px-1.5 py-0.5 rounded border border-neutral-200 dark:border-white/10">
               ESC

@@ -1,3 +1,5 @@
+import Spinner from "@/components/ui/Spinner";
+
 export default function ConnectLoading() {
   return (
     <div className="min-h-screen flex bg-neutral-50 dark:bg-neutral-950">
@@ -20,7 +22,7 @@ export default function ConnectLoading() {
       </div>
       {/* Main area skeleton */}
       <div className="flex-1 flex items-center justify-center">
-        <div className="animate-spin w-8 h-8 border-2 border-violet-500 dark:border-cyan-400 border-t-transparent rounded-full" />
+        <Spinner />
       </div>
     </div>
   );
