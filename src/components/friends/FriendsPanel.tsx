@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
+import Button from "@/components/ui/Button";
 import { motion, AnimatePresence } from "framer-motion";
 import { isOnline, timeAgo } from "@/lib/timeAgo";
 import GlowAvatar from "@/components/ui/GlowAvatar";
@@ -251,13 +252,9 @@ export default function FriendsPanel({ onMessageFriend }: FriendsPanelProps) {
                 className="w-full bg-[var(--cn-accent-dim)] border border-[var(--cn-border)] rounded-xl px-3 py-2.5 text-sm text-neutral-900 dark:text-white placeholder:text-neutral-400"
                 autoFocus
               />
-              <button
-                onClick={sendRequest}
-                disabled={loading || !username.trim()}
-                className="w-full px-4 py-2.5 bg-gradient-to-r from-violet-600 to-indigo-600 dark:from-cyan-500 dark:to-cyan-400 text-white dark:text-neutral-900 rounded-xl hover:shadow-lg transition-all text-sm font-medium disabled:opacity-50"
-              >
+              <Button onClick={sendRequest} disabled={loading || !username.trim()} size="md" fullWidth>
                 {loading ? "..." : "Отправить запрос"}
-              </button>
+              </Button>
               {message && (
                 <p className={`text-xs ${message.type === "ok" ? "text-green-500" : "text-red-500"}`}>
                   {message.text}

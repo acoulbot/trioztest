@@ -2,6 +2,7 @@
 
 import { useSession } from "next-auth/react";
 import Spinner from "@/components/ui/Spinner";
+import Input from "@/components/ui/Input";
 import { useRouter } from "next/navigation";
 import { useEffect, useState, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
@@ -345,31 +346,28 @@ export default function AdminServicesPage() {
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                   <div>
                     <label className="block text-sm text-gray-400 mb-1">Название</label>
-                    <input
+                    <Input
                       type="text"
                       value={form.title}
                       onChange={(e) => setForm({ ...form, title: e.target.value })}
-                      className="input-field"
                       required
                     />
                   </div>
                   <div>
                     <label className="block text-sm text-gray-400 mb-1">Иконка (emoji)</label>
-                    <input
+                    <Input
                       type="text"
                       value={form.icon}
                       onChange={(e) => setForm({ ...form, icon: e.target.value })}
-                      className="input-field"
                       placeholder="🔧"
                     />
                   </div>
                   <div>
                     <label className="block text-sm text-gray-400 mb-1">Порядок</label>
-                    <input
+                    <Input
                       type="number"
                       value={form.order}
                       onChange={(e) => setForm({ ...form, order: parseInt(e.target.value) })}
-                      className="input-field"
                     />
                   </div>
                 </div>
