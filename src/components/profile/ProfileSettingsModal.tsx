@@ -42,6 +42,7 @@ interface ProfileSettingsModalProps {
   user: GlowAvatarUser;
   onClose: () => void;
   onSaved: (settings: ProfileSettings) => void;
+  userRole?: string;
 }
 
 const PRESET_KEYS = Object.keys(GLOW_PRESETS) as (keyof typeof GLOW_PRESETS)[];
@@ -57,7 +58,8 @@ function detectPreset(colorsJson: string | null): string | null {
   return null;
 }
 
-export default function ProfileSettingsModal({ user, onClose, onSaved }: ProfileSettingsModalProps) {
+export default function ProfileSettingsModal({ user, onClose, onSaved, userRole }: ProfileSettingsModalProps) {
+  const isPrivileged = userRole === "ADMIN" || userRole === "OWNER" || userRole === "SITE_ADMIN";
   const [glowEnabled, setGlowEnabled] = useState(user.avatarGlowEnabled ?? false);
   const [dayNightEnabled, setDayNightEnabled] = useState<boolean>(() => {
     if (typeof window !== "undefined") {
@@ -182,7 +184,8 @@ export default function ProfileSettingsModal({ user, onClose, onSaved }: Profile
             </div>
           </div>
 
-          {/* Enable toggle */}
+          {/* Enable toggle — only for admins */}
+          {isPrivileged && (<>
           <div className="flex items-center justify-between">
             <div>
               <p className="text-sm font-medium text-neutral-900 dark:text-white">Свечение аватара</p>
@@ -300,11 +303,13 @@ export default function ProfileSettingsModal({ user, onClose, onSaved }: Profile
               </motion.div>
             )}
           </AnimatePresence>
+          </>)}
 
           {/* DM sound toggle */}
           <DMSoundToggle />
 
-          {/* ── TZ Connect: Day-Night background ── */}
+          {/* ── TZ Connect: Day-Night background (admin only) ── */}
+          {isPrivileged && (
           <div className="pt-2 border-t border-neutral-100 dark:border-white/5 space-y-4">
             <div className="flex items-center justify-between">
               <div>
@@ -385,6 +390,7 @@ export default function ProfileSettingsModal({ user, onClose, onSaved }: Profile
               )}
             </AnimatePresence>
           </div>
+          )}
 
           {error && (
             <p className="text-sm text-red-500 dark:text-red-400">{error}</p>

@@ -27,6 +27,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
     where: { conversationId: id },
     include: {
       user: { select: { id: true, name: true, username: true, avatar: true, role: true, avatarGlowEnabled: true, avatarGlowColors: true } },
+      replyTo: { select: { id: true, content: true, user: { select: { id: true, name: true } } } },
     },
     orderBy: { createdAt: "desc" },
     take: limit + 1,
@@ -58,7 +59,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
-  const { content, attachments } = await req.json();
+  const { content, attachments, replyToId } = await req.json();
   if ((!content || !content.trim()) && !attachments) {
     return NextResponse.json({ error: "Message content required" }, { status: 400 });
   }
@@ -79,9 +80,11 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       conversationId: id,
       userId,
       attachments: attachments ? JSON.stringify(attachments) : null,
+      replyToId: replyToId || null,
     },
     include: {
       user: { select: { id: true, name: true, username: true, avatar: true, role: true, avatarGlowEnabled: true, avatarGlowColors: true } },
+      replyTo: { select: { id: true, content: true, user: { select: { id: true, name: true } } } },
     },
   });
 

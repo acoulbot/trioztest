@@ -124,6 +124,9 @@ model Channel {
   groupId        String
   isRestricted   Boolean              @default(false)
   serviceId      String?
+  parentId       String?
+  parent         Channel?             @relation("ChannelTree", fields: [parentId], references: [id], onDelete: SetNull)
+  children       Channel[]            @relation("ChannelTree")
   group          Group                @relation(fields: [groupId], references: [id], onDelete: Cascade)
   members        ChannelMember[]
   messages       Message[]
@@ -133,6 +136,7 @@ model Channel {
 
   @@index([groupId])
   @@index([serviceId])
+  @@index([parentId])
 }
 
 model ChannelMember {
@@ -211,11 +215,15 @@ model DirectMessage {
   editedAt       DateTime?
   deleted        Boolean            @default(false)
   attachments    String?
+  replyToId      String?
+  replyTo        DirectMessage?     @relation("DMReply", fields: [replyToId], references: [id], onDelete: SetNull)
+  replies        DirectMessage[]    @relation("DMReply")
   user           User               @relation(fields: [userId], references: [id], onDelete: Cascade)
   conversation   DirectConversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
   createdAt      DateTime           @default(now())
 
   @@index([conversationId, createdAt])
+  @@index([replyToId])
 }
 
 model Badge {

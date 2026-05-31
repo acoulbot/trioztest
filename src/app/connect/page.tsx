@@ -921,6 +921,7 @@ function ConnectPageInner() {
                     voiceState={voiceState}
                     voiceActions={voiceActions}
                     onVoiceExpand={() => setShowVoicePanel(true)}
+                    onGroupRefresh={() => selectedGroup && fetchGroupDetail(selectedGroup)}
                   />
                 </SwipeBackWrapper>
               )}
@@ -930,6 +931,7 @@ function ConnectPageInner() {
                     channelId={selectedChannel}
                     channelName={selectedChannelData.name}
                     channelIcon={selectedChannelData.icon}
+                    channelType={selectedChannelData.type}
                     currentUserId={userId}
                     currentUserName={session.user.name ?? ""}
                     currentUserRole={userRole}
@@ -1074,6 +1076,7 @@ function ConnectPageInner() {
                   voiceState={voiceState}
                   voiceActions={voiceActions}
                   onVoiceExpand={() => setShowVoicePanel(true)}
+                  onGroupRefresh={() => selectedGroup && fetchGroupDetail(selectedGroup)}
                 />
               ) : (
                 /* Top-level group list */
@@ -1094,6 +1097,7 @@ function ConnectPageInner() {
                   channelId={selectedChannel}
                   channelName={selectedChannelData.name}
                   channelIcon={selectedChannelData.icon}
+                  channelType={selectedChannelData.type}
                   currentUserId={userId}
                   currentUserName={session.user.name ?? ""}
                   currentUserRole={userRole}
@@ -1213,6 +1217,7 @@ function ConnectPageInner() {
         {showProfileSettings && session?.user && (
           <ProfileSettingsModal
             user={myProfileUser}
+            userRole={userRole}
             onClose={() => setShowProfileSettings(false)}
             onSaved={(settings) => {
               setMyGlowSettings((prev) => ({ avatar: prev?.avatar ?? null, ...settings }));

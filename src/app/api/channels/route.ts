@@ -69,7 +69,7 @@ export async function POST(req: NextRequest) {
   const banned = await checkBan(session.user.id);
   if (banned) return banned;
 
-  const { name, type, groupId, isRestricted, roleIds } = await req.json();
+  const { name, type, groupId, isRestricted, roleIds, parentId } = await req.json();
   if (!name || !groupId) {
     return NextResponse.json({ error: "Name and groupId required" }, { status: 400 });
   }
@@ -94,6 +94,7 @@ export async function POST(req: NextRequest) {
       type: channelType,
       groupId,
       isRestricted: isRestricted || false,
+      parentId: parentId || null,
     },
   });
 

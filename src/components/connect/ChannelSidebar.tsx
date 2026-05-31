@@ -14,6 +14,7 @@ interface Channel {
   icon: string | null;
   groupId: string;
   serviceId?: string | null;
+  parentId?: string | null;
   _count: { members: number; messages: number };
 }
 
@@ -85,16 +86,172 @@ interface ChannelSidebarProps {
   voiceState?: VoiceState;
   voiceActions?: VoiceActions;
   onVoiceExpand?: () => void;
+  onGroupRefresh?: () => void;
+}
+
+/* ── Channel Settings Modal ── */
+function ChannelSettingsModal({ channel, groupId, allChannels, onClose, onUpdated }: {
+  channel: Channel;
+  groupId: string;
+  allChannels: Channel[];
+  onClose: () => void;
+  onUpdated: () => void;
+}) {
+  const [name, setName] = useState(channel.name);
+  const [icon, setIcon] = useState(channel.icon || "");
+  const [type, setType] = useState(channel.type);
+  const [parentId, setParentId] = useState(channel.parentId || "");
+  const [isRestricted, setIsRestricted] = useState(false);
+  const [roles, setRoles] = useState<{ id: string; name: string; color: string }[]>([]);
+  const [selectedRoles, setSelectedRoles] = useState<Set<string>>(new Set());
+  const [saving, setSaving] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const possibleParents = allChannels.filter(c => c.id !== channel.id && !c.parentId && (c.type === "TEXT" || c.type === "NEWS"));
+
+  useEffect(() => {
+    Promise.all([
+      fetch(`/api/channels/${channel.id}`).then(r => r.json()),
+      fetch(`/api/groups/${groupId}/roles`).then(r => r.json()),
+    ]).then(([chData, rolesData]) => {
+      if (chData.isRestricted !== undefined) setIsRestricted(chData.isRestricted);
+      if (chData.roleIds) setSelectedRoles(new Set(chData.roleIds));
+      if (Array.isArray(rolesData)) setRoles(rolesData);
+      setLoading(false);
+    }).catch(() => setLoading(false));
+  }, [channel.id, groupId]);
+
+  const handleSave = async () => {
+    setSaving(true);
+    await fetch(`/api/channels/${channel.id}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        name: name.trim(),
+        icon: icon.trim() || null,
+        type,
+        isRestricted,
+        roleIds: isRestricted ? Array.from(selectedRoles) : [],
+        parentId: parentId || null,
+      }),
+    });
+    setSaving(false);
+    onUpdated();
+    onClose();
+  };
+
+  const toggleRole = (roleId: string) => {
+    setSelectedRoles(prev => {
+      const next = new Set(prev);
+      if (next.has(roleId)) next.delete(roleId);
+      else next.add(roleId);
+      return next;
+    });
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4" onClick={(e) => e.target === e.currentTarget && onClose()}>
+      <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={onClose} />
+      <div className="relative z-10 w-full max-w-md bg-white dark:bg-neutral-900 border border-neutral-200 dark:border-white/10 rounded-2xl shadow-2xl" onClick={e => e.stopPropagation()}>
+        <div className="flex items-center justify-between px-5 py-4 border-b border-neutral-100 dark:border-white/5">
+          <h2 className="text-base font-semibold text-neutral-900 dark:text-white">Настройки канала</h2>
+          <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-neutral-100 dark:hover:bg-white/10 text-neutral-400 transition-colors">
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
+
+        {loading ? (
+          <div className="p-8 text-center text-neutral-400 text-sm">Загрузка...</div>
+        ) : (
+          <div className="p-5 space-y-4 max-h-[70vh] overflow-y-auto">
+            <div>
+              <label className="text-xs font-medium text-neutral-500 dark:text-neutral-400 mb-1 block">Название</label>
+              <input value={name} onChange={e => setName(e.target.value)} className="w-full px-3 py-2 bg-neutral-50 dark:bg-white/5 border border-neutral-200 dark:border-white/10 rounded-xl text-sm text-neutral-900 dark:text-white outline-none focus:border-violet-500 dark:focus:border-cyan-400" />
+            </div>
+
+            <div>
+              <label className="text-xs font-medium text-neutral-500 dark:text-neutral-400 mb-1 block">Иконка (emoji)</label>
+              <input value={icon} onChange={e => setIcon(e.target.value)} placeholder="💬" className="w-full px-3 py-2 bg-neutral-50 dark:bg-white/5 border border-neutral-200 dark:border-white/10 rounded-xl text-sm text-neutral-900 dark:text-white outline-none focus:border-violet-500 dark:focus:border-cyan-400" />
+            </div>
+
+            <div>
+              <label className="text-xs font-medium text-neutral-500 dark:text-neutral-400 mb-1.5 block">Тип канала</label>
+              <div className="grid grid-cols-3 gap-2">
+                {(["TEXT", "NEWS", "VOICE"] as const).map(t => (
+                  <button key={t} onClick={() => setType(t)} className={`px-3 py-2 rounded-xl text-xs font-medium border transition-all ${type === t ? "bg-violet-500 dark:bg-cyan-600 text-white border-transparent" : "bg-neutral-50 dark:bg-white/5 border-neutral-200 dark:border-white/10 text-neutral-600 dark:text-neutral-300 hover:border-violet-300 dark:hover:border-cyan-400/30"}`}>
+                    {t === "TEXT" ? "💬 Текст" : t === "NEWS" ? "📰 Новости" : "🎙️ Голос"}
+                  </button>
+                ))}
+              </div>
+              {type === "NEWS" && (
+                <p className="text-[11px] text-amber-500 dark:text-amber-400 mt-1.5">Только админы и модераторы могут писать</p>
+              )}
+            </div>
+
+            {possibleParents.length > 0 && (
+              <div>
+                <label className="text-xs font-medium text-neutral-500 dark:text-neutral-400 mb-1 block">Родительский канал</label>
+                <select value={parentId} onChange={e => setParentId(e.target.value)} className="w-full px-3 py-2 bg-neutral-50 dark:bg-white/5 border border-neutral-200 dark:border-white/10 rounded-xl text-sm text-neutral-900 dark:text-white outline-none">
+                  <option value="">Нет (корневой)</option>
+                  {possibleParents.map(p => (
+                    <option key={p.id} value={p.id}>{p.icon || "💬"} {p.name}</option>
+                  ))}
+                </select>
+              </div>
+            )}
+
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium text-neutral-900 dark:text-white">Ограничить доступ</p>
+                <p className="text-xs text-neutral-400 mt-0.5">Только выбранные теги видят канал</p>
+              </div>
+              <button onClick={() => setIsRestricted(!isRestricted)} className={`relative w-11 h-6 rounded-full transition-colors ${isRestricted ? "bg-violet-600 dark:bg-cyan-500" : "bg-neutral-300 dark:bg-neutral-600"}`}>
+                <span className={`absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform ${isRestricted ? "translate-x-5" : "translate-x-0"}`} />
+              </button>
+            </div>
+
+            {isRestricted && roles.length > 0 && (
+              <div>
+                <label className="text-xs font-medium text-neutral-500 dark:text-neutral-400 mb-1.5 block">Теги с доступом</label>
+                <div className="flex flex-wrap gap-2">
+                  {roles.map(role => (
+                    <button key={role.id} onClick={() => toggleRole(role.id)} className={`px-2.5 py-1 rounded-full text-xs font-medium border transition-all ${selectedRoles.has(role.id) ? "text-white border-transparent" : "bg-neutral-50 dark:bg-white/5 border-neutral-200 dark:border-white/10 text-neutral-600 dark:text-neutral-300"}`} style={selectedRoles.has(role.id) ? { backgroundColor: role.color } : undefined}>
+                      {role.name}
+                    </button>
+                  ))}
+                </div>
+                {selectedRoles.size === 0 && (
+                  <p className="text-[11px] text-amber-500 mt-1">Никто не сможет видеть канал. Выберите хотя бы один тег.</p>
+                )}
+              </div>
+            )}
+            {isRestricted && roles.length === 0 && (
+              <p className="text-xs text-neutral-400">Нет тегов. Создайте теги в настройках группы.</p>
+            )}
+          </div>
+        )}
+
+        <div className="flex justify-end gap-2 px-5 py-4 border-t border-neutral-100 dark:border-white/5">
+          <button onClick={onClose} className="px-4 py-2 text-sm text-neutral-500 hover:text-neutral-700 dark:hover:text-neutral-300">Отмена</button>
+          <button onClick={handleSave} disabled={saving || !name.trim()} className="px-4 py-2 bg-violet-500 dark:bg-cyan-600 text-white text-sm rounded-xl hover:opacity-90 transition-opacity disabled:opacity-50">
+            {saving ? "Сохранение..." : "Сохранить"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
 }
 
 /* ── Reusable channel item ── */
-function ChannelItem({ ch, selectedChannel, unreadCounts, canManage, onChannelClick, onDeleteChannel }: {
+function ChannelItem({ ch, selectedChannel, unreadCounts, canManage, onChannelClick, onDeleteChannel, onEditChannel }: {
   ch: Channel;
   selectedChannel: string | null;
   unreadCounts: Record<string, number>;
   canManage: boolean;
   onChannelClick: (channel: Channel) => void;
   onDeleteChannel: (channelId: string) => void;
+  onEditChannel?: (channel: Channel) => void;
 }) {
   return (
     <div className="group flex items-center">
@@ -114,15 +271,29 @@ function ChannelItem({ ch, selectedChannel, unreadCounts, canManage, onChannelCl
         )}
       </button>
       {canManage && (
-        <button
-          onClick={() => onDeleteChannel(ch.id)}
-          className="opacity-0 group-hover:opacity-100 p-1 text-neutral-400 hover:text-red-500 transition-all"
-          aria-label={`Delete ${ch.name}`}
-        >
-          <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-          </svg>
-        </button>
+        <div className="flex gap-0.5 opacity-0 group-hover:opacity-100 transition-all">
+          {onEditChannel && (
+            <button
+              onClick={() => onEditChannel(ch)}
+              className="p-1 text-neutral-400 hover:text-violet-500 dark:hover:text-cyan-400 transition-colors"
+              aria-label={`Edit ${ch.name}`}
+            >
+              <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.066 2.573c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.573 1.066c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.066-2.573c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+              </svg>
+            </button>
+          )}
+          <button
+            onClick={() => onDeleteChannel(ch.id)}
+            className="p-1 text-neutral-400 hover:text-red-500 transition-colors"
+            aria-label={`Delete ${ch.name}`}
+          >
+            <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
       )}
     </div>
   );
@@ -135,10 +306,13 @@ export default function ChannelSidebar({
   myProfileUser, userName, userUsername, userRole,
   onChannelClick, onDeleteChannel, onCreateChannel,
   onInvite, onToggleMembers, onProfileSettings, onOpenSettings, memberCount, onBack,
-  voiceState, voiceActions, onVoiceExpand,
+  voiceState, voiceActions, onVoiceExpand, onGroupRefresh,
 }: ChannelSidebarProps) {
   const textChannels = groupDetail.channels.filter((c) => c.type === "TEXT" || c.type === "NEWS");
   const voiceChannels = groupDetail.channels.filter((c) => c.type === "VOICE");
+
+  /* ── Channel settings modal ── */
+  const [editingChannel, setEditingChannel] = useState<Channel | null>(null);
 
   /* ── Collapsible category state ── */
   const [textOpen,  setTextOpen]  = useState(true);
@@ -254,7 +428,7 @@ export default function ChannelSidebar({
                   )}
                 </div>
                 {textOpen && serviceGroups.ungrouped.map((ch) => (
-                  <ChannelItem key={ch.id} ch={ch} selectedChannel={selectedChannel} unreadCounts={unreadCounts} canManage={canManage} onChannelClick={onChannelClick} onDeleteChannel={onDeleteChannel} />
+                  <ChannelItem key={ch.id} ch={ch} selectedChannel={selectedChannel} unreadCounts={unreadCounts} canManage={canManage} onChannelClick={onChannelClick} onDeleteChannel={onDeleteChannel} onEditChannel={canManage ? setEditingChannel : undefined} />
                 ))}
               </>
             )}
@@ -281,7 +455,7 @@ export default function ChannelSidebar({
                     </button>
                   </div>
                   {!isCollapsed && sg.channels.map((ch) => (
-                    <ChannelItem key={ch.id} ch={ch} selectedChannel={selectedChannel} unreadCounts={unreadCounts} canManage={canManage} onChannelClick={onChannelClick} onDeleteChannel={onDeleteChannel} />
+                    <ChannelItem key={ch.id} ch={ch} selectedChannel={selectedChannel} unreadCounts={unreadCounts} canManage={canManage} onChannelClick={onChannelClick} onDeleteChannel={onDeleteChannel} onEditChannel={canManage ? setEditingChannel : undefined} />
                   ))}
                 </div>
               );
@@ -312,9 +486,27 @@ export default function ChannelSidebar({
                 </button>
               )}
             </div>
-            {textOpen && textChannels.map((ch) => (
-              <ChannelItem key={ch.id} ch={ch} selectedChannel={selectedChannel} unreadCounts={unreadCounts} canManage={canManage} onChannelClick={onChannelClick} onDeleteChannel={onDeleteChannel} />
-            ))}
+            {textOpen && (() => {
+              const rootChannels = textChannels.filter(c => !c.parentId);
+              const childMap = new Map<string, Channel[]>();
+              for (const c of textChannels) {
+                if (c.parentId) {
+                  const arr = childMap.get(c.parentId) || [];
+                  arr.push(c);
+                  childMap.set(c.parentId, arr);
+                }
+              }
+              return rootChannels.map(ch => (
+                <div key={ch.id}>
+                  <ChannelItem ch={ch} selectedChannel={selectedChannel} unreadCounts={unreadCounts} canManage={canManage} onChannelClick={onChannelClick} onDeleteChannel={onDeleteChannel} onEditChannel={canManage ? setEditingChannel : undefined} />
+                  {childMap.get(ch.id)?.map(sub => (
+                    <div key={sub.id} className="ml-4 border-l border-neutral-200 dark:border-white/5">
+                      <ChannelItem ch={sub} selectedChannel={selectedChannel} unreadCounts={unreadCounts} canManage={canManage} onChannelClick={onChannelClick} onDeleteChannel={onDeleteChannel} onEditChannel={canManage ? setEditingChannel : undefined} />
+                    </div>
+                  ))}
+                </div>
+              ));
+            })()}
           </>
         )}
 
@@ -536,6 +728,15 @@ export default function ChannelSidebar({
         </div>
       )}
 
+      {editingChannel && (
+        <ChannelSettingsModal
+          channel={editingChannel}
+          groupId={groupDetail.channels[0]?.groupId ?? ""}
+          allChannels={groupDetail.channels}
+          onClose={() => setEditingChannel(null)}
+          onUpdated={() => { onGroupRefresh?.(); }}
+        />
+      )}
     </aside>
   );
 }
