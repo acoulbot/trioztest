@@ -23,6 +23,7 @@ model User {
   socialLinks    String?         @db.Text
   customStatus   String?         @db.VarChar(100)
   statusEmoji    String?         @db.VarChar(10)
+  statusType     String?         @default("online") @db.VarChar(20)
   privacyOnline  String          @default("everyone")
   privacyFriends String          @default("everyone")
   privacyEmail   Boolean         @default(false)
@@ -218,7 +219,9 @@ model DirectConversation {
   user1     User            @relation("DMUser1", fields: [user1Id], references: [id], onDelete: Cascade)
   user2     User            @relation("DMUser2", fields: [user2Id], references: [id], onDelete: Cascade)
   messages  DirectMessage[]
-  lastMessageAt DateTime?  
+  lastMessageAt DateTime?
+  user1ReadAt   DateTime?
+  user2ReadAt   DateTime?
   createdAt DateTime        @default(now())
   updatedAt DateTime        @updatedAt
 

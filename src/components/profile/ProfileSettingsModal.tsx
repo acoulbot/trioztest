@@ -86,6 +86,16 @@ export default function ProfileSettingsModal({ user, onClose, onSaved, userRole 
   const [useCustom, setUseCustom] = useState(detectPreset(user.avatarGlowColors ?? null) === null && !!user.avatarGlowColors);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [statusType, setStatusType] = useState<string>("online");
+  const [customStatus, setCustomStatus] = useState<string>("");
+  const [statusLoading, setStatusLoading] = useState(false);
+
+  useEffect(() => {
+    fetch("/api/profile/me").then(r => r.json()).then(d => {
+      if (d.statusType) setStatusType(d.statusType);
+      if (d.customStatus) setCustomStatus(d.customStatus);
+    }).catch(() => {});
+  }, []);
 
   const activeColors = useCustom
     ? customColors
@@ -181,6 +191,36 @@ export default function ProfileSettingsModal({ user, onClose, onSaved, userRole 
               <p className="text-[11px] text-violet-500 dark:text-violet-400 mt-1">
                 {glowEnabled ? "✨ Свечение активно" : "Свечение выключено"}
               </p>
+            </div>
+          </div>
+
+          {/* Status */}
+          <div className="space-y-2">
+            <p className="text-sm font-medium text-neutral-900 dark:text-white">Статус</p>
+            <div className="flex gap-2">
+              {([["online", "В сети", "bg-green-500"], ["away", "Нет на месте", "bg-yellow-500"], ["dnd", "Не беспокоить", "bg-red-500"], ["invisible", "Невидимка", "bg-neutral-400"]] as const).map(([key, label, color]) => (
+                <button key={key} onClick={async () => { setStatusType(key); setStatusLoading(true); await fetch("/api/profile/status", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ statusType: key }) }).catch(() => {}); setStatusLoading(false); }} className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs border transition-all ${statusType === key ? "border-violet-500 bg-violet-50 dark:bg-violet-500/10 text-violet-600 dark:text-violet-400" : "border-neutral-200 dark:border-white/10 text-neutral-600 dark:text-neutral-400 hover:border-neutral-300"}`}>
+                  <span className={`w-2 h-2 rounded-full ${color}`} />
+                  {label}
+                </button>
+              ))}
+            </div>
+            <div className="flex gap-2">
+              <input
+                type="text"
+                value={customStatus}
+                onChange={(e) => setCustomStatus(e.target.value)}
+                placeholder="Кастомный статус..."
+                maxLength={80}
+                className="flex-1 px-3 py-1.5 bg-neutral-50 dark:bg-white/5 border border-neutral-200 dark:border-white/10 rounded-lg text-sm text-neutral-900 dark:text-white"
+              />
+              <button
+                onClick={async () => { setStatusLoading(true); await fetch("/api/profile/status", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ customStatus: customStatus.trim() || null }) }).catch(() => {}); setStatusLoading(false); }}
+                disabled={statusLoading}
+                className="px-3 py-1.5 bg-violet-500 dark:bg-cyan-500 text-white dark:text-neutral-900 rounded-lg text-xs font-medium disabled:opacity-50"
+              >
+                {statusLoading ? "..." : "OK"}
+              </button>
             </div>
           </div>
 
