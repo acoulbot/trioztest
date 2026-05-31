@@ -98,6 +98,10 @@ export default function MessageArea({
   const [loading, setLoading] = useState(true);
   const [hasMore, setHasMore] = useState(false);
   const [forwardToast, setForwardToast] = useState(false);
+  const [forwardMsg, setForwardMsg] = useState<{ content: string; userName: string } | null>(null);
+  const [forwardTargets, setForwardTargets] = useState<{ type: "channel" | "dm"; id: string; name: string; icon?: string | null }[]>([]);
+  const [forwardSearch, setForwardSearch] = useState("");
+  const [forwardSending, setForwardSending] = useState(false);
   const [nextCursor, setNextCursor] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
   const [sending, setSending] = useState(false);
@@ -597,6 +601,58 @@ export default function MessageArea({
     try { return JSON.parse(raw); } catch { return []; }
   };
 
+  const openForwardModal = async (msg: Message) => {
+    setForwardMsg({ content: msg.content, userName: msg.user.name });
+    setForwardSearch("");
+    try {
+      const [chRes, dmRes] = await Promise.all([
+        fetch("/api/channels"),
+        fetch("/api/dm"),
+      ]);
+      const targets: { type: "channel" | "dm"; id: string; name: string; icon?: string | null }[] = [];
+      if (chRes.ok) {
+        const channels = await chRes.json();
+        for (const ch of channels) {
+          if (ch.id !== channelId) targets.push({ type: "channel", id: ch.id, name: ch.name, icon: null });
+        }
+      }
+      if (dmRes.ok) {
+        const convs = await dmRes.json();
+        for (const c of convs) {
+          const peer = c.user1?.id === currentUserId ? c.user2 : c.user1;
+          if (peer) targets.push({ type: "dm", id: c.id, name: peer.name || peer.username || "DM", icon: peer.avatar });
+        }
+      }
+      setForwardTargets(targets);
+    } catch { /* ignore */ }
+  };
+
+  const doForward = async (target: { type: "channel" | "dm"; id: string; name: string }) => {
+    if (!forwardMsg || forwardSending) return;
+    setForwardSending(true);
+    const fwdContent = `> Переслано от ${forwardMsg.userName}:\n> ${forwardMsg.content.split("\n").join("\n> ")}\n`;
+    try {
+      if (target.type === "channel") {
+        await fetch("/api/messages", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ channelId: target.id, content: fwdContent }),
+        });
+      } else {
+        await fetch(`/api/dm/${target.id}`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ content: fwdContent }),
+        });
+      }
+      setForwardMsg(null);
+      setForwardSearch("");
+      setForwardToast(true);
+      setTimeout(() => setForwardToast(false), 2000);
+    } catch { /* ignore */ }
+    setForwardSending(false);
+  };
+
   if (loading) {
     return (
       <div className="flex-1 flex items-center justify-center">
@@ -896,7 +952,7 @@ export default function MessageArea({
                       Тред
                     </button>
                     {/* Forward */}
-                    <button onClick={() => { navigator.clipboard.writeText(msg.content); setForwardToast(true); setTimeout(() => setForwardToast(false), 2000); }} className="text-[11px] text-neutral-400 hover:text-violet-500 dark:hover:text-cyan-400">
+                    <button onClick={() => openForwardModal(msg)} className="text-[11px] text-neutral-400 hover:text-violet-500 dark:hover:text-cyan-400">
                       Переслать
                     </button>
                   </div>
@@ -1124,10 +1180,64 @@ export default function MessageArea({
       {/* Image Lightbox */}
       <ImageLightbox src={lightboxSrc} onClose={() => setLightboxSrc(null)} />
 
+      {/* Forward modal */}
+      <AnimatePresence>
+        {forwardMsg && (
+          <motion.div
+            initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm"
+            onClick={() => { setForwardMsg(null); setForwardSearch(""); }}
+          >
+            <motion.div
+              initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.9, opacity: 0 }}
+              className="w-80 max-h-[70vh] rounded-2xl bg-white dark:bg-neutral-900 border border-neutral-200 dark:border-white/10 shadow-2xl overflow-hidden flex flex-col"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="px-4 pt-4 pb-2">
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-sm font-semibold text-neutral-900 dark:text-white">Переслать сообщение</span>
+                  <button onClick={() => { setForwardMsg(null); setForwardSearch(""); }} className="text-neutral-400 hover:text-neutral-600 dark:hover:text-neutral-300">
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+                  </button>
+                </div>
+                <div className="text-[11px] text-neutral-400 mb-2 truncate">от {forwardMsg.userName}: {forwardMsg.content.slice(0, 60)}{forwardMsg.content.length > 60 ? "..." : ""}</div>
+                <input
+                  type="text"
+                  value={forwardSearch}
+                  onChange={(e) => setForwardSearch(e.target.value)}
+                  placeholder="Поиск канала или диалога..."
+                  className="input-field !py-2 !text-sm w-full"
+                  autoFocus
+                />
+              </div>
+              <div className="flex-1 overflow-y-auto px-2 pb-3 space-y-0.5">
+                {forwardTargets
+                  .filter(t => t.name.toLowerCase().includes(forwardSearch.toLowerCase()))
+                  .map(t => (
+                    <button
+                      key={`${t.type}-${t.id}`}
+                      onClick={() => doForward(t)}
+                      disabled={forwardSending}
+                      className="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-left hover:bg-violet-50 dark:hover:bg-white/5 transition-colors disabled:opacity-50"
+                    >
+                      <span className="text-base flex-shrink-0">{t.type === "channel" ? "#" : "💬"}</span>
+                      <span className="text-sm text-neutral-900 dark:text-white truncate">{t.name}</span>
+                      <span className="text-[10px] text-neutral-400 ml-auto flex-shrink-0">{t.type === "channel" ? "канал" : "ЛС"}</span>
+                    </button>
+                  ))}
+                {forwardTargets.filter(t => t.name.toLowerCase().includes(forwardSearch.toLowerCase())).length === 0 && (
+                  <div className="text-center text-xs text-neutral-400 py-4">Ничего не найдено</div>
+                )}
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
       {/* Forward toast */}
       {forwardToast && (
         <div className="fixed bottom-20 left-1/2 -translate-x-1/2 z-50 px-4 py-2 bg-green-500 text-white text-sm rounded-xl shadow-lg animate-fade-in">
-          Сообщение скопировано
+          Сообщение переслано
         </div>
       )}
     </div>
