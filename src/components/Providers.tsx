@@ -7,6 +7,8 @@ import InlineEditOverlay from "./InlineEditOverlay";
 import { HeartbeatProvider } from "./HeartbeatProvider";
 import { VoiceProvider } from "@/contexts/VoiceContext";
 import VoiceMiniWidget from "@/components/voice/VoiceMiniWidget";
+import WelcomeModal from "@/components/WelcomeModal";
+import { ThemeProvider as ConnectThemeProvider } from "@/contexts/ThemeContext";
 
 type Theme = "dark" | "light";
 
@@ -48,14 +50,17 @@ export default function Providers({ children }: { children: ReactNode }) {
   return (
     <SessionProvider>
       <ThemeProvider>
-        <HeartbeatProvider />
-        <VoiceProvider>
-          <InlineEditProvider>
-            {children}
-            <InlineEditOverlay />
-          </InlineEditProvider>
-          <VoiceMiniWidget />
-        </VoiceProvider>
+        <ConnectThemeProvider>
+          <HeartbeatProvider />
+          <VoiceProvider>
+            <InlineEditProvider>
+              {children}
+              <InlineEditOverlay />
+            </InlineEditProvider>
+            <VoiceMiniWidget />
+            <WelcomeModal />
+          </VoiceProvider>
+        </ConnectThemeProvider>
       </ThemeProvider>
     </SessionProvider>
   );

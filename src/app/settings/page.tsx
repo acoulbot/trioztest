@@ -7,6 +7,7 @@ import { motion } from "framer-motion";
 import Link from "next/link";
 import Image from "next/image";
 import { useTheme } from "@/components/Providers";
+import { useConnectTheme } from "@/contexts/ThemeContext";
 
 interface ProfileData {
   id: string;
@@ -97,6 +98,7 @@ export default function SettingsPage() {
   const { data: session, status } = useSession();
   const router = useRouter();
   const { theme, toggleTheme } = useTheme();
+  const { theme: darkVariant, toggleTheme: toggleDarkVariant, lightVariant, toggleLightVariant } = useConnectTheme();
   const fileRef = useRef<HTMLInputElement>(null);
 
   const [profile, setProfile] = useState<ProfileData | null>(null);
@@ -425,6 +427,79 @@ export default function SettingsPage() {
               )}
               Переключить
             </button>
+          </div>
+
+          {theme === "dark" ? (
+            <div className="mt-4">
+              <p className="text-sm text-neutral-900 dark:text-white font-medium mb-2">Цветовая схема (тёмная тема)</p>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => { if (darkVariant !== "cyber") toggleDarkVariant(); }}
+                  className={`flex-1 py-2 rounded-xl text-sm font-medium transition-all border ${
+                    darkVariant === "cyber"
+                      ? "bg-cyan-500/10 border-cyan-500/30 text-cyan-400"
+                      : "bg-neutral-100 dark:bg-white/5 border-neutral-200 dark:border-white/10 text-neutral-500 dark:text-gray-400"
+                  }`}
+                >
+                  Cyber
+                </button>
+                <button
+                  onClick={() => { if (darkVariant !== "velvet") toggleDarkVariant(); }}
+                  className={`flex-1 py-2 rounded-xl text-sm font-medium transition-all border ${
+                    darkVariant === "velvet"
+                      ? "bg-purple-500/10 border-purple-500/30 text-purple-400"
+                      : "bg-neutral-100 dark:bg-white/5 border-neutral-200 dark:border-white/10 text-neutral-500 dark:text-gray-400"
+                  }`}
+                >
+                  Velvet
+                </button>
+              </div>
+            </div>
+          ) : (
+            <div className="mt-4">
+              <p className="text-sm text-neutral-900 dark:text-white font-medium mb-2">Цветовая схема (светлая тема)</p>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => { if (lightVariant !== "default") toggleLightVariant(); }}
+                  className={`flex-1 py-2 rounded-xl text-sm font-medium transition-all border ${
+                    lightVariant === "default"
+                      ? "bg-violet-500/10 border-violet-500/30 text-violet-600"
+                      : "bg-neutral-100 border-neutral-200 text-neutral-500"
+                  }`}
+                >
+                  Violet
+                </button>
+                <button
+                  onClick={() => { if (lightVariant !== "warm") toggleLightVariant(); }}
+                  className={`flex-1 py-2 rounded-xl text-sm font-medium transition-all border ${
+                    lightVariant === "warm"
+                      ? "bg-orange-500/10 border-orange-500/30 text-orange-600"
+                      : "bg-neutral-100 border-neutral-200 text-neutral-500"
+                  }`}
+                >
+                  Warm
+                </button>
+              </div>
+            </div>
+          )}
+        </Section>
+
+        {/* ── Notifications ── */}
+        <Section title="Уведомления">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm text-neutral-900 dark:text-white font-medium">Центр уведомлений</p>
+              <p className="text-xs text-neutral-400 mt-0.5">Все уведомления из игр и TZ.Connect</p>
+            </div>
+            <Link
+              href="/settings/notifications"
+              className="flex items-center gap-2 px-4 py-2 bg-neutral-100 dark:bg-white/10 hover:bg-neutral-200 dark:hover:bg-white/15 rounded-xl text-sm text-neutral-700 dark:text-gray-300 transition-colors"
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
+              </svg>
+              Открыть
+            </Link>
           </div>
         </Section>
 

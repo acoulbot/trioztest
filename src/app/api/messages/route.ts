@@ -6,6 +6,7 @@ import { sanitizeText } from "@/lib/sanitize";
 import { checkBan } from "@/lib/banCheck";
 import { rateLimit } from "@/lib/rateLimit";
 import { emitToChannel } from "@/lib/socketEmit";
+import { createNotification } from "@/lib/createNotification";
 
 const MESSAGE_SELECT = {
   user: {
@@ -147,6 +148,21 @@ export async function POST(req: NextRequest) {
   });
 
   emitToChannel(channelId, "new-message", message);
+
+  if (mentions && Array.isArray(mentions) && mentions.length > 0) {
+    const senderName = message.user?.name || "Пользователь";
+    for (const mentionedId of mentions) {
+      if (mentionedId !== session.user.id) {
+        createNotification({
+          userId: mentionedId,
+          type: "mention",
+          title: `${senderName} упомянул вас`,
+          body: sanitizedContent.slice(0, 100),
+          link: "/connect",
+        }).catch(() => {});
+      }
+    }
+  }
 
   return NextResponse.json(message);
 }

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import prisma from "@/lib/prisma";
+import { createNotification } from "@/lib/createNotification";
 
 export async function POST(req: NextRequest) {
   const session = await getServerSession(authOptions);
@@ -51,6 +52,15 @@ export async function POST(req: NextRequest) {
       invitee: { select: { id: true, name: true, username: true, avatar: true } },
     },
   });
+
+  const senderName = (session.user as { name?: string }).name || "Игрок";
+  createNotification({
+    userId: inviteeId,
+    type: "game_invite",
+    title: `${senderName} приглашает вас в игру`,
+    body: `Комната: ${room.name}`,
+    link: "/games/velderan",
+  }).catch(() => {});
 
   return NextResponse.json(invite, { status: 201 });
 }

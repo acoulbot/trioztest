@@ -741,6 +741,19 @@ export function VoiceProvider({ children }: { children: React.ReactNode }) {
     return () => { if (statsIntervalRef.current) clearInterval(statsIntervalRef.current); };
   }, [isConnected]);
 
+  /* ── Auto-disconnect when voice channel is deleted ── */
+  useEffect(() => {
+    const sock = socketRef.current;
+    if (!sock) return;
+    const handler = ({ channelId: deletedId }: { channelId: string }) => {
+      if (channelIdRef.current === deletedId) {
+        leaveVoice();
+      }
+    };
+    sock.on("channel-deleted", handler);
+    return () => { sock.off("channel-deleted", handler); };
+  }, [isConnected, leaveVoice]);
+
   /* ── Cleanup on unmount ── */
   useEffect(() => () => {
     if (isConnected) leaveVoice();

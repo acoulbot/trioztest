@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import prisma from "@/lib/prisma";
+import { getIO } from "@/lib/socketEmit";
 
 async function checkChannelAdmin(userId: string, channelId: string) {
   const channel = await prisma.channel.findUnique({ where: { id: channelId } });
@@ -92,5 +93,11 @@ export async function DELETE(_req: Request, { params }: { params: Promise<{ id: 
   }
 
   await prisma.channel.delete({ where: { id } });
+
+  const io = getIO();
+  if (io) {
+    io.emit("channel-deleted", { channelId: id, groupId: channel.groupId });
+  }
+
   return NextResponse.json({ success: true });
 }

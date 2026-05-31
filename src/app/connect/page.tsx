@@ -21,7 +21,7 @@ import MessageArea from "@/components/connect/MessageArea";
 import MobileGroupList from "@/components/connect/MobileGroupList";
 import ModalBackdrop from "@/components/connect/ModalBackdrop";
 import ConnectSplash from "@/components/connect/ConnectSplash";
-import { ThemeProvider } from "@/contexts/ThemeContext";
+// ThemeProvider is now in global Providers
 
 const ScreenShareWindow = dynamic(() => import("@/components/voice/ScreenShareWindow"), { ssr: false });
 const VoiceExpandedPanel = dynamic(() => import("@/components/voice/VoiceExpandedPanel"), { ssr: false });
@@ -670,11 +670,7 @@ type MobileView = "groups" | "channels" | "chat";
 /* ─── Main Page ─── */
 
 export default function ConnectPage() {
-  return (
-    <ThemeProvider>
-      <ConnectPageInner />
-    </ThemeProvider>
-  );
+  return <ConnectPageInner />;
 }
 
 function ConnectPageInner() {
@@ -711,6 +707,8 @@ function ConnectPageInner() {
 
   const isBanned = session?.user?.banned && (!session.user.bannedUntil || new Date(session.user.bannedUntil) > new Date());
   const canManage = groupDetail?.myRole === "OWNER" || groupDetail?.myRole === "MODERATOR";
+  const userRole = (session?.user as { role?: string } | undefined)?.role ?? "USER";
+  const hideMembersForMain = !!groupDetail?.isMain && !canManage && userRole !== "ADMIN";
 
   const fetchGroups = useCallback(() => {
     fetch("/api/groups").then((r) => r.json()).then((data) => {
@@ -776,12 +774,21 @@ function ConnectPageInner() {
           }));
         }
       });
+      sock.on("channel-deleted", (data: { channelId: string; groupId: string }) => {
+        setSelectedChannel((prev) => prev === data.channelId ? null : prev);
+        setSelectedGroup((prevGroup) => {
+          if (prevGroup === data.groupId) {
+            fetchGroupDetail(data.groupId);
+          }
+          return prevGroup;
+        });
+      });
     });
     return () => {
       profileSocketRef.current?.disconnect();
       profileSocketRef.current = null;
     };
-  }, [session]);
+  }, [session, fetchGroupDetail]);
 
   useEffect(() => {
     if (selectedGroup) {
@@ -881,7 +888,6 @@ function ConnectPageInner() {
 
   const selectedChannelData = groupDetail?.channels.find((c) => c.id === selectedChannel);
   const userId = (session.user as { id?: string }).id ?? "";
-  const userRole = (session.user as { role?: string }).role ?? "USER";
 
   return (
     <>
@@ -1051,7 +1057,7 @@ function ConnectPageInner() {
         )}
 
         {/* Mobile Members bottom sheet */}
-        <BottomSheet open={showMembers && !!groupDetail} onClose={() => setShowMembers(false)} height="70%" title={`Участники — ${groupDetail?.members.length ?? 0}`}>
+        <BottomSheet open={showMembers && !!groupDetail && !hideMembersForMain} onClose={() => setShowMembers(false)} height="70%" title={`Участники — ${groupDetail?.members.length ?? 0}`}>
           {groupDetail && (
             <div className="p-3 space-y-0.5">
               {groupDetail.members.map((m) => (
@@ -1168,7 +1174,7 @@ function ConnectPageInner() {
               )}
             </div>
 
-            {showMembers && groupDetail && (
+            {showMembers && groupDetail && !hideMembersForMain && (
               <MembersPanel group={groupDetail} onClose={() => setShowMembers(false)} />
             )}
           </>

@@ -5,6 +5,7 @@ import prisma from "@/lib/prisma";
 import { checkBan } from "@/lib/banCheck";
 import { sanitizeText } from "@/lib/sanitize";
 import { emitToUser } from "@/lib/socketEmit";
+import { createNotification } from "@/lib/createNotification";
 
 export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const session = await getServerSession(authOptions);
@@ -97,6 +98,14 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   const dmPayload = { ...message, conversationId: id };
   emitToUser(otherId, "dm-message", dmPayload);
   emitToUser(userId, "dm-message", dmPayload);
+
+  createNotification({
+    userId: otherId,
+    type: "dm",
+    title: `Новое сообщение от ${message.user.name}`,
+    body: content?.startsWith("e2ee:") ? "Зашифрованное сообщение" : (content || "").slice(0, 100),
+    link: "/connect",
+  }).catch(() => {});
 
   return NextResponse.json(message);
 }
