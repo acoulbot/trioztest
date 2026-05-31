@@ -68,6 +68,7 @@ interface ChannelSidebarProps {
   groupDetail: GroupDetail;
   selectedChannel: string | null;
   unreadCounts: Record<string, number>;
+  mentionChannels?: Record<string, boolean>;
   canManage: boolean;
   isMainCommunity?: boolean;
   myProfileUser: GlowAvatarUser;
@@ -264,10 +265,11 @@ function ChannelSettingsModal({ channel, groupId, allChannels, onClose, onUpdate
 }
 
 /* ── Reusable channel item ── */
-function ChannelItem({ ch, selectedChannel, unreadCounts, canManage, onChannelClick, onDeleteChannel, onEditChannel, isMuted, onToggleMute }: {
+function ChannelItem({ ch, selectedChannel, unreadCounts, mentionChannels = {}, canManage, onChannelClick, onDeleteChannel, onEditChannel, isMuted, onToggleMute }: {
   ch: Channel;
   selectedChannel: string | null;
   unreadCounts: Record<string, number>;
+  mentionChannels?: Record<string, boolean>;
   canManage: boolean;
   onChannelClick: (channel: Channel) => void;
   onDeleteChannel: (channelId: string) => void;
@@ -288,9 +290,11 @@ function ChannelItem({ ch, selectedChannel, unreadCounts, canManage, onChannelCl
         <span className="truncate flex-1">{ch.name}</span>
         {isMuted && <span className="text-[10px] text-neutral-400" title="Уведомления отключены">🔕</span>}
         {(unreadCounts[ch.id] ?? 0) > 0 && (
-          <span className="ml-auto bg-red-500 text-white text-[10px] px-1.5 py-0.5 rounded-full font-bold min-w-[18px] text-center" aria-label={`${unreadCounts[ch.id]} unread`}>
-            {unreadCounts[ch.id]}
-          </span>
+          mentionChannels[ch.id] ? (
+            <span className="ml-auto w-2 h-2 rounded-full bg-red-500 flex-shrink-0" title="Вас упомянули" />
+          ) : (
+            <span className="ml-auto w-2 h-2 rounded-full bg-neutral-400 dark:bg-white flex-shrink-0" title="Непрочитано" />
+          )
         )}
       </button>
       <div className="flex gap-0.5 opacity-0 group-hover:opacity-100 transition-all">
@@ -335,7 +339,7 @@ function ChannelItem({ ch, selectedChannel, unreadCounts, canManage, onChannelCl
 /* ═══════════════════════════════════════════════════════════════════════════ */
 
 export default function ChannelSidebar({
-  groupDetail, selectedChannel, unreadCounts, canManage, isMainCommunity,
+  groupDetail, selectedChannel, unreadCounts, mentionChannels = {}, canManage, isMainCommunity,
   myProfileUser, userName, userUsername, userRole,
   onChannelClick, onDeleteChannel, onCreateChannel,
   onInvite, onToggleMembers, onProfileSettings, onOpenSettings, memberCount, onBack,
@@ -505,7 +509,7 @@ export default function ChannelSidebar({
                   )}
                 </div>
                 {textOpen && serviceGroups.ungrouped.map((ch) => (
-                  <ChannelItem key={ch.id} ch={ch} selectedChannel={selectedChannel} unreadCounts={unreadCounts} canManage={canManage} onChannelClick={onChannelClick} onDeleteChannel={onDeleteChannel} onEditChannel={canManage ? setEditingChannel : undefined} isMuted={channelMutes[ch.id] ?? (groupMuted && channelMutes[ch.id] !== false)} onToggleMute={handleToggleChannelMute} />
+                  <ChannelItem key={ch.id} ch={ch} selectedChannel={selectedChannel} unreadCounts={unreadCounts} mentionChannels={mentionChannels} canManage={canManage} onChannelClick={onChannelClick} onDeleteChannel={onDeleteChannel} onEditChannel={canManage ? setEditingChannel : undefined} isMuted={channelMutes[ch.id] ?? (groupMuted && channelMutes[ch.id] !== false)} onToggleMute={handleToggleChannelMute} />
                 ))}
               </>
             )}
@@ -532,7 +536,7 @@ export default function ChannelSidebar({
                     </button>
                   </div>
                   {!isCollapsed && sg.channels.map((ch) => (
-                    <ChannelItem key={ch.id} ch={ch} selectedChannel={selectedChannel} unreadCounts={unreadCounts} canManage={canManage} onChannelClick={onChannelClick} onDeleteChannel={onDeleteChannel} onEditChannel={canManage ? setEditingChannel : undefined} isMuted={channelMutes[ch.id] ?? (groupMuted && channelMutes[ch.id] !== false)} onToggleMute={handleToggleChannelMute} />
+                    <ChannelItem key={ch.id} ch={ch} selectedChannel={selectedChannel} unreadCounts={unreadCounts} mentionChannels={mentionChannels} canManage={canManage} onChannelClick={onChannelClick} onDeleteChannel={onDeleteChannel} onEditChannel={canManage ? setEditingChannel : undefined} isMuted={channelMutes[ch.id] ?? (groupMuted && channelMutes[ch.id] !== false)} onToggleMute={handleToggleChannelMute} />
                   ))}
                 </div>
               );
@@ -575,10 +579,10 @@ export default function ChannelSidebar({
               }
               return rootChannels.map(ch => (
                 <div key={ch.id}>
-                  <ChannelItem ch={ch} selectedChannel={selectedChannel} unreadCounts={unreadCounts} canManage={canManage} onChannelClick={onChannelClick} onDeleteChannel={onDeleteChannel} onEditChannel={canManage ? setEditingChannel : undefined} isMuted={channelMutes[ch.id] ?? (groupMuted && channelMutes[ch.id] !== false)} onToggleMute={handleToggleChannelMute} />
+                  <ChannelItem ch={ch} selectedChannel={selectedChannel} unreadCounts={unreadCounts} mentionChannels={mentionChannels} canManage={canManage} onChannelClick={onChannelClick} onDeleteChannel={onDeleteChannel} onEditChannel={canManage ? setEditingChannel : undefined} isMuted={channelMutes[ch.id] ?? (groupMuted && channelMutes[ch.id] !== false)} onToggleMute={handleToggleChannelMute} />
                   {childMap.get(ch.id)?.map(sub => (
                     <div key={sub.id} className="ml-4 border-l border-neutral-200 dark:border-white/5">
-                      <ChannelItem ch={sub} selectedChannel={selectedChannel} unreadCounts={unreadCounts} canManage={canManage} onChannelClick={onChannelClick} onDeleteChannel={onDeleteChannel} onEditChannel={canManage ? setEditingChannel : undefined} isMuted={channelMutes[sub.id] ?? (groupMuted && channelMutes[sub.id] !== false)} onToggleMute={handleToggleChannelMute} />
+                      <ChannelItem ch={sub} selectedChannel={selectedChannel} unreadCounts={unreadCounts} mentionChannels={mentionChannels} canManage={canManage} onChannelClick={onChannelClick} onDeleteChannel={onDeleteChannel} onEditChannel={canManage ? setEditingChannel : undefined} isMuted={channelMutes[sub.id] ?? (groupMuted && channelMutes[sub.id] !== false)} onToggleMute={handleToggleChannelMute} />
                     </div>
                   ))}
                 </div>
