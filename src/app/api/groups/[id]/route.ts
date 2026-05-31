@@ -29,7 +29,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
           _count: { select: { messages: true, members: true } },
           allowedRoles: { select: { roleId: true } },
         },
-        orderBy: { createdAt: "asc" },
+        orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }],
       },
       members: {
         include: {

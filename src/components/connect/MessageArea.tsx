@@ -102,6 +102,7 @@ export default function MessageArea({
   const [forwardTargets, setForwardTargets] = useState<{ type: "channel" | "dm"; id: string; name: string; icon?: string | null }[]>([]);
   const [forwardSearch, setForwardSearch] = useState("");
   const [forwardSending, setForwardSending] = useState(false);
+  const [mentionSuggestions, setMentionSuggestions] = useState<{id:string;name:string|null}[]>([]);
   const [nextCursor, setNextCursor] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
   const [sending, setSending] = useState(false);
@@ -710,17 +711,58 @@ export default function MessageArea({
       {/* Search bar */}
       {showSearch && (
         <div className="border-b border-[var(--cn-border)] bg-[var(--cn-main)]">
-          <div className="px-4 py-2 flex gap-2 items-center">
-            <input
-              value={searchQuery}
-              onChange={e => { setSearchQuery(e.target.value); performSearch(e.target.value); }}
-              placeholder="Поиск по сообщениям..."
-              className="flex-1 px-3 py-1.5 bg-neutral-100 dark:bg-white/5 border border-neutral-200 dark:border-white/10 rounded-lg text-sm text-neutral-900 dark:text-white outline-none focus:ring-1 focus:ring-violet-500 dark:focus:ring-cyan-400"
-              autoFocus
-            />
-            <button onClick={() => { setShowSearch(false); setSearchQuery(""); setSearchResults([]); }} className="text-neutral-400 hover:text-neutral-600 dark:hover:text-white p-1">
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
-            </button>
+          <div className="px-4 py-2 relative">
+            <div className="flex gap-2 items-center">
+              <div className="flex-1 relative">
+                <input
+                  value={searchQuery}
+                  onChange={e => {
+                    const val = e.target.value;
+                    setSearchQuery(val);
+                    if (val.startsWith("@") && val.length >= 2) {
+                      const nick = val.slice(1).toLowerCase();
+                      const matches = channelMembers.filter(m => (m.name || "").toLowerCase().includes(nick));
+                      setMentionSuggestions(matches.slice(0, 8));
+                    } else {
+                      setMentionSuggestions([]);
+                      performSearch(val);
+                    }
+                  }}
+                  onKeyDown={e => {
+                    if (e.key === "Enter" && searchQuery.startsWith("@") && mentionSuggestions.length > 0) {
+                      e.preventDefault();
+                      const picked = mentionSuggestions[0];
+                      setSearchQuery("");
+                      setMentionSuggestions([]);
+                      performSearch(`@${picked.name}`);
+                    }
+                  }}
+                  placeholder="Поиск сообщений или @ник..."
+                  className="w-full px-3 py-1.5 bg-neutral-100 dark:bg-white/5 border border-neutral-200 dark:border-white/10 rounded-lg text-sm text-neutral-900 dark:text-white outline-none focus:ring-1 focus:ring-violet-500 dark:focus:ring-cyan-400"
+                  autoFocus
+                />
+                {mentionSuggestions.length > 0 && (
+                  <div className="absolute top-full left-0 right-0 mt-1 bg-white dark:bg-neutral-800 border border-neutral-200 dark:border-white/10 rounded-lg shadow-xl z-50 overflow-hidden">
+                    {mentionSuggestions.map(u => (
+                      <button
+                        key={u.id}
+                        onClick={() => {
+                          setSearchQuery("");
+                          setMentionSuggestions([]);
+                          performSearch(`@${u.name}`);
+                        }}
+                        className="w-full flex items-center gap-2 px-3 py-2 text-left hover:bg-violet-50 dark:hover:bg-white/5 transition-colors"
+                      >
+                        <span className="text-sm text-neutral-900 dark:text-white">{u.name}</span>
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+              <button onClick={() => { setShowSearch(false); setSearchQuery(""); setSearchResults([]); setMentionSuggestions([]); }} className="text-neutral-400 hover:text-neutral-600 dark:hover:text-white p-1">
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+              </button>
+            </div>
           </div>
           {searching && <p className="px-4 pb-2 text-xs text-neutral-400">Поиск...</p>}
           {searchResults.length > 0 && (
@@ -736,7 +778,7 @@ export default function MessageArea({
               ))}
             </div>
           )}
-          {!searching && searchQuery.length >= 2 && searchResults.length === 0 && (
+          {!searching && searchQuery.length >= 2 && !searchQuery.startsWith("@") && searchResults.length === 0 && (
             <p className="px-4 pb-2 text-xs text-neutral-400">Ничего не найдено</p>
           )}
         </div>

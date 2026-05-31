@@ -196,12 +196,26 @@ function ChannelSettingsModal({ channel, groupId, allChannels, onClose, onUpdate
             {possibleParents.length > 0 && (
               <div>
                 <label className="text-xs font-medium text-neutral-500 dark:text-neutral-400 mb-1 block">Родительский канал</label>
-                <select value={parentId} onChange={e => setParentId(e.target.value)} className="w-full px-3 py-2 bg-neutral-50 dark:bg-white/5 border border-neutral-200 dark:border-white/10 rounded-xl text-sm text-neutral-900 dark:text-white outline-none">
-                  <option value="">Нет (корневой)</option>
+                <div className="space-y-1">
+                  <button
+                    type="button"
+                    onClick={() => setParentId("")}
+                    className={`w-full flex items-center gap-2 px-3 py-2 rounded-xl text-sm text-left transition-all border ${!parentId ? "bg-violet-500/10 dark:bg-cyan-500/10 border-violet-500 dark:border-cyan-400 text-violet-600 dark:text-cyan-400 font-medium" : "bg-neutral-50 dark:bg-white/5 border-neutral-200 dark:border-white/10 text-neutral-600 dark:text-neutral-300 hover:border-violet-300 dark:hover:border-cyan-400/30"}`}
+                  >
+                    Нет (корневой)
+                  </button>
                   {possibleParents.map(p => (
-                    <option key={p.id} value={p.id}>{p.icon || "💬"} {p.name}</option>
+                    <button
+                      key={p.id}
+                      type="button"
+                      onClick={() => setParentId(p.id)}
+                      className={`w-full flex items-center gap-2 px-3 py-2 rounded-xl text-sm text-left transition-all border ${parentId === p.id ? "bg-violet-500/10 dark:bg-cyan-500/10 border-violet-500 dark:border-cyan-400 text-violet-600 dark:text-cyan-400 font-medium" : "bg-neutral-50 dark:bg-white/5 border-neutral-200 dark:border-white/10 text-neutral-600 dark:text-neutral-300 hover:border-violet-300 dark:hover:border-cyan-400/30"}`}
+                    >
+                      <span>{p.icon || "💬"}</span>
+                      <span className="truncate">{p.name}</span>
+                    </button>
                   ))}
-                </select>
+                </div>
               </div>
             )}
 
@@ -314,18 +328,7 @@ function ChannelItem({ ch, selectedChannel, unreadCounts, mentionChannels = {}, 
             <span className="text-[11px]">{isMuted ? "🔕" : "🔔"}</span>
           </button>
         )}
-        {canManage && onEditChannel && (
-          <button
-            onClick={() => onEditChannel(ch)}
-            className="p-1 text-neutral-400 hover:text-violet-500 dark:hover:text-cyan-400 transition-colors"
-            aria-label={`Edit ${ch.name}`}
-          >
-            <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.066 2.573c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.573 1.066c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.066-2.573c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-            </svg>
-          </button>
-        )}
+        
         {canManage && (
           <button
             onClick={() => onDeleteChannel(ch.id)}
@@ -356,6 +359,9 @@ export default function ChannelSidebar({
 
   /* ── Channel settings modal ── */
   const [editingChannel, setEditingChannel] = useState<Channel | null>(null);
+  const [showReorder, setShowReorder] = useState(false);
+  const [reorderChannels, setReorderChannels] = useState<Channel[]>([]);
+  const [reorderSaving, setReorderSaving] = useState(false);
 
   /* ── Mute state ── */
   const [groupMuted, setGroupMuted] = useState(false);
@@ -566,11 +572,18 @@ export default function ChannelSidebar({
                 )}
               </button>
               {canManage && textOpen && (
-                <button onClick={onCreateChannel} className="text-neutral-400 hover:text-violet-500 dark:hover:text-cyan-400 transition-colors opacity-0 group-hover/cat:opacity-100" aria-label="Создать канал">
-                  <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-                  </svg>
-                </button>
+                <div className="flex gap-0.5 opacity-0 group-hover/cat:opacity-100">
+                  <button onClick={() => { setReorderChannels([...groupDetail.channels]); setShowReorder(true); }} className="text-neutral-400 hover:text-violet-500 dark:hover:text-cyan-400 transition-colors" aria-label="Порядок каналов" title="Порядок каналов">
+                    <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16V4m0 0L3 8m4-4l4 4m6 0v12m0 0l4-4m-4 4l-4-4" />
+                    </svg>
+                  </button>
+                  <button onClick={onCreateChannel} className="text-neutral-400 hover:text-violet-500 dark:hover:text-cyan-400 transition-colors" aria-label="Создать канал">
+                    <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                    </svg>
+                  </button>
+                </div>
               )}
             </div>
             {textOpen && (() => {
@@ -825,6 +838,75 @@ export default function ChannelSidebar({
           onClose={() => setEditingChannel(null)}
           onUpdated={() => { onGroupRefresh?.(); }}
         />
+      )}
+
+      {/* Reorder modal */}
+      {showReorder && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4" onClick={() => setShowReorder(false)}>
+          <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" />
+          <div className="relative z-10 w-full max-w-sm bg-white dark:bg-neutral-900 border border-neutral-200 dark:border-white/10 rounded-2xl shadow-2xl" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between px-5 py-4 border-b border-neutral-100 dark:border-white/5">
+              <h2 className="text-base font-semibold text-neutral-900 dark:text-white">Порядок каналов</h2>
+              <button onClick={() => setShowReorder(false)} className="p-1.5 rounded-lg hover:bg-neutral-100 dark:hover:bg-white/10 text-neutral-400 transition-colors">
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+              </button>
+            </div>
+            <div className="p-3 max-h-[60vh] overflow-y-auto space-y-1">
+              {reorderChannels.map((ch, idx) => (
+                <div key={ch.id} className="flex items-center gap-2 px-3 py-2 bg-neutral-50 dark:bg-white/5 rounded-xl">
+                  <span className="text-base">{ch.icon || (ch.type === "VOICE" ? "🎙️" : "💬")}</span>
+                  <span className="text-sm text-neutral-900 dark:text-white truncate flex-1">{ch.name}</span>
+                  <div className="flex gap-1">
+                    <button
+                      onClick={() => {
+                        if (idx === 0) return;
+                        const arr = [...reorderChannels];
+                        [arr[idx - 1], arr[idx]] = [arr[idx], arr[idx - 1]];
+                        setReorderChannels(arr);
+                      }}
+                      disabled={idx === 0}
+                      className="p-1 text-neutral-400 hover:text-violet-500 dark:hover:text-cyan-400 disabled:opacity-30 transition-colors"
+                    >
+                      <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 15l7-7 7 7" /></svg>
+                    </button>
+                    <button
+                      onClick={() => {
+                        if (idx === reorderChannels.length - 1) return;
+                        const arr = [...reorderChannels];
+                        [arr[idx], arr[idx + 1]] = [arr[idx + 1], arr[idx]];
+                        setReorderChannels(arr);
+                      }}
+                      disabled={idx === reorderChannels.length - 1}
+                      className="p-1 text-neutral-400 hover:text-violet-500 dark:hover:text-cyan-400 disabled:opacity-30 transition-colors"
+                    >
+                      <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+            <div className="flex justify-end gap-2 px-5 py-4 border-t border-neutral-100 dark:border-white/5">
+              <button onClick={() => setShowReorder(false)} className="px-4 py-2 text-sm text-neutral-500 hover:text-neutral-700 dark:hover:text-neutral-300">Отмена</button>
+              <button
+                onClick={async () => {
+                  setReorderSaving(true);
+                  await fetch("/api/channels/reorder", {
+                    method: "PUT",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ channelIds: reorderChannels.map(c => c.id), groupId }),
+                  });
+                  setReorderSaving(false);
+                  setShowReorder(false);
+                  onGroupRefresh?.();
+                }}
+                disabled={reorderSaving}
+                className="px-4 py-2 bg-violet-500 dark:bg-cyan-600 text-white text-sm rounded-xl hover:opacity-90 transition-opacity disabled:opacity-50"
+              >
+                {reorderSaving ? "Сохранение..." : "Сохранить"}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </aside>
   );
