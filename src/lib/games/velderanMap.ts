@@ -200,6 +200,17 @@ export const MAP_NODES: MapNode[] = [
   { id: "p39", name: "p39", type: "port", x: 41.1, y: 96.0 },
 ];
 
+// Custom nodes loaded from map config, overrides MAP_NODES when set
+let customNodes: MapNode[] | null = null;
+
+export function setCustomNodes(nodes: MapNode[]) {
+  customNodes = nodes;
+}
+
+export function getActiveNodes(): MapNode[] {
+  return customNodes && customNodes.length > 0 ? customNodes : MAP_NODES;
+}
+
 // Edges stored in map config file, loaded at runtime
 export let MAP_EDGES: MapEdge[] = [];
 
@@ -254,5 +265,5 @@ export function getNeighbors(nodeId: string): string[] {
 }
 
 export function getNodeById(id: string): MapNode | undefined {
-  return MAP_NODES.find((n) => n.id === id);
+  return getActiveNodes().find((n) => n.id === id);
 }

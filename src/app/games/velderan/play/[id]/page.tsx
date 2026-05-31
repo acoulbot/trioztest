@@ -6,8 +6,8 @@ import { useParams, useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import Image from "next/image";
 import Link from "next/link";
-import { MAP_NODES, FACTION_COLORS, getNeighbors, setMapEdges } from "@/lib/games/velderanMap";
-import type { MapEdge } from "@/lib/games/velderanMap";
+import { FACTION_COLORS, getNeighbors, setMapEdges, setCustomNodes, getActiveNodes } from "@/lib/games/velderanMap";
+import type { MapEdge, MapNode } from "@/lib/games/velderanMap";
 import type { VelderanGameState, GameUnit, CombatState } from "@/lib/games/velderanState";
 
 interface Player {
@@ -145,13 +145,16 @@ export default function PlayPage() {
     }
   }, [roomId]);
 
-  // Load map edges from config
+  // Load map config (edges + custom nodes)
   useEffect(() => {
     fetch("/api/games/map-config")
       .then((r) => r.json())
       .then((data) => {
         if (data.edges) {
           setMapEdges(data.edges as MapEdge[]);
+        }
+        if (data.nodes && data.nodes.length > 0) {
+          setCustomNodes(data.nodes as MapNode[]);
         }
         setEdgesLoaded(true);
       })
@@ -339,7 +342,7 @@ export default function PlayPage() {
           <Image src="/games/velderan/map.png" alt="Карта" fill className="object-cover" unoptimized />
 
           {/* Nodes */}
-          {MAP_NODES.map((node) => {
+          {getActiveNodes().map((node) => {
             const units = unitsByNode[node.id] || [];
             const isValidMove = validMoves.includes(node.id);
             const hasMyUnit = units.some((u) => u.playerId === myPlayerId);
