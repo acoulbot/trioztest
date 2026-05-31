@@ -1,5 +1,5 @@
 import { VelderanGameState, getCurrentPlayerId, moveUnit, endTurn, placeReserve, finishPlacement, canMoveUnit, rollDiceForGod, resolveCombat } from "./velderanState";
-import { MAP_NODES, getNeighbors } from "./velderanMap";
+import { getActiveNodes, getNeighbors } from "./velderanMap";
 
 const BOT_USER_PREFIX = "bot-velderan-";
 
@@ -116,7 +116,7 @@ function botMove(
     for (const neighborId of neighbors) {
       if (!canMoveUnit(newState, unit.id, neighborId)) continue;
 
-      const node = MAP_NODES.find((n) => n.id === neighborId);
+      const node = getActiveNodes().find((n) => n.id === neighborId);
       if (!node) continue;
 
       let priority = 1; // base

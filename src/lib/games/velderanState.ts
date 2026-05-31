@@ -1,4 +1,4 @@
-import { MAP_NODES, getNeighbors } from "./velderanMap";
+import { getActiveNodes, getNeighbors } from "./velderanMap";
 
 export interface GameUnit {
   id: string;
@@ -66,7 +66,7 @@ export function createInitialState(
   let unitCounter = 0;
 
   for (const player of sorted) {
-    const factionCities = MAP_NODES.filter(
+    const factionCities = getActiveNodes().filter(
       (n) => n.type === "city" && n.faction === player.faction
     );
 
@@ -94,7 +94,7 @@ export function createInitialState(
   // Initialize city ownership
   const cityOwners: Record<string, string> = {};
   for (const player of sorted) {
-    const factionCities = MAP_NODES.filter(
+    const factionCities = getActiveNodes().filter(
       (n) => n.type === "city" && n.faction === player.faction
     );
     for (const city of factionCities) {
@@ -139,7 +139,7 @@ export function placeReserve(
   const reserve = newState.reserve[playerId] || 0;
   if (reserve <= 0) return newState;
 
-  const node = MAP_NODES.find((n) => n.id === cityNodeId);
+  const node = getActiveNodes().find((n) => n.id === cityNodeId);
   if (!node || node.type !== "city") return newState;
 
   // Can only place on own cities
@@ -245,8 +245,8 @@ export function moveUnit(
   const unit = newState.units.find((u) => u.id === unitId);
   if (!unit) return newState;
 
-  const fromNode = MAP_NODES.find((n) => n.id === unit.position);
-  const toNode = MAP_NODES.find((n) => n.id === targetNodeId);
+  const fromNode = getActiveNodes().find((n) => n.id === unit.position);
+  const toNode = getActiveNodes().find((n) => n.id === targetNodeId);
   unit.position = targetNodeId;
   unit.movesLeft--;
 
@@ -335,7 +335,7 @@ export function rollDiceForGod(
     if (enemyArmies.length > 0) {
       const target = enemyArmies[Math.floor(Math.random() * enemyArmies.length)];
       const targetName = playerNames[target.playerId] || "Противник";
-      const node = MAP_NODES.find((n) => n.id === target.position);
+      const node = getActiveNodes().find((n) => n.id === target.position);
       newState.units = newState.units.filter((u) => u.id !== target.id);
       newState.log.push(`Антегриз уничтожил отряд ${targetName} в ${node?.name || ""}!`);
     }
@@ -359,7 +359,7 @@ export function resolveCombat(
   const { attackerUnitId, defenderUnitId, attackerPlayerId, defenderPlayerId, nodeId } = newState.combat;
   const attackerName = playerNames[attackerPlayerId] || "Атакующий";
   const defenderName = playerNames[defenderPlayerId] || "Защитник";
-  const node = MAP_NODES.find((n) => n.id === nodeId);
+  const node = getActiveNodes().find((n) => n.id === nodeId);
 
   // Exact guess wins
   const attackerGuessedRight = attackerGuess === defenderCard;
