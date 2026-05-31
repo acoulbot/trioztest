@@ -148,18 +148,20 @@ export default function UserProfilePage() {
           animate={{ opacity: 1, y: 0 }}
           className="bg-white dark:bg-neutral-900 border border-neutral-200 dark:border-white/10 rounded-2xl overflow-hidden shadow-lg"
         >
-          {/* Banner */}
-          <div className="relative h-40 sm:h-48 bg-gradient-to-br from-violet-600 via-indigo-600 to-cyan-500 overflow-hidden">
-            {profile.profileBanner ? (
-              <img src={profile.profileBanner} alt="" className="w-full h-full object-cover" />
-            ) : (
-              <div className="absolute inset-0">
-                <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top_right,_var(--tw-gradient-stops))] from-violet-600/50 via-transparent to-cyan-500/30" />
-                <div className="absolute bottom-0 left-0 right-0 h-24 bg-gradient-to-t from-black/30 to-transparent" />
-              </div>
-            )}
-            {/* Avatar overlay */}
-            <div className="absolute -bottom-10 left-6 sm:left-8">
+          {/* Banner + Avatar wrapper */}
+          <div className="relative">
+            <div className="h-40 sm:h-48 bg-gradient-to-br from-violet-600 via-indigo-600 to-cyan-500 overflow-hidden">
+              {profile.profileBanner ? (
+                <img src={profile.profileBanner} alt="" className="w-full h-full object-cover" />
+              ) : (
+                <div className="absolute inset-0">
+                  <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top_right,_var(--tw-gradient-stops))] from-violet-600/50 via-transparent to-cyan-500/30" />
+                  <div className="absolute bottom-0 left-0 right-0 h-24 bg-gradient-to-t from-black/30 to-transparent" />
+                </div>
+              )}
+            </div>
+            {/* Avatar overlay — outside overflow-hidden banner */}
+            <div className="absolute -bottom-10 left-6 sm:left-8 z-10">
               <div className="ring-4 ring-white dark:ring-neutral-900 rounded-full">
                 <GlowAvatar user={profile} size={88} onlineColor={onlineNow ? "green" : undefined} />
               </div>
