@@ -22,6 +22,8 @@ export async function GET() {
       avatarGlowEnabled: true,
       avatarGlowColors: true,
       tosAccepted: true,
+      statusType: true,
+      customStatus: true,
     },
   });
 

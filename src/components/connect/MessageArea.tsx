@@ -74,17 +74,20 @@ interface MessageAreaProps {
   currentUserRole: string;
   isBanned: boolean;
   onBack?: () => void;
+  onNewMessage?: () => void;
 }
 
 export default function MessageArea({
-  channelId, channelName, channelIcon, channelType = "TEXT", currentUserId, currentUserName = "", currentUserRole, isBanned, onBack,
+  channelId, channelName, channelIcon, channelType = "TEXT", currentUserId, currentUserName = "", currentUserRole, isBanned, onBack, onNewMessage,
 }: MessageAreaProps) {
   const isNewsChannel = channelType === "NEWS";
   const canWriteNews = isNewsChannel && (currentUserRole === "OWNER" || currentUserRole === "ADMIN" || currentUserRole === "MODERATOR" || currentUserRole === "SITE_ADMIN");
   const currentUserIdRef = useRef(currentUserId);
   const currentUserNameRef = useRef(currentUserName);
+  const onNewMessageRef = useRef(onNewMessage);
   useEffect(() => { currentUserIdRef.current = currentUserId; }, [currentUserId]);
   useEffect(() => { currentUserNameRef.current = currentUserName; }, [currentUserName]);
+  useEffect(() => { onNewMessageRef.current = onNewMessage; }, [onNewMessage]);
   const [messages, setMessages] = useState<Message[]>([]);
   const [newMessage, setNewMessage] = useState("");
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -94,6 +97,7 @@ export default function MessageArea({
   const [typingUsers, setTypingUsers] = useState<Map<string, string>>(new Map());
   const [loading, setLoading] = useState(true);
   const [hasMore, setHasMore] = useState(false);
+  const [forwardToast, setForwardToast] = useState(false);
   const [nextCursor, setNextCursor] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
   const [sending, setSending] = useState(false);
@@ -238,6 +242,7 @@ export default function MessageArea({
         if (prev.find((m) => m.id === msg.id)) return prev;
         return [...prev, msg];
       });
+      onNewMessageRef.current?.();
       // Play notification only for messages from others (unless muted)
       if (msg.user.id !== currentUserIdRef.current && !isMutedRef.current) {
         const uname = currentUserNameRef.current;
@@ -247,6 +252,9 @@ export default function MessageArea({
         );
         if (isMention) playMentionNotification();
         else playMsgNotification();
+        if (document.hidden && typeof Notification !== "undefined" && Notification.permission === "granted") {
+          new Notification(`${msg.user.name}`, { body: msg.content.slice(0, 80), tag: msg.id });
+        }
       }
     });
 
@@ -873,6 +881,10 @@ export default function MessageArea({
                     <button onClick={() => openThread(msg)} className="text-[11px] text-neutral-400 hover:text-violet-500 dark:hover:text-cyan-400">
                       Тред
                     </button>
+                    {/* Forward */}
+                    <button onClick={() => { navigator.clipboard.writeText(msg.content); setForwardToast(true); setTimeout(() => setForwardToast(false), 2000); }} className="text-[11px] text-neutral-400 hover:text-violet-500 dark:hover:text-cyan-400">
+                      Переслать
+                    </button>
                   </div>
                 )}
 
@@ -1095,6 +1107,13 @@ export default function MessageArea({
 
       {/* Image Lightbox */}
       <ImageLightbox src={lightboxSrc} onClose={() => setLightboxSrc(null)} />
+
+      {/* Forward toast */}
+      {forwardToast && (
+        <div className="fixed bottom-20 left-1/2 -translate-x-1/2 z-50 px-4 py-2 bg-green-500 text-white text-sm rounded-xl shadow-lg animate-fade-in">
+          Сообщение скопировано
+        </div>
+      )}
     </div>
   );
 }

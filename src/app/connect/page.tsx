@@ -264,6 +264,7 @@ function InviteModal({ groupId, onClose }: { groupId: string; onClose: () => voi
   const [inviteCode, setInviteCode] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [copied, setCopied] = useState(false);
 
   const createInvite = async () => {
     setLoading(true);
@@ -284,8 +285,8 @@ function InviteModal({ groupId, onClose }: { groupId: string; onClose: () => voi
             <p className="text-sm text-neutral-500">Код приглашения:</p>
             <div className="flex gap-2">
               <input type="text" value={inviteCode} readOnly className="flex-1 bg-neutral-50 dark:bg-neutral-700 border border-neutral-200 dark:border-white/10 rounded-xl px-3 py-2.5 text-sm text-neutral-900 dark:text-white font-mono" />
-              <button onClick={() => navigator.clipboard.writeText(inviteCode)} className="px-4 py-2.5 bg-violet-100 dark:bg-cyan-400/20 text-violet-600 dark:text-cyan-400 rounded-xl text-sm font-medium hover:bg-violet-200 dark:hover:bg-cyan-400/30 transition-all">
-                Копировать
+              <button onClick={() => { navigator.clipboard.writeText(inviteCode); setCopied(true); setTimeout(() => setCopied(false), 2000); }} className={`px-4 py-2.5 rounded-xl text-sm font-medium transition-all ${copied ? "bg-green-100 dark:bg-green-400/20 text-green-600 dark:text-green-400" : "bg-violet-100 dark:bg-cyan-400/20 text-violet-600 dark:text-cyan-400 hover:bg-violet-200 dark:hover:bg-cyan-400/30"}`}>
+                {copied ? "Скопировано!" : "Копировать"}
               </button>
             </div>
           </div>
@@ -305,13 +306,14 @@ function InviteModal({ groupId, onClose }: { groupId: string; onClose: () => voi
 
 function GroupRulesGate({ group, onAccept }: { group: GroupDetail; onAccept: () => void }) {
   const [loading, setLoading] = useState(false);
+  const [imgError, setImgError] = useState(false);
 
   return (
     <div className="max-w-lg w-full mx-4 p-6 bg-white dark:bg-neutral-900 rounded-2xl border border-neutral-200 dark:border-white/10 shadow-lg">
       <div className="text-center mb-4">
-        {group.icon && group.icon.startsWith("/") ? (
+        {group.icon && group.icon.startsWith("/") && !imgError ? (
           <div className="w-16 h-16 rounded-xl overflow-hidden mx-auto mb-3">
-            <Image src={group.icon} alt={group.name} width={64} height={64} className="w-full h-full object-cover" />
+            <Image src={group.icon} alt={group.name} width={64} height={64} className="w-full h-full object-cover" onError={() => setImgError(true)} />
           </div>
         ) : (
           <div className="w-16 h-16 rounded-xl bg-violet-100 dark:bg-cyan-400/10 flex items-center justify-center mx-auto mb-3">
@@ -344,10 +346,15 @@ function GroupRulesGate({ group, onAccept }: { group: GroupDetail; onAccept: () 
   );
 }
 
-function GroupInfoPanel({ group, canManage, onUpdateRules }: { group: GroupDetail; canManage: boolean; onUpdateRules: (rules: string) => Promise<void> }) {
+function GroupInfoPanel({ group, canManage, onUpdateRules, onAutoSelectChannel }: { group: GroupDetail; canManage: boolean; onUpdateRules: (rules: string) => Promise<void>; onAutoSelectChannel?: () => void }) {
   const [editingRules, setEditingRules] = useState(false);
   const [rulesText, setRulesText] = useState(group.rules || "");
   const [saving, setSaving] = useState(false);
+  const [imgError, setImgError] = useState(false);
+
+  useEffect(() => {
+    if (onAutoSelectChannel) onAutoSelectChannel();
+  }, [onAutoSelectChannel]);
 
   const onlineCount = group.members.filter(m => m.user.lastSeen && (Date.now() - new Date(m.user.lastSeen).getTime()) < 60000).length;
   const created = new Date(group.createdAt).toLocaleDateString("ru-RU", { day: "numeric", month: "long", year: "numeric" });
@@ -362,9 +369,9 @@ function GroupInfoPanel({ group, canManage, onUpdateRules }: { group: GroupDetai
   return (
     <div className="max-w-md w-full mx-4 py-8">
       <div className="text-center mb-6">
-        {group.icon && group.icon.startsWith("/") ? (
+        {group.icon && group.icon.startsWith("/") && !imgError ? (
           <div className="w-20 h-20 rounded-2xl overflow-hidden mx-auto mb-4 shadow-lg">
-            <Image src={group.icon} alt={group.name} width={80} height={80} className="w-full h-full object-cover" />
+            <Image src={group.icon} alt={group.name} width={80} height={80} className="w-full h-full object-cover" onError={() => setImgError(true)} />
           </div>
         ) : (
           <div className="w-20 h-20 rounded-2xl bg-violet-100 dark:bg-cyan-400/10 flex items-center justify-center mx-auto mb-4">
@@ -635,7 +642,7 @@ function GroupSettingsModal({ group, onClose, onUpdated, onDelete }: { group: Gr
 
 function MembersPanel({ group, onClose }: { group: GroupDetail; onClose: () => void }) {
   return (
-    <aside className="w-60 max-md:absolute max-md:right-0 max-md:top-0 max-md:h-full max-md:z-40 bg-white dark:bg-neutral-900 border-l border-neutral-200 dark:border-white/5 flex flex-col h-full">
+    <aside className="w-60 flex-shrink-0 max-lg:absolute max-lg:right-0 max-lg:top-0 max-lg:h-full max-lg:z-40 max-lg:shadow-xl max-lg:animate-slide-in-right bg-white dark:bg-neutral-900 border-l border-neutral-200 dark:border-white/5 flex flex-col h-full transition-all duration-200">
       <div className="p-3 border-b border-neutral-200 dark:border-white/5 flex items-center justify-between">
         <span className="text-sm font-medium text-neutral-900 dark:text-white">Участники — {group.members.length}</span>
         <button onClick={onClose} className="text-neutral-400 hover:text-neutral-600 dark:hover:text-white transition-colors" aria-label="Close members panel">
@@ -742,9 +749,12 @@ function ConnectPageInner() {
     if (session?.user) {
       fetchGroups();
       fetchUnread();
+      if (typeof Notification !== "undefined" && Notification.permission === "default") {
+        Notification.requestPermission().catch(() => {});
+      }
       const interval = setInterval(() => {
         if (!document.hidden) fetchUnread();
-      }, 15000);
+      }, 60000);
       return () => clearInterval(interval);
     }
   }, [session, fetchGroups, fetchUnread]);
@@ -785,6 +795,7 @@ function ConnectPageInner() {
           return prevGroup;
         });
       });
+      
     });
     return () => {
       profileSocketRef.current?.disconnect();
@@ -1137,6 +1148,7 @@ function ConnectPageInner() {
                   currentUserName={session.user.name ?? ""}
                   currentUserRole={userRole}
                   isBanned={!!isBanned}
+                  onNewMessage={fetchUnread}
                 />
               ) : selectedGroup && groupDetail ? (
                 <div className="flex-1 flex items-center justify-center overflow-y-auto">
@@ -1156,6 +1168,10 @@ function ConnectPageInner() {
                           body: JSON.stringify({ rules }),
                         });
                         setGroupDetail({ ...groupDetail, rules });
+                      }}
+                      onAutoSelectChannel={() => {
+                        const firstText = groupDetail.channels.find(c => c.type === "TEXT");
+                        if (firstText) handleChannelClick(firstText);
                       }}
                     />
                   )}

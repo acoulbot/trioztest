@@ -82,6 +82,7 @@ export default function DMPanel({ currentUserId, onClose, initialFriendId }: DMP
   const [voiceUploading, setVoiceUploading] = useState(false);
   const [fileUploading, setFileUploading] = useState(false);
   const [e2eeReady, setE2eeReady] = useState(false);
+  const [peerReadAt, setPeerReadAt] = useState<string | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const socketRef = useRef<Socket | null>(null);
   const privateKeyRef = useRef<CryptoKey | null>(null);
@@ -195,7 +196,14 @@ export default function DMPanel({ currentUserId, onClose, initialFriendId }: DMP
   }, [decryptContent]);
 
   useEffect(() => {
-    if (selectedConv) loadMessages(selectedConv);
+    if (selectedConv) {
+      loadMessages(selectedConv);
+      fetch("/api/dm/read", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ conversationId: selectedConv }),
+      }).catch(() => {});
+    }
   }, [selectedConv, loadMessages]);
 
   // Join/leave DM conversation room for typing indicators
@@ -257,6 +265,9 @@ export default function DMPanel({ currentUserId, onClose, initialFriendId }: DMP
       // Play notification only for incoming messages (not own)
       if (msg.userId !== currentUserIdRef.current) {
         playDMNotification();
+        if (document.hidden && typeof Notification !== "undefined" && Notification.permission === "granted") {
+          new Notification("Личное сообщение", { body: msg.content.slice(0, 80), tag: msg.id });
+        }
       }
       setConversations((prev) =>
         prev.map((c) => c.id === msg.conversationId
@@ -286,9 +297,19 @@ export default function DMPanel({ currentUserId, onClose, initialFriendId }: DMP
       }
     });
 
+    socket.on("dm-read", ({ conversationId, readAt }: { conversationId: string; userId: string; readAt: string }) => {
+      if (conversationId === selectedConv) {
+        setPeerReadAt(readAt);
+      }
+    });
+
     return () => {
       socket.disconnect();
       socketRef.current = null;
+      if (dmTypingTimeoutRef.current) {
+        clearTimeout(dmTypingTimeoutRef.current);
+        dmTypingTimeoutRef.current = null;
+      }
     };
   }, [currentUserId, selectedConv]);
 
@@ -592,6 +613,9 @@ export default function DMPanel({ currentUserId, onClose, initialFriendId }: DMP
                             {new Date(msg.createdAt).toLocaleTimeString("ru-RU", { hour: "2-digit", minute: "2-digit" })}
                           </span>
                           {msg.edited && <span className={`text-[9px] ${msg.userId === currentUserId ? "text-white/40" : "text-neutral-400"}`}>(ред.)</span>}
+                          {msg.userId === currentUserId && peerReadAt && new Date(peerReadAt) >= new Date(msg.createdAt) && (
+                            <span className="text-[9px] text-white/50" title="Прочитано">✓✓</span>
+                          )}
                           {(msg as Message & { _encrypted?: boolean })._encrypted && (
                             <svg className={`w-3 h-3 ${msg.userId === currentUserId ? "text-white/50" : "text-green-500"}`} viewBox="0 0 24 24" fill="currentColor">
                               <path d="M18 8h-1V6c0-2.76-2.24-5-5-5S7 3.24 7 6v2H6c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V10c0-1.1-.9-2-2-2zm-6 9c-1.1 0-2-.9-2-2s.9-2 2-2 2 .9 2 2-.9 2-2 2zm3.1-9H8.9V6c0-1.71 1.39-3.1 3.1-3.1s3.1 1.39 3.1 3.1v2z" />
