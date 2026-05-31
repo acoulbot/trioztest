@@ -8,6 +8,7 @@ import TypingIndicator from "@/components/ui/TypingIndicator";
 import VoiceRecorder from "@/components/ui/VoiceRecorder";
 import VoicePlayer from "@/components/ui/VoicePlayer";
 import { playDMNotification } from "@/lib/dmSound";
+import { getOrCreateKeyPair, encryptMessage, decryptMessage, isE2EEMessage, encryptFile } from "@/lib/e2ee";
 
 interface Attachment {
   url: string;
@@ -69,8 +70,24 @@ export default function DMPanel({ currentUserId, onClose, initialFriendId }: DMP
   const [editContent, setEditContent] = useState("");
   const [sending, setSending] = useState(false);
   const [voiceUploading, setVoiceUploading] = useState(false);
+  const [e2eeReady, setE2eeReady] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const socketRef = useRef<Socket | null>(null);
+  const privateKeyRef = useRef<CryptoKey | null>(null);
+  const peerPublicKeyRef = useRef<JsonWebKey | null>(null);
+  const decryptedCache = useRef<Map<string, string>>(new Map());
+
+  // Initialize E2EE keypair
+  useEffect(() => {
+    getOrCreateKeyPair().then(({ publicKeyJwk, privateKey }) => {
+      privateKeyRef.current = privateKey;
+      fetch("/api/e2ee", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ publicKey: publicKeyJwk }),
+      }).catch(() => {});
+    }).catch(() => {});
+  }, []);
 
   useEffect(() => {
     fetch("/api/dm")
@@ -103,6 +120,35 @@ export default function DMPanel({ currentUserId, onClose, initialFriendId }: DMP
       .finally(() => setLoading(false));
   }, [initialFriendId, initialHandled]);
 
+  // Fetch peer's public key when conversation changes
+  useEffect(() => {
+    if (!selectedConv) { peerPublicKeyRef.current = null; setE2eeReady(false); return; }
+    const other = conversations.find(c => c.id === selectedConv)?.other;
+    if (!other) return;
+    decryptedCache.current.clear();
+    fetch(`/api/e2ee?userId=${other.id}`)
+      .then(r => r.json())
+      .then(data => {
+        peerPublicKeyRef.current = data.publicKey || null;
+        setE2eeReady(!!data.publicKey && !!privateKeyRef.current);
+      })
+      .catch(() => { peerPublicKeyRef.current = null; setE2eeReady(false); });
+  }, [selectedConv, conversations]);
+
+  const decryptContent = useCallback(async (msgId: string, content: string): Promise<string> => {
+    if (!isE2EEMessage(content)) return content;
+    const cached = decryptedCache.current.get(msgId);
+    if (cached) return cached;
+    if (!privateKeyRef.current || !peerPublicKeyRef.current) return "\uD83D\uDD12 \u0417\u0430\u0448\u0438\u0444\u0440\u043e\u0432\u0430\u043d\u043d\u043e\u0435 \u0441\u043e\u043e\u0431\u0449\u0435\u043d\u0438\u0435";
+    try {
+      const decrypted = await decryptMessage(content, privateKeyRef.current, peerPublicKeyRef.current);
+      decryptedCache.current.set(msgId, decrypted);
+      return decrypted;
+    } catch {
+      return "\uD83D\uDD12 \u041d\u0435 \u0443\u0434\u0430\u043b\u043e\u0441\u044c \u0440\u0430\u0441\u0448\u0438\u0444\u0440\u043e\u0432\u0430\u0442\u044c";
+    }
+  }, []);
+
   const loadMessages = useCallback(async (convId: string, cursor?: string) => {
     setMessagesLoading(true);
     try {
@@ -110,10 +156,22 @@ export default function DMPanel({ currentUserId, onClose, initialFriendId }: DMP
       const res = await fetch(url);
       if (!res.ok) throw new Error(res.statusText);
       const data = await res.json();
+
+      // Decrypt E2EE messages
+      const decryptedMsgs = await Promise.all(
+        data.messages.map(async (msg: Message) => {
+          if (isE2EEMessage(msg.content)) {
+            const plaintext = await decryptContent(msg.id, msg.content);
+            return { ...msg, content: plaintext, _encrypted: true };
+          }
+          return msg;
+        })
+      );
+
       if (cursor) {
-        setMessages((prev) => [...data.messages, ...prev]);
+        setMessages((prev) => [...decryptedMsgs, ...prev]);
       } else {
-        setMessages(data.messages);
+        setMessages(decryptedMsgs);
       }
       setNextCursor(data.nextCursor);
     } catch {
@@ -122,7 +180,7 @@ export default function DMPanel({ currentUserId, onClose, initialFriendId }: DMP
     } finally {
       setMessagesLoading(false);
     }
-  }, []);
+  }, [decryptContent]);
 
   useEffect(() => {
     if (selectedConv) loadMessages(selectedConv);
@@ -169,11 +227,19 @@ export default function DMPanel({ currentUserId, onClose, initialFriendId }: DMP
       if (dmTypingTimeoutRef.current) clearTimeout(dmTypingTimeoutRef.current);
     });
 
-    socket.on("dm-message", (msg: Message & { conversationId: string }) => {
+    socket.on("dm-message", async (msg: Message & { conversationId: string }) => {
+      let displayMsg = msg;
+      if (isE2EEMessage(msg.content) && privateKeyRef.current && peerPublicKeyRef.current) {
+        try {
+          const plaintext = await decryptMessage(msg.content, privateKeyRef.current, peerPublicKeyRef.current);
+          decryptedCache.current.set(msg.id, plaintext);
+          displayMsg = { ...msg, content: plaintext };
+        } catch { /* keep encrypted */ }
+      }
       if (msg.conversationId === selectedConv) {
         setMessages((prev) => {
           if (prev.find((m) => m.id === msg.id)) return prev;
-          return [...prev, msg];
+          return [...prev, displayMsg];
         });
       }
       // Play notification only for incoming messages (not own)
@@ -188,9 +254,17 @@ export default function DMPanel({ currentUserId, onClose, initialFriendId }: DMP
       );
     });
 
-    socket.on("dm-edited", (msg: Message & { conversationId: string }) => {
+    socket.on("dm-edited", async (msg: Message & { conversationId: string }) => {
+      let displayMsg = msg;
+      if (isE2EEMessage(msg.content) && privateKeyRef.current && peerPublicKeyRef.current) {
+        try {
+          const plaintext = await decryptMessage(msg.content, privateKeyRef.current, peerPublicKeyRef.current);
+          decryptedCache.current.set(msg.id, plaintext);
+          displayMsg = { ...msg, content: plaintext };
+        } catch { /* keep encrypted */ }
+      }
       if (msg.conversationId === selectedConv) {
-        setMessages((prev) => prev.map((m) => m.id === msg.id ? msg : m));
+        setMessages((prev) => prev.map((m) => m.id === msg.id ? displayMsg : m));
       }
     });
 
@@ -212,22 +286,27 @@ export default function DMPanel({ currentUserId, onClose, initialFriendId }: DMP
     setSending(true);
     const content = input.trim();
     setInput("");
-    // Stop typing indicator immediately on send
     socketRef.current?.emit("dm-stop-typing", { convId: selectedConv });
     try {
+      let finalContent = content;
+      if (e2eeReady && privateKeyRef.current && peerPublicKeyRef.current) {
+        finalContent = await encryptMessage(content, privateKeyRef.current, peerPublicKeyRef.current);
+      }
       const res = await fetch(`/api/dm/${selectedConv}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ content }),
+        body: JSON.stringify({ content: finalContent }),
       });
       if (res.ok) {
         const msg = await res.json();
+        const displayMsg = isE2EEMessage(msg.content) ? { ...msg, content } : msg;
         setMessages((prev) => {
           if (prev.find((m) => m.id === msg.id)) return prev;
-          return [...prev, msg];
+          return [...prev, displayMsg];
         });
+        decryptedCache.current.set(msg.id, content);
         setConversations((prev) =>
-          prev.map((c) => c.id === selectedConv ? { ...c, lastMessage: msg, lastMessageAt: msg.createdAt } : c)
+          prev.map((c) => c.id === selectedConv ? { ...c, lastMessage: { ...msg, content }, lastMessageAt: msg.createdAt } : c)
             .sort((a, b) => new Date(b.lastMessageAt || 0).getTime() - new Date(a.lastMessageAt || 0).getTime())
         );
       } else {
@@ -244,12 +323,27 @@ export default function DMPanel({ currentUserId, onClose, initialFriendId }: DMP
     if (!selectedConv) return;
     setVoiceUploading(true);
     try {
+      let uploadBlob = blob;
+      let encIv: string | undefined;
+
+      if (e2eeReady && privateKeyRef.current && peerPublicKeyRef.current) {
+        const arrayBuf = await blob.arrayBuffer();
+        const { encrypted, iv } = await encryptFile(arrayBuf, privateKeyRef.current, peerPublicKeyRef.current);
+        uploadBlob = new Blob([encrypted], { type: "application/octet-stream" });
+        encIv = iv;
+      }
+
       const fd = new FormData();
-      fd.append("file", blob, "voice.webm");
+      fd.append("file", uploadBlob, encIv ? "voice.enc" : "voice.webm");
       fd.append("duration", String(duration));
+      if (encIv) fd.append("e2eeIv", encIv);
       const uploadRes = await fetch("/api/messages/upload", { method: "POST", body: fd });
       if (!uploadRes.ok) return;
       const attachment = await uploadRes.json();
+      if (encIv) {
+        attachment.e2eeIv = encIv;
+        attachment.isE2EE = true;
+      }
       const res = await fetch(`/api/dm/${selectedConv}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -274,14 +368,20 @@ export default function DMPanel({ currentUserId, onClose, initialFriendId }: DMP
 
   const editMessage = async (messageId: string) => {
     if (!editContent.trim() || !selectedConv) return;
+    let finalContent = editContent;
+    if (e2eeReady && privateKeyRef.current && peerPublicKeyRef.current) {
+      finalContent = await encryptMessage(editContent, privateKeyRef.current, peerPublicKeyRef.current);
+    }
     const res = await fetch(`/api/dm/${selectedConv}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ messageId, content: editContent }),
+      body: JSON.stringify({ messageId, content: finalContent }),
     });
     if (res.ok) {
       const msg = await res.json();
-      setMessages((prev) => prev.map((m) => m.id === msg.id ? msg : m));
+      const displayMsg = isE2EEMessage(msg.content) ? { ...msg, content: editContent, _encrypted: true } : msg;
+      decryptedCache.current.set(msg.id, editContent);
+      setMessages((prev) => prev.map((m) => m.id === msg.id ? displayMsg : m));
     }
     setEditingId(null);
     setEditContent("");
@@ -292,6 +392,12 @@ export default function DMPanel({ currentUserId, onClose, initialFriendId }: DMP
     await fetch(`/api/dm/${selectedConv}?messageId=${messageId}`, { method: "DELETE" });
     setMessages((prev) => prev.map((m) => m.id === messageId ? { ...m, deleted: true, content: "" } : m));
   };
+
+  const handleDecryptFile = useCallback(async (encrypted: ArrayBuffer, iv: string): Promise<ArrayBuffer> => {
+    if (!privateKeyRef.current || !peerPublicKeyRef.current) throw new Error("No keys");
+    const { decryptFile } = await import("@/lib/e2ee");
+    return decryptFile(encrypted, iv, privateKeyRef.current, peerPublicKeyRef.current);
+  }, []);
 
   const selectedOther = conversations.find((c) => c.id === selectedConv)?.other;
 
@@ -361,12 +467,20 @@ export default function DMPanel({ currentUserId, onClose, initialFriendId }: DMP
                 </svg>
               </button>
               <GlowAvatar user={selectedOther} size={32} onlineColor={isOnline(selectedOther.lastSeen) ? "green" : undefined} />
-              <div className="min-w-0">
+              <div className="min-w-0 flex-1">
                 <p className="text-sm font-medium text-neutral-900 dark:text-white truncate">{selectedOther.name}</p>
                 <p className="text-xs text-neutral-400">
                   {isOnline(selectedOther.lastSeen) ? "Онлайн" : `Был(а) ${timeAgo(selectedOther.lastSeen)}`}
                 </p>
               </div>
+              {e2eeReady && (
+                <div className="flex items-center gap-1 px-2 py-1 rounded-lg bg-green-500/10 text-green-600 dark:text-green-400">
+                  <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M18 8h-1V6c0-2.76-2.24-5-5-5S7 3.24 7 6v2H6c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V10c0-1.1-.9-2-2-2zm-6 9c-1.1 0-2-.9-2-2s.9-2 2-2 2 .9 2 2-.9 2-2 2zm3.1-9H8.9V6c0-1.71 1.39-3.1 3.1-3.1s3.1 1.39 3.1 3.1v2z" />
+                  </svg>
+                  <span className="text-[10px] font-medium">E2EE</span>
+                </div>
+              )}
             </div>
 
             <div className="flex-1 overflow-y-auto p-4 space-y-3">
@@ -396,7 +510,7 @@ export default function DMPanel({ currentUserId, onClose, initialFriendId }: DMP
                         {parseAttachments(msg.attachments).map((att, i) => (
                           att.isVoice ? (
                             <div key={i} className="mt-1">
-                              <VoicePlayer url={att.url} duration={att.duration} isOwn={msg.userId === currentUserId} />
+                              <VoicePlayer url={att.url} duration={att.duration} isOwn={msg.userId === currentUserId} e2eeIv={(att as Attachment & { e2eeIv?: string }).e2eeIv} e2eeDecrypt={(att as Attachment & { e2eeIv?: string }).e2eeIv ? handleDecryptFile : undefined} />
                             </div>
                           ) : att.isImage ? (
                             <div key={i} className="mt-1">
@@ -413,6 +527,11 @@ export default function DMPanel({ currentUserId, onClose, initialFriendId }: DMP
                             {new Date(msg.createdAt).toLocaleTimeString("ru-RU", { hour: "2-digit", minute: "2-digit" })}
                           </span>
                           {msg.edited && <span className={`text-[9px] ${msg.userId === currentUserId ? "text-white/40" : "text-neutral-400"}`}>(ред.)</span>}
+                          {(msg as Message & { _encrypted?: boolean })._encrypted && (
+                            <svg className={`w-3 h-3 ${msg.userId === currentUserId ? "text-white/50" : "text-green-500"}`} viewBox="0 0 24 24" fill="currentColor">
+                              <path d="M18 8h-1V6c0-2.76-2.24-5-5-5S7 3.24 7 6v2H6c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V10c0-1.1-.9-2-2-2zm-6 9c-1.1 0-2-.9-2-2s.9-2 2-2 2 .9 2 2-.9 2-2 2zm3.1-9H8.9V6c0-1.71 1.39-3.1 3.1-3.1s3.1 1.39 3.1 3.1v2z" />
+                            </svg>
+                          )}
                         </div>
                       </>
                     )}

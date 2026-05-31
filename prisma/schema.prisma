@@ -50,6 +50,7 @@ model User {
   directMessages    DirectMessage[]
   avatarGlowEnabled Boolean         @default(false)
   avatarGlowColors  String?
+  e2eePublicKey     String?         @db.Text
   lastSeen          DateTime?
   createdAt         DateTime        @default(now())
   updatedAt         DateTime        @updatedAt
