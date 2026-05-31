@@ -9,6 +9,7 @@ import Link from "next/link";
 import { FACTION_COLORS, getNeighbors, setMapEdges, setCustomNodes, getActiveNodes } from "@/lib/games/velderanMap";
 import type { MapEdge, MapNode } from "@/lib/games/velderanMap";
 import type { VelderanGameState, GameUnit, CombatState, InventoryUnit } from "@/lib/games/velderanState";
+import DiceRoller from "@/components/games/DiceRoller";
 
 const NODE_TYPE_LABELS: Record<string, string> = {
   city: "Город",
@@ -44,11 +45,13 @@ function CombatModal({
   combat,
   myPlayerId,
   playerNames,
+  myHand,
   onPlayCard,
 }: {
   combat: CombatState;
   myPlayerId: string;
   playerNames: Record<string, string>;
+  myHand: number[];
   onPlayCard: (card: number, guess: number) => void;
 }) {
   const [card, setCard] = useState<number | null>(null);
@@ -57,7 +60,12 @@ function CombatModal({
   const isDefender = myPlayerId === combat.defenderPlayerId;
   const isParticipant = isAttacker || isDefender;
 
-  const alreadyPlayed = isAttacker ? !!combat.attackerCard : !!combat.defenderCard;
+  const alreadyPlayed = isAttacker ? combat.attackerCard != null : combat.defenderCard != null;
+
+  // Count cards in hand by value
+  const handCounts: Record<number, number> = {};
+  for (const c of myHand) handCounts[c] = (handCounts[c] || 0) + 1;
+  const uniqueValues = Array.from(new Set(myHand)).sort((a, b) => a - b);
 
   return (
     <motion.div
@@ -77,35 +85,40 @@ function CombatModal({
 
         {isParticipant && !alreadyPlayed ? (
           <>
-            <p className="text-sm text-gray-300 mb-3">Выберите карту (1-5) и угадайте карту противника:</p>
+            <p className="text-sm text-gray-300 mb-3">Выберите карту из руки и угадайте карту противника:</p>
             <div className="mb-3">
-              <p className="text-xs text-gray-500 mb-1">Ваша карта:</p>
-              <div className="flex gap-2 justify-center">
-                {[1, 2, 3, 4, 5].map((n) => (
+              <p className="text-xs text-gray-500 mb-1">Ваши карты ({myHand.length}):</p>
+              <div className="flex gap-2 justify-center flex-wrap">
+                {uniqueValues.map((v) => (
                   <button
-                    key={n}
-                    onClick={() => setCard(n)}
-                    className={`w-10 h-12 rounded-lg border text-lg font-bold transition-all ${
-                      card === n
-                        ? "border-red-500 bg-red-500/20 text-red-400"
+                    key={v}
+                    onClick={() => setCard(v)}
+                    className={`w-12 h-14 rounded-lg border text-lg font-bold transition-all relative ${
+                      card === v
+                        ? "border-red-500 bg-red-500/20 text-red-400 scale-110"
                         : "border-white/10 bg-white/5 text-white hover:border-white/30"
                     }`}
                   >
-                    {n}
+                    {v}
+                    {handCounts[v] > 1 && (
+                      <span className="absolute -top-1.5 -right-1.5 text-[9px] bg-red-600 text-white rounded-full w-4 h-4 flex items-center justify-center">
+                        {handCounts[v]}
+                      </span>
+                    )}
                   </button>
                 ))}
               </div>
             </div>
             <div className="mb-4">
-              <p className="text-xs text-gray-500 mb-1">Ваше предположение:</p>
+              <p className="text-xs text-gray-500 mb-1">Предположение (карта противника):</p>
               <div className="flex gap-2 justify-center">
                 {[1, 2, 3, 4, 5].map((n) => (
                   <button
                     key={n}
                     onClick={() => setGuess(n)}
-                    className={`w-10 h-12 rounded-lg border text-lg font-bold transition-all ${
+                    className={`w-12 h-14 rounded-lg border text-lg font-bold transition-all ${
                       guess === n
-                        ? "border-amber-500 bg-amber-500/20 text-amber-400"
+                        ? "border-amber-500 bg-amber-500/20 text-amber-400 scale-110"
                         : "border-white/10 bg-white/5 text-white hover:border-white/30"
                     }`}
                   >
@@ -123,7 +136,12 @@ function CombatModal({
             </button>
           </>
         ) : alreadyPlayed ? (
-          <p className="text-center text-amber-400 text-sm py-8">Ожидание хода противника...</p>
+          <div className="text-center py-8">
+            <motion.div animate={{ rotate: 360 }} transition={{ repeat: Infinity, duration: 2, ease: "linear" }}>
+              <span className="text-3xl">⏳</span>
+            </motion.div>
+            <p className="text-amber-400 text-sm mt-3">Ожидание хода противника...</p>
+          </div>
         ) : (
           <p className="text-center text-gray-500 text-sm py-8">Идёт сражение между другими игроками...</p>
         )}
@@ -143,6 +161,7 @@ export default function PlayPage() {
   const [selectedInvUnit, setSelectedInvUnit] = useState<string | null>(null);
   const [validMoves, setValidMoves] = useState<string[]>([]);
   const [edgesLoaded, setEdgesLoaded] = useState(false);
+  const [showDiceRoller, setShowDiceRoller] = useState(false);
   const logRef = useRef<HTMLDivElement>(null);
 
   const fetchRoom = useCallback(async () => {
@@ -190,6 +209,13 @@ export default function PlayPage() {
   const myPlayer = room?.players.find((p) => p.userId === userId);
   const myPlayerId = myPlayer?.id;
   const isMyTurn = gameState && myPlayerId ? gameState.turnOrder[gameState.currentPlayerIndex] === myPlayerId : false;
+
+  // Auto-show dice roller when entering GOD_SUMMON phase
+  useEffect(() => {
+    if (gameState?.phase === "GOD_SUMMON" && isMyTurn) {
+      setShowDiceRoller(true);
+    }
+  }, [gameState?.phase, isMyTurn]);
 
   const playerNames: Record<string, string> = {};
   const playerFactions: Record<string, string> = {};
@@ -352,10 +378,10 @@ export default function PlayPage() {
           )}
           {gameState.phase === "GOD_SUMMON" && isMyTurn && (
             <button
-              onClick={doRollGod}
+              onClick={() => setShowDiceRoller(true)}
               className="px-4 py-1.5 bg-purple-600 text-white rounded-lg text-sm font-medium hover:bg-purple-500 transition-all"
             >
-              🎲 Бросить кубики
+              🎲 Призвать божество
             </button>
           )}
           {isMyTurn && gameState.phase === "MOVE" && (
@@ -492,27 +518,27 @@ export default function PlayPage() {
                         >
                           {isGuard ? (
                             /* Guard: shield shape */
-                            <svg width="14" height="16" viewBox="0 0 14 16">
+                            <svg width="20" height="22" viewBox="0 0 14 16">
                               <path d="M7 0 L14 4 L14 10 Q14 14 7 16 Q0 14 0 10 L0 4 Z"
-                                fill={color} stroke={isSelected ? "#fff" : `${color}cc`} strokeWidth="1.5"
-                                style={{ filter: `drop-shadow(0 0 4px ${color}80)` }} />
+                                fill={color} stroke={isSelected ? "#fff" : `${color}cc`} strokeWidth="1.2"
+                                style={{ filter: `drop-shadow(0 0 6px ${color}aa)` }} />
                               <text x="7" y="10.5" textAnchor="middle" fill={color === "#f5f5f5" || color === "#eab308" ? "#000" : "#fff"}
                                 fontSize="7" fontWeight="bold">G</text>
                             </svg>
                           ) : (
                             /* Army: circle piece */
                             <span
-                              className="block w-4 h-4 rounded-full border-[1.5px]"
+                              className="block w-5 h-5 rounded-full border-2"
                               style={{
                                 backgroundColor: color,
                                 borderColor: isSelected ? "#fff" : `${color}cc`,
-                                boxShadow: isSelected ? `0 0 8px ${color}` : undefined,
+                                boxShadow: `0 0 6px ${color}80`,
                               }}
                             />
                           )}
                           {/* Moves indicator */}
                           {unit.movesLeft > 0 && unit.playerId === myPlayerId && (
-                            <span className="absolute -top-0.5 -right-0.5 w-1.5 h-1.5 rounded-full bg-green-400 border border-neutral-900" />
+                            <span className="absolute -top-0.5 -right-0.5 w-2 h-2 rounded-full bg-green-400 border border-neutral-900" />
                           )}
                         </button>
                       );
@@ -639,7 +665,7 @@ export default function PlayPage() {
                             setValidMoves([]);
                           }
                         }}
-                        className={`relative flex items-center justify-center p-1 rounded-lg transition-all ${
+                        className={`relative flex items-center justify-center p-1.5 rounded-lg transition-all ${
                           isSelected
                             ? "bg-cyan-500/20 ring-2 ring-cyan-400 scale-110"
                             : "bg-white/5 hover:bg-white/10"
@@ -647,19 +673,20 @@ export default function PlayPage() {
                         title={isGuard ? "Гвардия" : "Отряд"}
                       >
                         {isGuard ? (
-                          <svg width="18" height="20" viewBox="0 0 14 16">
+                          <svg width="28" height="32" viewBox="0 0 14 16">
                             <path d="M7 0 L14 4 L14 10 Q14 14 7 16 Q0 14 0 10 L0 4 Z"
-                              fill={myColor} stroke={isSelected ? "#22d3ee" : `${myColor}cc`} strokeWidth="1.2"
-                              style={{ filter: `drop-shadow(0 0 3px ${myColor}60)` }} />
+                              fill={myColor} stroke={isSelected ? "#22d3ee" : `${myColor}cc`} strokeWidth="1"
+                              style={{ filter: `drop-shadow(0 0 4px ${myColor}80)` }} />
                             <text x="7" y="10.5" textAnchor="middle" fill={myColor === "#f5f5f5" || myColor === "#eab308" ? "#000" : "#fff"}
                               fontSize="6" fontWeight="bold">G</text>
                           </svg>
                         ) : (
                           <span
-                            className="block w-4 h-4 rounded-full border-[1.5px]"
+                            className="block w-6 h-6 rounded-full border-2"
                             style={{
                               backgroundColor: myColor,
                               borderColor: isSelected ? "#22d3ee" : `${myColor}cc`,
+                              boxShadow: `0 0 6px ${myColor}60`,
                             }}
                           />
                         )}
@@ -671,6 +698,32 @@ export default function PlayPage() {
               {selectedInvUnit && (
                 <p className="text-[10px] text-cyan-400 mt-1.5">Нажмите на свой город для размещения</p>
               )}
+            </div>
+          )}
+
+          {/* Battle cards hand */}
+          {myPlayerId && gameState.battleCards?.hands?.[myPlayerId] && (
+            <div className="p-3 border-b border-white/5">
+              <h3 className="text-sm font-bold text-gray-400 mb-2 flex items-center gap-1">
+                <span>🃏</span> Боевые карты
+              </h3>
+              <div className="flex gap-1.5 flex-wrap">
+                {(() => {
+                  const hand = gameState.battleCards!.hands[myPlayerId] || [];
+                  const sorted = [...hand].sort((a, b) => a - b);
+                  return sorted.map((val, idx) => (
+                    <div
+                      key={idx}
+                      className="w-9 h-12 rounded-lg border border-white/20 bg-gradient-to-b from-red-900/30 to-neutral-800 flex items-center justify-center text-white font-bold text-sm shadow-sm"
+                    >
+                      {val}
+                    </div>
+                  ));
+                })()}
+              </div>
+              <p className="text-[9px] text-gray-600 mt-1">
+                Колода: {gameState.battleCards!.deck.length} | Бито: {gameState.battleCards!.discard.length}
+              </p>
             </div>
           )}
 
@@ -716,6 +769,35 @@ export default function PlayPage() {
         </div>
       </div>
 
+      {/* Dice Roller modal for GOD_SUMMON */}
+      <AnimatePresence>
+        {showDiceRoller && gameState.phase === "GOD_SUMMON" && isMyTurn && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm"
+          >
+            <motion.div
+              initial={{ scale: 0.9 }}
+              animate={{ scale: 1 }}
+              className="bg-neutral-900 border border-purple-500/30 rounded-2xl p-6 flex flex-col items-center gap-4"
+            >
+              <h3 className="text-xl font-bold text-purple-400">✨ Призыв божества</h3>
+              <p className="text-sm text-gray-400">Бросьте кубики, чтобы узнать, какой бог ответит</p>
+              <DiceRoller
+                onResult={() => {
+                  setTimeout(async () => {
+                    await doRollGod();
+                    setShowDiceRoller(false);
+                  }, 1200);
+                }}
+              />
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
       {/* Game Over overlay */}
       <AnimatePresence>
         {gameState.phase === "GAME_OVER" && gameState.winner && (
@@ -750,6 +832,7 @@ export default function PlayPage() {
             combat={gameState.combat}
             myPlayerId={myPlayerId}
             playerNames={playerNames}
+            myHand={gameState.battleCards?.hands?.[myPlayerId] || []}
             onPlayCard={doCombatCard}
           />
         )}
