@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import prisma from "@/lib/prisma";
+import { createInitialState } from "@/lib/games/velderanState";
 
 export async function GET(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const session = await getServerSession(authOptions);
@@ -39,7 +40,8 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
   const isInvited = room.invites.some((inv) => inv.invitee.id === userId);
   const isAdmin = (session.user as { role: string }).role === "ADMIN";
 
-  if (!isPlayer && !isHost && !isInvited && !isAdmin) {
+  const isLobby = room.status === "LOBBY";
+  if (!isPlayer && !isHost && !isInvited && !isAdmin && !isLobby) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
@@ -69,9 +71,19 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     if (!allReady) {
       return NextResponse.json({ error: "Не все игроки готовы" }, { status: 400 });
     }
+    const playersData = players.map((p) => ({
+      id: p.id,
+      faction: p.faction || "empire",
+      turnOrder: p.turnOrder,
+    }));
+    const initialState = createInitialState(playersData);
+
     const updated = await prisma.gameRoom.update({
       where: { id },
-      data: { status: "PLAYING" },
+      data: {
+        status: "PLAYING",
+        gameState: JSON.stringify(initialState),
+      },
     });
     return NextResponse.json(updated);
   }

@@ -3,6 +3,50 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import prisma from "@/lib/prisma";
 
+export async function POST(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  const session = await getServerSession(authOptions);
+  if (!session?.user) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+  const userId = (session.user as { id: string }).id;
+  const { id } = await params;
+
+  const room = await prisma.gameRoom.findUnique({
+    where: { id },
+    include: { _count: { select: { players: true } } },
+  });
+  if (!room) {
+    return NextResponse.json({ error: "Комната не найдена" }, { status: 404 });
+  }
+  if (room.status !== "LOBBY") {
+    return NextResponse.json({ error: "Игра уже началась" }, { status: 400 });
+  }
+
+  const alreadyIn = await prisma.gamePlayer.findUnique({
+    where: { roomId_userId: { roomId: id, userId } },
+  });
+  if (alreadyIn) {
+    return NextResponse.json({ error: "Вы уже в комнате" }, { status: 400 });
+  }
+
+  if (room._count.players >= room.maxPlayers) {
+    return NextResponse.json({ error: "Комната полна" }, { status: 400 });
+  }
+
+  const player = await prisma.gamePlayer.create({
+    data: {
+      roomId: id,
+      userId,
+      turnOrder: room._count.players,
+    },
+    include: {
+      user: { select: { id: true, name: true, username: true, avatar: true } },
+    },
+  });
+
+  return NextResponse.json(player, { status: 201 });
+}
+
 export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const session = await getServerSession(authOptions);
   if (!session?.user) {

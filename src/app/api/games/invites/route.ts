@@ -139,30 +139,6 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ error: "Комната не найдена" }, { status: 404 });
     }
 
-    const isFriendWithHost = await prisma.friendship.findFirst({
-      where: {
-        status: "ACCEPTED",
-        OR: [
-          { senderId: userId, receiverId: room.hostId },
-          { senderId: room.hostId, receiverId: userId },
-        ],
-      },
-    });
-
-    const isFriendWithAnyPlayer = await prisma.friendship.findFirst({
-      where: {
-        status: "ACCEPTED",
-        OR: room.players.flatMap((p) => [
-          { senderId: userId, receiverId: p.userId },
-          { senderId: p.userId, receiverId: userId },
-        ]),
-      },
-    });
-
-    if (!isFriendWithHost && !isFriendWithAnyPlayer) {
-      return NextResponse.json({ error: "Можно присоединиться только по приглашению друга" }, { status: 403 });
-    }
-
     return NextResponse.json(room);
   }
 
