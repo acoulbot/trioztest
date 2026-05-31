@@ -1,6 +1,8 @@
 "use client";
 
 import { useState, useEffect, useCallback, useRef } from "react";
+import Spinner from "@/components/ui/Spinner";
+import Button from "@/components/ui/Button";
 import { useSession } from "next-auth/react";
 import { AnimatePresence } from "framer-motion";
 import Link from "next/link";
@@ -159,9 +161,9 @@ function CreateGroupModal({ onClose, onCreated }: { onClose: () => void; onCreat
         </div>
         {error && <p className="text-xs text-red-500 dark:text-red-400">{error}</p>}
         <div className="flex gap-2 pt-1">
-          <button onClick={handleCreate} disabled={loading || !name.trim()} className="flex-1 px-4 py-2.5 bg-gradient-to-r from-violet-600 to-indigo-600 dark:from-cyan-500 dark:to-cyan-400 text-white dark:text-neutral-900 rounded-xl hover:shadow-lg transition-all text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed">
+          <Button onClick={handleCreate} disabled={loading || !name.trim()} size="md" className="flex-1">
             {loading ? "Создание..." : "Создать"}
-          </button>
+          </Button>
           <button onClick={onClose} className="flex-1 px-4 py-2.5 bg-neutral-100 dark:bg-neutral-700 text-neutral-600 dark:text-gray-400 rounded-xl hover:bg-neutral-200 dark:hover:bg-neutral-600 transition-all text-sm">
             Отмена
           </button>
@@ -250,9 +252,9 @@ function CreateChannelModal({ groupId, onClose, onCreated }: { groupId: string; 
         </div>
         {error && <p className="text-xs text-red-500 dark:text-red-400">{error}</p>}
         <div className="flex gap-2 pt-1">
-          <button onClick={handleCreate} disabled={loading || !name.trim()} className="flex-1 px-4 py-2.5 bg-gradient-to-r from-violet-600 to-indigo-600 dark:from-cyan-500 dark:to-cyan-400 text-white dark:text-neutral-900 rounded-xl hover:shadow-lg transition-all text-sm font-medium disabled:opacity-50">
+          <Button onClick={handleCreate} disabled={loading || !name.trim()} size="md" className="flex-1">
             {loading ? "Создание..." : "Создать"}
-          </button>
+          </Button>
           <button onClick={onClose} className="flex-1 px-4 py-2.5 bg-neutral-100 dark:bg-neutral-700 text-neutral-600 dark:text-gray-400 rounded-xl hover:bg-neutral-200 dark:hover:bg-neutral-600 transition-all text-sm">
             Отмена
           </button>
@@ -293,9 +295,9 @@ function InviteModal({ groupId, onClose }: { groupId: string; onClose: () => voi
             </div>
           </div>
         ) : (
-          <button onClick={createInvite} disabled={loading} className="w-full px-4 py-2.5 bg-gradient-to-r from-violet-600 to-indigo-600 dark:from-cyan-500 dark:to-cyan-400 text-white dark:text-neutral-900 rounded-xl text-sm font-medium disabled:opacity-50">
+          <Button onClick={createInvite} disabled={loading} size="md" fullWidth>
             {loading ? "..." : "Создать приглашение"}
-          </button>
+          </Button>
         )}
         {error && <p className="text-xs text-red-500 dark:text-red-400">{error}</p>}
         <button onClick={onClose} className="w-full px-4 py-2.5 bg-neutral-100 dark:bg-neutral-700 text-neutral-600 dark:text-gray-400 rounded-xl hover:bg-neutral-200 dark:hover:bg-neutral-600 transition-all text-sm">
@@ -330,7 +332,7 @@ function GroupRulesGate({ group, onAccept }: { group: GroupDetail; onAccept: () 
       <div className="bg-neutral-50 dark:bg-neutral-800 rounded-xl p-4 mb-4 max-h-60 overflow-y-auto">
         <p className="text-sm text-neutral-700 dark:text-gray-300 whitespace-pre-wrap leading-relaxed">{group.rules}</p>
       </div>
-      <button
+      <Button
         onClick={async () => {
           setLoading(true);
           try {
@@ -340,10 +342,11 @@ function GroupRulesGate({ group, onAccept }: { group: GroupDetail; onAccept: () 
           }
         }}
         disabled={loading}
-        className="w-full px-4 py-2.5 bg-gradient-to-r from-violet-600 to-indigo-600 dark:from-cyan-500 dark:to-cyan-400 text-white dark:text-neutral-900 rounded-xl hover:shadow-lg transition-all text-sm font-medium disabled:opacity-50"
+        size="md"
+        fullWidth
       >
         {loading ? "..." : "Принимаю правила"}
-      </button>
+      </Button>
     </div>
   );
 }
@@ -592,9 +595,9 @@ function GroupSettingsModal({ group, onClose, onUpdated, onDelete }: { group: Gr
             <textarea value={description} onChange={e => setDescription(e.target.value)} placeholder="Описание группы..."
               className="w-full bg-neutral-50 dark:bg-neutral-700 border border-neutral-200 dark:border-white/10 rounded-xl px-3 py-2 text-sm text-neutral-900 dark:text-white placeholder:text-neutral-400 resize-none h-20" />
             <div className="flex gap-2">
-              <button onClick={handleSaveGeneral} disabled={saving || !name.trim()} className="flex-1 px-4 py-2 bg-gradient-to-r from-violet-600 to-indigo-600 dark:from-cyan-500 dark:to-cyan-400 text-white dark:text-neutral-900 rounded-xl text-sm font-medium disabled:opacity-50">
+              <Button onClick={handleSaveGeneral} disabled={saving || !name.trim()} size="md" className="flex-1">
                 {saving ? "..." : "Сохранить"}
-              </button>
+              </Button>
               {isOwner && (
                 <button onClick={onDelete} className="px-4 py-2 bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 border border-red-200 dark:border-red-500/30 rounded-xl text-sm font-medium hover:bg-red-100 dark:hover:bg-red-900/40 transition-colors">
                   Удалить
@@ -609,9 +612,9 @@ function GroupSettingsModal({ group, onClose, onUpdated, onDelete }: { group: Gr
             <p className="text-xs text-neutral-400">Новые участники увидят эти правила и должны будут их принять при первом входе.</p>
             <textarea value={rules} onChange={e => setRules(e.target.value)} placeholder="Напишите правила сообщества..."
               className="w-full bg-neutral-50 dark:bg-neutral-700 border border-neutral-200 dark:border-white/10 rounded-xl px-3 py-2 text-sm text-neutral-900 dark:text-white placeholder:text-neutral-400 resize-none h-40" />
-            <button onClick={handleSaveRules} disabled={saving} className="w-full px-4 py-2 bg-gradient-to-r from-violet-600 to-indigo-600 dark:from-cyan-500 dark:to-cyan-400 text-white dark:text-neutral-900 rounded-xl text-sm font-medium disabled:opacity-50">
+            <Button onClick={handleSaveRules} disabled={saving} size="md" fullWidth>
               {saving ? "..." : "Сохранить правила"}
-            </button>
+            </Button>
           </div>
         )}
 
@@ -913,7 +916,7 @@ function ConnectPageInner() {
   if (status === "loading") {
     return (
       <div className="min-h-screen flex items-center justify-center bg-white dark:bg-neutral-950">
-        <div className="animate-spin w-8 h-8 border-2 border-violet-500 dark:border-cyan-400 border-t-transparent rounded-full" role="status" aria-label="Loading" />
+        <Spinner />
       </div>
     );
   }

@@ -1,6 +1,8 @@
 "use client";
 
 import { useSession } from "next-auth/react";
+import Spinner from "@/components/ui/Spinner";
+import Input from "@/components/ui/Input";
 import { useRouter } from "next/navigation";
 import { useEffect, useState, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
@@ -295,7 +297,7 @@ export default function AdminServicesPage() {
   if (status === "loading") {
     return (
       <div className="min-h-screen flex items-center justify-center bg-neutral-50 dark:bg-dark-900">
-        <div className="animate-spin w-8 h-8 border-2 border-cyan-400 border-t-transparent rounded-full" />
+        <Spinner />
       </div>
     );
   }
@@ -344,31 +346,28 @@ export default function AdminServicesPage() {
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                   <div>
                     <label className="block text-sm text-gray-400 mb-1">Название</label>
-                    <input
+                    <Input
                       type="text"
                       value={form.title}
                       onChange={(e) => setForm({ ...form, title: e.target.value })}
-                      className="input-field"
                       required
                     />
                   </div>
                   <div>
                     <label className="block text-sm text-gray-400 mb-1">Иконка (emoji)</label>
-                    <input
+                    <Input
                       type="text"
                       value={form.icon}
                       onChange={(e) => setForm({ ...form, icon: e.target.value })}
-                      className="input-field"
                       placeholder="🔧"
                     />
                   </div>
                   <div>
                     <label className="block text-sm text-gray-400 mb-1">Порядок</label>
-                    <input
+                    <Input
                       type="number"
                       value={form.order}
                       onChange={(e) => setForm({ ...form, order: parseInt(e.target.value) })}
-                      className="input-field"
                     />
                   </div>
                 </div>
@@ -443,7 +442,7 @@ export default function AdminServicesPage() {
                   </span>
                   {togglingId === service.id ? (
                     <div className="w-11 h-6 flex items-center justify-center">
-                      <div className="w-4 h-4 border-2 border-cyan-400 border-t-transparent rounded-full animate-spin" />
+                      <Spinner size="sm" />
                     </div>
                   ) : (
                     <Toggle

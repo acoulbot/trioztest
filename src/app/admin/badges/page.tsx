@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
+import Spinner from "@/components/ui/Spinner";
 import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
@@ -84,7 +85,7 @@ export default function AdminBadgesPage() {
   };
 
   if (status === "loading" || loading) {
-    return <div className="min-h-screen flex items-center justify-center"><div className="animate-spin w-8 h-8 border-2 border-violet-500 border-t-transparent rounded-full" /></div>;
+    return <div className="min-h-screen flex items-center justify-center"><Spinner /></div>;
   }
 
   return (

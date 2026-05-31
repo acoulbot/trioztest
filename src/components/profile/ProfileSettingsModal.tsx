@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
+import Button from "@/components/ui/Button";
 import { motion, AnimatePresence } from "framer-motion";
 import GlowAvatar, { GLOW_PRESETS, GlowAvatarUser } from "@/components/ui/GlowAvatar";
 import { DayNightMiniPreview } from "@/components/connect/DayNightBackground";
@@ -531,13 +532,9 @@ export default function ProfileSettingsModal({ user, onClose, onSaved, userRole 
 
         {/* Footer */}
         <div className="px-5 py-4 border-t border-neutral-100 dark:border-white/5 flex gap-2">
-          <button
-            onClick={save}
-            disabled={saving}
-            className="flex-1 py-2.5 rounded-xl bg-gradient-to-r from-violet-600 to-indigo-600 text-white text-sm font-medium hover:shadow-lg hover:shadow-violet-500/20 disabled:opacity-50 transition-all"
-          >
+          <Button onClick={save} disabled={saving} size="md" className="flex-1">
             {saving ? "Сохранение..." : "Сохранить"}
-          </button>
+          </Button>
           <button
             onClick={onClose}
             className="px-4 py-2.5 rounded-xl bg-neutral-100 dark:bg-white/5 text-neutral-600 dark:text-neutral-400 text-sm hover:bg-neutral-200 dark:hover:bg-white/10 transition-all"

@@ -1,6 +1,8 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
+import Button from "@/components/ui/Button";
+import { Send } from "lucide-react";
 import { useSession } from "next-auth/react";
 import { motion, AnimatePresence } from "framer-motion";
 
@@ -325,16 +327,13 @@ export default function AiChatPanel() {
                         disabled:opacity-50 transition-all"
                       disabled={loading || !!limitExhausted}
                     />
-                    <button
+                    <Button
                       type="submit"
+                      size="sm"
                       disabled={loading || !input.trim() || !!limitExhausted}
-                      className="px-3 py-2.5 bg-gradient-to-r from-violet-600 to-indigo-600 text-white rounded-xl
-                        hover:shadow-lg hover:shadow-violet-500/20 disabled:opacity-40 transition-all"
                     >
-                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
-                      </svg>
-                    </button>
+                      <Send className="w-4 h-4" strokeWidth={2} />
+                    </Button>
                   </div>
                 </form>
               </>
