@@ -603,7 +603,7 @@ export default function MessageArea({
                   </div>
                 ) : (
                   <>
-                    {msg.content && <p className="text-neutral-700 dark:text-gray-300 text-sm mt-0.5 break-words">{msg.content}</p>}
+                    {msg.content && <p className="text-neutral-700 dark:text-gray-300 text-sm mt-0.5 break-words whitespace-pre-wrap">{msg.content}</p>}
                     {parseAttachments(msg.attachments).map((att, i) => (
                       att.isVoice ? (
                         <div key={i} className="mt-1.5">
