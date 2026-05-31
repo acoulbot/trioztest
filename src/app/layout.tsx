@@ -16,7 +16,10 @@ const playfair = Playfair_Display({
   weight: ["400", "500", "600", "700", "800", "900"],
 });
 
+const BASE_URL = "https://connect.trioz.ru";
+
 export const metadata: Metadata = {
+  metadataBase: new URL(BASE_URL),
   title: "TrioZ — Экосистема проектов",
   description: "T.Р.И.О.Z — масштабная экосистема проектов. Игры, книги, коммуникации, IT-услуги для бизнеса.",
   icons: {
@@ -26,6 +29,20 @@ export const metadata: Metadata = {
       { url: "/favicon-16x16.png", sizes: "16x16", type: "image/png" },
     ],
     apple: "/apple-touch-icon.png",
+  },
+  openGraph: {
+    type: "website",
+    siteName: "T.Р.И.О.Z",
+    title: "T.Р.И.О.Z — Экосистема проектов",
+    description: "Масштабная экосистема проектов. Игры, книги, коммуникации, IT-услуги для бизнеса.",
+    url: BASE_URL,
+    images: [{ url: "/api/og?page=main", width: 1200, height: 630, alt: "T.Р.И.О.Z" }],
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "T.Р.И.О.Z — Экосистема проектов",
+    description: "Масштабная экосистема проектов. Игры, книги, коммуникации, IT-услуги.",
+    images: ["/api/og?page=main"],
   },
 };
 

@@ -5,7 +5,12 @@ export const metadata: Metadata = {
   description: "Коммуникационная платформа T.Р.И.О.Z: групповые чаты, голосовые каналы, IT-услуги для бизнеса.",
   openGraph: {
     title: "TZ.Connect — Мессенджер T.Р.И.О.Z",
-    description: "Мессенджер с голосовыми каналами и IT-услугами",
+    description: "Коммуникационная платформа с голосовыми каналами и IT-услугами.",
+    images: [{ url: "/api/og?page=connect", width: 1200, height: 630, alt: "TZ.Connect" }],
+  },
+  twitter: {
+    card: "summary_large_image",
+    images: ["/api/og?page=connect"],
   },
 };
 
