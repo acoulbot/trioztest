@@ -2,6 +2,7 @@
 
 import { useSession } from "next-auth/react";
 import Spinner from "@/components/ui/Spinner";
+import Button from "@/components/ui/Button";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
@@ -134,13 +135,9 @@ export default function AdminAiPage() {
             />
           </div>
 
-          <button
-            onClick={save}
-            disabled={saving}
-            className="w-full py-3 bg-gradient-to-r from-violet-600 to-indigo-600 text-white rounded-xl font-medium text-sm hover:shadow-lg hover:shadow-violet-500/20 disabled:opacity-50 transition-all"
-          >
+          <Button onClick={save} disabled={saving} size="lg" fullWidth>
             {saving ? "Сохранение..." : saved ? "Сохранено ✓" : "Сохранить настройки"}
-          </button>
+          </Button>
         </motion.div>
       </div>
     </div>

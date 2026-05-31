@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
+import Button from "@/components/ui/Button";
 import { useSession } from "next-auth/react";
 import { motion, AnimatePresence } from "framer-motion";
 
@@ -73,13 +74,9 @@ export default function WelcomeModal() {
             </div>
 
             <div className="p-6 border-t border-neutral-100 dark:border-white/5">
-              <button
-                onClick={handleAccept}
-                disabled={accepting}
-                className="w-full py-3 rounded-xl bg-gradient-to-r from-violet-600 to-indigo-600 text-white font-semibold text-sm hover:shadow-lg hover:shadow-violet-500/20 disabled:opacity-50 transition-all"
-              >
+              <Button onClick={handleAccept} disabled={accepting} size="lg" fullWidth>
                 {accepting ? "Подтверждение..." : "Принять и продолжить"}
-              </button>
+              </Button>
               <p className="text-[11px] text-neutral-400 dark:text-neutral-500 text-center mt-3">
                 Нажимая кнопку, вы подтверждаете ознакомление с правовой информацией
               </p>

@@ -3,6 +3,7 @@
 import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
+import Button from "@/components/ui/Button";
 import { motion } from "framer-motion";
 import Link from "next/link";
 
@@ -73,13 +74,9 @@ export default function AdminWelcomePage() {
             />
 
             <div className="flex items-center gap-3 mt-4">
-              <button
-                onClick={handleSave}
-                disabled={saving}
-                className="px-6 py-2.5 rounded-xl bg-gradient-to-r from-violet-600 to-indigo-600 text-white text-sm font-semibold hover:shadow-lg disabled:opacity-50 transition-all"
-              >
+              <Button onClick={handleSave} disabled={saving} size="lg">
                 {saving ? "Сохранение..." : "Сохранить"}
-              </button>
+              </Button>
               {saved && <span className="text-sm text-green-500">Сохранено</span>}
             </div>
           </div>

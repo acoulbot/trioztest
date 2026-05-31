@@ -2,6 +2,8 @@
 
 import { useState, useEffect } from "react";
 import Spinner from "@/components/ui/Spinner";
+import Card from "@/components/ui/Card";
+import Badge from "@/components/ui/Badge";
 import { useParams } from "next/navigation";
 import { motion } from "framer-motion";
 import Link from "next/link";
@@ -59,16 +61,16 @@ export default function ArticlePage() {
             </span>
           </div>
 
-          <div className="glass-card p-8 md:p-12 max-md:p-4 max-md:text-base">
+          <Card className="p-8 md:p-12 max-md:p-4 max-md:text-base">
             <MarkdownRenderer content={article.content} />
-          </div>
+          </Card>
 
           {article.tags && (
             <div className="flex gap-2 mt-6">
               {article.tags.split(",").map((tag) => (
-                <span key={tag} className="text-sm text-gray-400 bg-dark-700 px-3 py-1 rounded-lg">
+                <Badge key={tag} tone="neutral">
                   #{tag.trim()}
-                </span>
+                </Badge>
               ))}
             </div>
           )}
