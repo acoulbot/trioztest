@@ -250,37 +250,6 @@ export default function VelderanPage() {
         </div>
       </div>
 
-      {/* Gods */}
-      <div className="max-w-6xl mx-auto px-4 pb-16">
-        <motion.h2 initial={{ opacity: 0 }} whileInView={{ opacity: 1 }} viewport={{ once: true }}
-          className="text-3xl font-display font-bold text-white mb-4 text-center">
-          Божества
-        </motion.h2>
-        <p className="text-gray-400 text-center mb-8 max-w-2xl mx-auto">
-          Гвардия на святилище бросает 2 кубика. Число определяет призываемое божество.
-        </p>
-
-        <div className="mb-8 flex justify-center">
-          <div className="relative w-full max-w-2xl rounded-2xl overflow-hidden border border-white/10">
-            <Image src="/games/velderan/gods-cards.png" alt="Карты богов" width={800} height={600} className="w-full h-auto" />
-          </div>
-        </div>
-
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-          {GODS.map((g, i) => (
-            <motion.div key={g.num} initial={{ opacity: 0, y: 10 }} whileInView={{ opacity: 1, y: 0 }}
-              viewport={{ once: true }} transition={{ delay: i * 0.03 }}
-              className="bg-neutral-900 border border-white/5 rounded-xl p-4 hover:border-amber-500/20 transition-all">
-              <div className="flex items-center gap-2 mb-2">
-                <span className="w-7 h-7 rounded-lg bg-amber-500/20 text-amber-400 flex items-center justify-center text-xs font-bold">{g.num}</span>
-                <span className="text-white font-medium text-sm">{g.name}</span>
-              </div>
-              <p className="text-gray-500 text-xs leading-relaxed">{g.effect}</p>
-            </motion.div>
-          ))}
-        </div>
-      </div>
-
       {/* Rules */}
       <AnimatePresence>
         {showRules && (
@@ -316,6 +285,26 @@ export default function VelderanPage() {
 
                 <Section title="Спецвход">
                   <p className="text-gray-400 text-sm leading-relaxed">Твердь Гиордта — нечётное число на кубиках. Пески Сихвариса — чётное число. При неудаче — возврат на предыдущую точку.</p>
+                </Section>
+
+                <Section title="Божества">
+                  <p className="text-gray-400 text-sm leading-relaxed mb-4">
+                    Гвардия на святилище бросает 2 кубика. Сумма определяет призываемое божество.
+                  </p>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                    {GODS.map((g) => (
+                      <div key={g.num}
+                        className="bg-neutral-800/60 border border-amber-500/10 rounded-xl p-4 hover:border-amber-500/30 transition-all">
+                        <div className="flex items-center gap-3 mb-2">
+                          <span className="w-8 h-8 rounded-lg bg-gradient-to-br from-amber-600/30 to-red-600/30 border border-amber-500/20 text-amber-400 flex items-center justify-center text-sm font-bold flex-shrink-0">
+                            {g.num}
+                          </span>
+                          <span className="text-white font-medium text-sm">{g.name}</span>
+                        </div>
+                        <p className="text-gray-400 text-xs leading-relaxed">{g.effect}</p>
+                      </div>
+                    ))}
+                  </div>
                 </Section>
               </div>
             </div>

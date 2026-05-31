@@ -17,8 +17,13 @@ export async function GET(req: NextRequest) {
 
   let rooms;
   if (browse === "1") {
+    // Only show rooms with activity in the last 5 minutes
+    const fiveMinAgo = new Date(Date.now() - 5 * 60 * 1000);
     rooms = await prisma.gameRoom.findMany({
-      where: { status: "LOBBY" },
+      where: {
+        status: "LOBBY",
+        updatedAt: { gte: fiveMinAgo },
+      },
       include: {
         host: { select: { id: true, name: true, username: true, avatar: true } },
         players: {
