@@ -18,11 +18,11 @@ export async function POST(req: Request) {
   }
 
   const now = new Date();
-  if (conv.user1Id === userId) {
-    await prisma.directConversation.update({ where: { id: conversationId }, data: { user1ReadAt: now } });
-  } else {
-    await prisma.directConversation.update({ where: { id: conversationId }, data: { user2ReadAt: now } });
-  }
+  const col = conv.user1Id === userId ? "user1ReadAt" : "user2ReadAt";
+  await prisma.$executeRawUnsafe(
+    `UPDATE "DirectConversation" SET "${col}" = $1 WHERE "id" = $2`,
+    now, conversationId
+  );
 
   const peerId = conv.user1Id === userId ? conv.user2Id : conv.user1Id;
   emitToUser(peerId, "dm-read", { conversationId, userId, readAt: now.toISOString() });
