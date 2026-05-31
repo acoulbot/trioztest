@@ -1,4 +1,4 @@
-import { VelderanGameState, getCurrentPlayerId, moveUnit, endTurn, placeReserve, placeFromInventory, finishPlacement, canMoveUnit, rollDiceForGod, resolveCombat } from "./velderanState";
+import { VelderanGameState, getCurrentPlayerId, moveUnit, endTurn, placeReserve, placeFromInventory, finishPlacement, canMoveUnit, rollDiceForGod, playCombatCard } from "./velderanState";
 import { getActiveNodes, getNeighbors } from "./velderanMap";
 
 const BOT_USER_PREFIX = "bot-velderan-";
@@ -202,7 +202,7 @@ function botMove(
 function botCombat(
   state: VelderanGameState,
   botId: string,
-  playerNames: Record<string, string>
+  _playerNames: Record<string, string>
 ): VelderanGameState {
   let newState = structuredClone(state);
   if (!newState.combat) return newState;
@@ -213,29 +213,14 @@ function botCombat(
 
   if (!isAttacker && !isDefender) return newState;
 
-  // Bot picks random card and guess
-  const card = Math.floor(Math.random() * 5) + 1;
+  // Bot picks card from hand (random) and random guess
+  const hand = newState.battleCards?.hands[botId] || [];
+  const card = hand.length > 0 ? hand[Math.floor(Math.random() * hand.length)] : Math.floor(Math.random() * 5) + 1;
   const guess = Math.floor(Math.random() * 5) + 1;
 
-  if (isAttacker && !combat.attackerCard) {
-    newState.combat!.attackerCard = card;
-    newState.combat!.attackerGuess = guess;
-  }
-  if (isDefender && !combat.defenderCard) {
-    newState.combat!.defenderCard = card;
-    newState.combat!.defenderGuess = guess;
-  }
-
-  // If both sides have played, resolve
-  if (newState.combat!.attackerCard && newState.combat!.defenderCard) {
-    newState = resolveCombat(
-      newState,
-      newState.combat!.attackerCard,
-      newState.combat!.attackerGuess!,
-      newState.combat!.defenderCard,
-      newState.combat!.defenderGuess!,
-      playerNames
-    );
+  const shouldPlay = (isAttacker && combat.attackerCard == null) || (isDefender && combat.defenderCard == null);
+  if (shouldPlay) {
+    newState = playCombatCard(newState, botId, card, guess);
   }
 
   return newState;

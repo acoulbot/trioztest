@@ -41,6 +41,7 @@ const config: Config = {
         "fade-in": "fade-in 0.8s ease-out forwards",
         "slide-up": "slide-up 0.8s ease-out forwards",
         "scale-in": "scale-in 0.5s ease-out forwards",
+        "dice-shake": "dice-shake 0.65s ease-in-out",
       },
       keyframes: {
         "glow-pulse": {
@@ -62,6 +63,14 @@ const config: Config = {
         "scale-in": {
           "0%": { opacity: "0", transform: "scale(0.9)" },
           "100%": { opacity: "1", transform: "scale(1)" },
+        },
+        "dice-shake": {
+          "0%": { transform: "rotate(0) scale(1)" },
+          "12%": { transform: "rotate(-13deg) scale(1.07)" },
+          "30%": { transform: "rotate(10deg) scale(1.09)" },
+          "50%": { transform: "rotate(-7deg) scale(1.05)" },
+          "70%": { transform: "rotate(5deg) scale(1.03)" },
+          "100%": { transform: "rotate(0) scale(1)" },
         },
       },
       backgroundImage: {

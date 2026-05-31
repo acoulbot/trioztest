@@ -34,6 +34,12 @@ export interface InventoryUnit {
   type: "ARMY" | "GUARD";
 }
 
+export interface BattleCardState {
+  deck: number[];           // shared draw pile (values 1-5)
+  hands: Record<string, number[]>; // playerId → cards in hand
+  discard: number[];        // discard pile ("бито")
+}
+
 export interface VelderanGameState {
   round: number;
   currentPlayerIndex: number;
@@ -41,6 +47,7 @@ export interface VelderanGameState {
   units: GameUnit[];
   combat?: CombatState;
   lastGodResult?: GodResult;
+  battleCards?: BattleCardState;
   log: string[];
   turnOrder: string[]; // array of GamePlayer.id in turn order
   eliminatedPlayers: string[]; // GamePlayer.ids
@@ -66,6 +73,38 @@ const GODS: Record<number, { name: string; effect: string }> = {
 
 const TOTAL_ARMIES = 8;
 const TOTAL_GUARDS = 3;
+
+/** Shuffle array in place (Fisher-Yates) */
+function shuffle<T>(arr: T[]): T[] {
+  for (let i = arr.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [arr[i], arr[j]] = [arr[j], arr[i]];
+  }
+  return arr;
+}
+
+/** Create a deck of 100 battle cards: 20 each of values 1-5 */
+function createDeck(): number[] {
+  const deck: number[] = [];
+  for (let v = 1; v <= 5; v++) {
+    for (let i = 0; i < 20; i++) deck.push(v);
+  }
+  return shuffle(deck);
+}
+
+/** Draw N cards from deck; if deck is empty, reshuffle discard into deck */
+function drawCards(bc: BattleCardState, count: number): number[] {
+  const drawn: number[] = [];
+  for (let i = 0; i < count; i++) {
+    if (bc.deck.length === 0) {
+      if (bc.discard.length === 0) break;
+      bc.deck = shuffle([...bc.discard]);
+      bc.discard = [];
+    }
+    drawn.push(bc.deck.pop()!);
+  }
+  return drawn;
+}
 
 export function createInitialState(
   players: { id: string; faction: string; turnOrder: number }[]
@@ -104,13 +143,24 @@ export function createInitialState(
     reserve[player.id] = 0;
   }
 
+  // Random turn order
+  const randomOrder = shuffle(sorted.map((p) => p.id));
+
+  // Create battle cards deck and deal 5 to each player
+  const deck = createDeck();
+  const bc: BattleCardState = { deck, hands: {}, discard: [] };
+  for (const pid of randomOrder) {
+    bc.hands[pid] = drawCards(bc, 5);
+  }
+
   return {
     round: 1,
     currentPlayerIndex: 0,
     phase: "PLACEMENT",
     units,
+    battleCards: bc,
     log: ["Игра началась! Расставьте фишки из инвентаря на свои города (по 1 на город)."],
-    turnOrder: sorted.map((p) => p.id),
+    turnOrder: randomOrder,
     eliminatedPlayers: [],
     reserve,
     inventory,
@@ -429,21 +479,61 @@ export function rollDiceForGod(
   return newState;
 }
 
-export function resolveCombat(
+/** Play a combat card from hand (one side at a time) */
+export function playCombatCard(
   state: VelderanGameState,
-  attackerCard: number,
-  attackerGuess: number,
-  defenderCard: number,
-  defenderGuess: number,
-  playerNames: Record<string, string>
+  playerId: string,
+  card: number,
+  guess: number,
 ): VelderanGameState {
   const newState = structuredClone(state);
+  if (!newState.combat || !newState.battleCards) return newState;
+
+  const { attackerPlayerId, defenderPlayerId } = newState.combat;
+  const isAttacker = playerId === attackerPlayerId;
+  const isDefender = playerId === defenderPlayerId;
+  if (!isAttacker && !isDefender) return newState;
+
+  // Remove card from hand
+  const hand = newState.battleCards.hands[playerId] || [];
+  const cardIdx = hand.indexOf(card);
+  if (cardIdx < 0) return newState; // card not in hand
+  hand.splice(cardIdx, 1);
+  newState.battleCards.hands[playerId] = hand;
+
+  if (isAttacker) {
+    newState.combat.attackerCard = card;
+    newState.combat.attackerGuess = guess;
+  } else {
+    newState.combat.defenderCard = card;
+    newState.combat.defenderGuess = guess;
+  }
+
+  // If both have played, resolve
+  if (newState.combat.attackerCard != null && newState.combat.defenderCard != null) {
+    return resolveCombat(newState);
+  }
+
+  return newState;
+}
+
+function resolveCombat(
+  newState: VelderanGameState,
+): VelderanGameState {
   if (!newState.combat) return newState;
 
-  const { attackerUnitId, defenderUnitId, attackerPlayerId, defenderPlayerId, nodeId } = newState.combat;
-  const attackerName = playerNames[attackerPlayerId] || "Атакующий";
-  const defenderName = playerNames[defenderPlayerId] || "Защитник";
+  const {
+    attackerUnitId, defenderUnitId, attackerPlayerId, defenderPlayerId,
+    nodeId, attackerCard, defenderCard, attackerGuess, defenderGuess,
+  } = newState.combat;
+  if (attackerCard == null || defenderCard == null || attackerGuess == null || defenderGuess == null) return newState;
+
   const node = getActiveNodes().find((n) => n.id === nodeId);
+
+  // Discard played cards
+  if (newState.battleCards) {
+    newState.battleCards.discard.push(attackerCard, defenderCard);
+  }
 
   // Exact guess wins
   const attackerGuessedRight = attackerGuess === defenderCard;
@@ -455,13 +545,12 @@ export function resolveCombat(
   if (attackerGuessedRight && !defenderGuessedRight) {
     winnerId = attackerPlayerId;
     loserId = defenderPlayerId;
-    newState.log.push(`${attackerName} угадал карту! Победа атакующего на ${node?.name || ""}.`);
+    newState.log.push(`Атакующий угадал карту ${defenderCard}! Победа.`);
   } else if (defenderGuessedRight && !attackerGuessedRight) {
     winnerId = defenderPlayerId;
     loserId = attackerPlayerId;
-    newState.log.push(`${defenderName} угадал карту! Победа защитника на ${node?.name || ""}.`);
+    newState.log.push(`Защитник угадал карту ${attackerCard}! Победа.`);
   } else if (attackerGuessedRight && defenderGuessedRight) {
-    // Both guessed — higher card wins
     if (attackerCard > defenderCard) {
       winnerId = attackerPlayerId;
       loserId = defenderPlayerId;
@@ -478,41 +567,60 @@ export function resolveCombat(
     if (attackerCard > defenderCard && attackerNear) {
       winnerId = attackerPlayerId;
       loserId = defenderPlayerId;
-      newState.log.push(`${attackerName} побеждает (карта ${attackerCard} > ${defenderCard}, ±1).`);
+      newState.log.push(`Карта ${attackerCard} > ${defenderCard} (±1). Победа атакующего.`);
     } else if (defenderCard > attackerCard && defenderNear) {
       winnerId = defenderPlayerId;
       loserId = attackerPlayerId;
-      newState.log.push(`${defenderName} побеждает (карта ${defenderCard} > ${attackerCard}, ±1).`);
+      newState.log.push(`Карта ${defenderCard} > ${attackerCard} (±1). Победа защитника.`);
     } else {
-      // Draw — no losses
-      newState.log.push(`Ничья на ${node?.name || ""}. Переигровка не требуется.`);
+      // Draw — replay (keep combat but reset cards)
+      newState.log.push(`Ничья (${attackerCard} vs ${defenderCard}). Переигровка!`);
+      newState.combat.attackerCard = undefined;
+      newState.combat.defenderCard = undefined;
+      newState.combat.attackerGuess = undefined;
+      newState.combat.defenderGuess = undefined;
+      // Draw replacement cards
+      if (newState.battleCards) {
+        const atkNew = drawCards(newState.battleCards, 1);
+        const defNew = drawCards(newState.battleCards, 1);
+        if (atkNew.length > 0) newState.battleCards.hands[attackerPlayerId].push(...atkNew);
+        if (defNew.length > 0) newState.battleCards.hands[defenderPlayerId].push(...defNew);
+      }
+      return newState;
     }
   }
 
   if (loserId) {
     const loserUnitId = loserId === attackerPlayerId ? attackerUnitId : defenderUnitId;
-    const winnerId = loserId === attackerPlayerId ? defenderPlayerId : attackerPlayerId;
+    const actualWinnerId = loserId === attackerPlayerId ? defenderPlayerId : attackerPlayerId;
     newState.units = newState.units.filter((u) => u.id !== loserUnitId);
-    const loserName = loserId === attackerPlayerId ? attackerName : defenderName;
-    newState.log.push(`Отряд ${loserName} уничтожен.`);
+    newState.log.push(`Проигравший отряд уничтожен.`);
 
     // Capture city if attacker won and city belongs to defender
     if (!newState.cityOwners) newState.cityOwners = {};
-    if (node?.type === "city" && winnerId === attackerPlayerId) {
+    if (node?.type === "city" && actualWinnerId === attackerPlayerId) {
       const prevOwner = newState.cityOwners[nodeId];
-      if (prevOwner && prevOwner !== winnerId) {
-        newState.cityOwners[nodeId] = winnerId;
-        const winName = playerNames[winnerId] || "Игрок";
-        newState.log.push(`${winName} захватил город ${node.name}!`);
+      if (prevOwner && prevOwner !== actualWinnerId) {
+        newState.cityOwners[nodeId] = actualWinnerId;
+        newState.log.push(`Город ${node.name} захвачен!`);
       }
     }
 
     // Check elimination
     const remaining = newState.units.filter((u) => u.playerId === loserId);
-    if (remaining.length === 0 && loserId) {
+    const invRemaining = newState.inventory?.[loserId]?.length || 0;
+    if (remaining.length === 0 && invRemaining === 0 && loserId) {
       newState.eliminatedPlayers.push(loserId);
-      newState.log.push(`${loserName} выбыл из игры!`);
+      newState.log.push(`Игрок выбыл из игры!`);
     }
+  }
+
+  // Draw replacement cards (each player draws 1 to replace the played card)
+  if (newState.battleCards) {
+    const atkNew = drawCards(newState.battleCards, 1);
+    const defNew = drawCards(newState.battleCards, 1);
+    if (atkNew.length > 0) newState.battleCards.hands[attackerPlayerId].push(...atkNew);
+    if (defNew.length > 0) newState.battleCards.hands[defenderPlayerId].push(...defNew);
   }
 
   newState.combat = undefined;
@@ -525,8 +633,7 @@ export function resolveCombat(
   if (activePlayers.length === 1) {
     newState.winner = activePlayers[0];
     newState.phase = "GAME_OVER";
-    const winName = playerNames[activePlayers[0]] || "Игрок";
-    newState.log.push(`${winName} победил! Игра окончена.`);
+    newState.log.push(`Победа! Игра окончена.`);
   }
 
   return newState;

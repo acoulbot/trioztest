@@ -8,7 +8,7 @@ import {
   moveUnit,
   canMoveUnit,
   endTurn,
-  resolveCombat,
+  playCombatCard,
   rollDiceForGod,
   placeReserve,
   placeFromInventory,
@@ -110,29 +110,15 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       return NextResponse.json({ error: "Вы не участвуете в сражении" }, { status: 400 });
     }
 
-    // Update combat state
-    newState = structuredClone(state);
-    if (!newState.combat) return NextResponse.json({ error: "Ошибка" }, { status: 500 });
-
-    if (isAttacker) {
-      newState.combat.attackerCard = card;
-      newState.combat.attackerGuess = guess;
-    } else {
-      newState.combat.defenderCard = card;
-      newState.combat.defenderGuess = guess;
+    // Check player hasn't already played
+    if (isAttacker && combat.attackerCard != null) {
+      return NextResponse.json({ error: "Вы уже выложили карту" }, { status: 400 });
+    }
+    if (isDefender && combat.defenderCard != null) {
+      return NextResponse.json({ error: "Вы уже выложили карту" }, { status: 400 });
     }
 
-    // If both have played cards, resolve
-    if (newState.combat.attackerCard && newState.combat.defenderCard) {
-      newState = resolveCombat(
-        newState,
-        newState.combat.attackerCard,
-        newState.combat.attackerGuess!,
-        newState.combat.defenderCard,
-        newState.combat.defenderGuess!,
-        playerNames
-      );
-    }
+    newState = playCombatCard(state, player.id, card, guess);
   } else if (action === "roll_god") {
     if (state.phase !== "GOD_SUMMON") {
       return NextResponse.json({ error: "Нет вызова божества" }, { status: 400 });
