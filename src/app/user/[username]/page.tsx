@@ -270,7 +270,11 @@ export default function UserProfilePage() {
             <div className="space-y-2">
               {profile.commonGroups.map((g) => (
                 <div key={g.id} className="flex items-center gap-2 px-3 py-2 bg-neutral-100 dark:bg-white/5 rounded-xl">
-                  <span className="text-lg">{g.icon || "💬"}</span>
+                  {g.icon && g.icon.startsWith("/") ? (
+                    <img src={g.icon} alt="" className="w-7 h-7 rounded-lg object-cover" />
+                  ) : (
+                    <span className="text-lg">{g.icon || "💬"}</span>
+                  )}
                   <span className="text-sm text-neutral-900 dark:text-white">{g.name}</span>
                 </div>
               ))}
