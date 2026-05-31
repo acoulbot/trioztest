@@ -6,7 +6,7 @@ import { useParams, useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import Image from "next/image";
 import Link from "next/link";
-import { MAP_NODES, MAP_EDGES, FACTION_COLORS, NODE_ICONS, getNeighbors, setMapEdges } from "@/lib/games/velderanMap";
+import { MAP_NODES, FACTION_COLORS, getNeighbors, setMapEdges } from "@/lib/games/velderanMap";
 import type { MapEdge } from "@/lib/games/velderanMap";
 import type { VelderanGameState, GameUnit, CombatState } from "@/lib/games/velderanState";
 
@@ -335,28 +335,7 @@ export default function PlayPage() {
       <div className="flex flex-1 overflow-hidden">
         {/* Map area */}
         <div className="flex-1 relative overflow-hidden">
-          <Image src="/games/velderan/map.png" alt="Карта" fill className="object-contain" style={{ opacity: 0.85 }} />
-
-          {/* Edges */}
-          <svg className="absolute inset-0 w-full h-full pointer-events-none">
-            {MAP_EDGES.map((edge, i) => {
-              const from = MAP_NODES.find((n) => n.id === edge.from);
-              const to = MAP_NODES.find((n) => n.id === edge.to);
-              if (!from || !to) return null;
-              return (
-                <line
-                  key={i}
-                  x1={`${from.x}%`}
-                  y1={`${from.y}%`}
-                  x2={`${to.x}%`}
-                  y2={`${to.y}%`}
-                  stroke={edge.sea ? "rgba(56,189,248,0.4)" : "rgba(255,200,50,0.35)"}
-                  strokeWidth={edge.sea ? 2 : 1.5}
-                  strokeDasharray="6 4"
-                />
-              );
-            })}
-          </svg>
+          <Image src="/games/velderan/map.png" alt="Карта" fill className="object-contain" unoptimized />
 
           {/* Nodes */}
           {MAP_NODES.map((node) => {
@@ -365,7 +344,6 @@ export default function PlayPage() {
             const hasMyUnit = units.some((u) => u.playerId === myPlayerId);
             const cityOwner = gameState.cityOwners?.[node.id];
             const cityOwnerColor = cityOwner ? FACTION_COLORS[playerFactions[cityOwner]] : undefined;
-            const nodeColor = cityOwnerColor || (node.faction ? FACTION_COLORS[node.faction] : undefined);
 
             // Placement: highlight own cities
             const isPlacementTarget = gameState.phase === "PLACEMENT" && isMyTurn &&
@@ -400,12 +378,12 @@ export default function PlayPage() {
                 {/* City ownership ring */}
                 {node.type === "city" && cityOwnerColor && (
                   <span
-                    className="absolute inset-[-2px] rounded-full pointer-events-none"
-                    style={{ border: `2px solid ${cityOwnerColor}50` }}
+                    className="absolute inset-[-4px] rounded-full pointer-events-none"
+                    style={{ border: `3px solid ${cityOwnerColor}80`, boxShadow: `0 0 8px ${cityOwnerColor}40` }}
                   />
                 )}
 
-                {/* Node button */}
+                {/* Node button — invisible by default, map image shows symbols */}
                 <button
                   onClick={() => {
                     if (isPlacementTarget) {
@@ -417,24 +395,17 @@ export default function PlayPage() {
                       if (myUnits.length > 0) selectUnit(myUnits[0].id);
                     }
                   }}
-                  className={`relative w-8 h-8 rounded-full flex items-center justify-center text-xs transition-all ${
+                  className={`relative w-6 h-6 rounded-full flex items-center justify-center transition-all ${
                     isValidMove
-                      ? "bg-green-500/30 border-2 border-green-400 cursor-pointer hover:bg-green-500/50"
+                      ? "bg-green-500/40 border-2 border-green-400 cursor-pointer hover:bg-green-500/60"
                       : isPlacementTarget
-                        ? "bg-cyan-500/20 border-2 border-cyan-400 cursor-pointer hover:bg-cyan-500/40"
+                        ? "bg-cyan-500/30 border-2 border-cyan-400 cursor-pointer hover:bg-cyan-500/50"
                         : selectedUnit && units.some((u) => u.id === selectedUnit)
                           ? "bg-amber-500/30 border-2 border-amber-400"
-                          : "bg-neutral-800/80 border border-white/20 hover:border-white/40"
+                          : "cursor-pointer hover:bg-white/10"
                   }`}
-                  style={
-                    nodeColor && !isValidMove && !isPlacementTarget
-                      ? { borderColor: nodeColor + "60", backgroundColor: nodeColor + "15" }
-                      : undefined
-                  }
                   title={node.name}
-                >
-                  <span className="text-[10px]">{NODE_ICONS[node.type]}</span>
-                </button>
+                />
 
                 {/* Units on this node */}
                 {units.length > 0 && (
