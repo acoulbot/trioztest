@@ -137,6 +137,7 @@ model Channel {
   slowmode       Int                  @default(0)
   serviceId      String?
   parentId       String?
+  sortOrder      Int                  @default(0)
   parent         Channel?             @relation("ChannelTree", fields: [parentId], references: [id], onDelete: SetNull)
   children       Channel[]            @relation("ChannelTree")
   group          Group                @relation(fields: [groupId], references: [id], onDelete: Cascade)
