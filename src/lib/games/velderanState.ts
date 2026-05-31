@@ -61,12 +61,23 @@ export interface BattleCardState {
   discard: number[];        // discard pile ("бито")
 }
 
+export interface CombatResult {
+  winnerId: string;
+  loserId: string;
+  winnerCard: number;
+  loserCard: number;
+  reason: string; // "guess" | "proximity" | "both_guess"
+  loserUnitDestroyed: boolean;
+  converted?: boolean; // Шент'Ар conversion
+}
+
 export interface VelderanGameState {
   round: number;
   currentPlayerIndex: number;
   phase: "PLACEMENT" | "MOVE" | "COMBAT" | "GOD_SUMMON" | "GAME_OVER";
   units: GameUnit[];
   combat?: CombatState;
+  lastCombatResult?: CombatResult;
   lastGodResult?: GodResult;
   battleCards?: BattleCardState;
   log: string[];
@@ -81,6 +92,9 @@ export interface VelderanGameState {
   godSummonCounts?: Record<string, Record<string, number>>; // unitId → { shrineId → count }
   godCards?: Record<string, GodCard[]>; // playerId → god cards in hand
   smugglerQueue?: SmugglerQueueEntry[]; // units queued for teleport
+  skipTurnPlayers?: string[]; // players who skip their next turn (Ситас)
+  divineProtection?: Record<string, number>; // playerId → count of Гиордг protections
+  shentarActive?: Record<string, number>; // playerId → count of Шент'Ар conversions
 }
 
 const GODS: Record<number, { name: string; effect: string }> = {
@@ -701,10 +715,39 @@ export function playGodCard(
     case 5: {
       // Sitas — skip enemy turn
       if (!targetUnitId) break;
-      // targetUnitId used as playerId here
       const skipId = targetUnitId;
+      if (!newState.skipTurnPlayers) newState.skipTurnPlayers = [];
+      if (!newState.skipTurnPlayers.includes(skipId)) {
+        newState.skipTurnPlayers.push(skipId);
+      }
       newState.log.push(`${playerName} использовал карту Ситас — ${playerNames[skipId] || "Игрок"} пропускает ход!`);
-      // Mark as eliminated for 1 turn (simplified: skip next turn by advancing past them)
+      break;
+    }
+    case 6: {
+      // Shent'Ar — activate conversion: next combat win converts enemy unit
+      if (!newState.shentarActive) newState.shentarActive = {};
+      newState.shentarActive[playerId] = (newState.shentarActive[playerId] || 0) + 1;
+      newState.log.push(`${playerName} использовал карту Шент'Ар — при следующей победе вражеский отряд станет союзным!`);
+      break;
+    }
+    case 7: {
+      // Giordg — divine protection: re-battle on loss
+      if (!newState.divineProtection) newState.divineProtection = {};
+      newState.divineProtection[playerId] = (newState.divineProtection[playerId] || 0) + 1;
+      newState.log.push(`${playerName} использовал карту Гиордг — божественная защита: при проигрыше будет переигровка!`);
+      break;
+    }
+    case 8: {
+      // Sikhvaris — teleport own unit to any non-shrine
+      if (!targetUnitId) break;
+      const ownUnit = newState.units.find((u) => u.id === targetUnitId && u.playerId === playerId);
+      if (!ownUnit) break;
+      const destNodes = getActiveNodes().filter((n) => n.type !== "shrine");
+      if (destNodes.length > 0) {
+        const rndNode = destNodes[Math.floor(Math.random() * destNodes.length)];
+        ownUnit.position = rndNode.id;
+        newState.log.push(`${playerName} использовал карту Сихварис — перенёс свой отряд в ${rndNode.name}!`);
+      }
       break;
     }
     case 9: {
@@ -803,9 +846,9 @@ export function rollDiceForGod(
     newState.godCards[playerId].push({ godId: 7, godName: "Гиордг" });
     newState.log.push(`${playerName} получил 2 карты Гиордг.`);
   } else if (total === 8) {
-    // Sikhvaris — teleport own unit anywhere except shrine
-    newState.log.push(`Сихварис: можно перенести отряд в любую точку (кроме святилищ).`);
-    // Auto: teleport guard to a random non-shrine (or keep for manual later)
+    // Sikhvaris — give a god card to teleport own unit
+    newState.godCards[playerId].push({ godId: 8, godName: "Сихварис" });
+    newState.log.push(`${playerName} получил карту Сихварис — перенос своего отряда.`);
   } else if (total === 9) {
     // Vieronh — god card (teleport enemy)
     newState.godCards[playerId].push({ godId: 9, godName: "Вьеронх" });
@@ -837,9 +880,19 @@ export function rollDiceForGod(
       newState.log.push(`Антегриз уничтожил отряд ${targetName} в ${node?.name || ""}!`);
     }
   } else if (total === 12) {
-    // Choice — player picks any god (auto: give Avalais card as default)
-    newState.log.push(`Выпало 12 — выбор любого божества!`);
-    newState.godCards[playerId].push({ godId: 3, godName: "Авалайс (выбор)" });
+    // Choice — player gets one god card of each type to choose from
+    newState.log.push(`Выпало 12 — выбор любого божества! Выберите карту из полученных.`);
+    const choiceGods = [
+      { godId: 3, godName: "Авалайс" },
+      { godId: 5, godName: "Ситас" },
+      { godId: 6, godName: "Шент'Ар" },
+      { godId: 7, godName: "Гиордг" },
+      { godId: 8, godName: "Сихварис" },
+      { godId: 9, godName: "Вьеронх" },
+    ];
+    for (const g of choiceGods) {
+      newState.godCards[playerId].push(g);
+    }
   }
 
   // 3rd summon on same shrine = guard dies
@@ -1018,25 +1071,73 @@ function resolveCombat(
     }
   }
 
-  if (loserId) {
+  if (loserId && winnerId) {
     const loserUnitId = loserId === attackerPlayerId ? attackerUnitId : defenderUnitId;
-    const actualWinnerId = loserId === attackerPlayerId ? defenderPlayerId : attackerPlayerId;
+
+    // Check Гиордг divine protection — loser gets a re-battle
+    if (newState.divineProtection && newState.divineProtection[loserId] > 0) {
+      newState.divineProtection[loserId]--;
+      newState.log.push(`Божественная защита Гиордга! Переигровка.`);
+      newState.combat.attackerCard = undefined;
+      newState.combat.defenderCard = undefined;
+      newState.combat.attackerGuess = undefined;
+      newState.combat.defenderGuess = undefined;
+      if (newState.battleCards) {
+        const atkNew = drawCards(newState.battleCards, 1);
+        const defNew = drawCards(newState.battleCards, 1);
+        if (atkNew.length > 0) newState.battleCards.hands[attackerPlayerId].push(...atkNew);
+        if (defNew.length > 0) newState.battleCards.hands[defenderPlayerId].push(...defNew);
+      }
+      return newState;
+    }
 
     // Check if the loser is protected (pirate/ghost/camp: safe loser doesn't lose unit)
     const isSafe = newState.combat.safeLoser === loserId;
-    if (!isSafe) {
+    let unitDestroyed = false;
+    let converted = false;
+
+    // Check Шент'Ар conversion — winner converts loser's unit
+    if (newState.shentarActive && newState.shentarActive[winnerId] > 0 && !isSafe) {
+      newState.shentarActive[winnerId]--;
+      const loserUnit = newState.units.find((u) => u.id === loserUnitId);
+      if (loserUnit) {
+        loserUnit.playerId = winnerId;
+        loserUnit.movesLeft = 0;
+        newState.log.push(`Шент'Ар: побеждённый отряд перешёл на сторону победителя!`);
+        converted = true;
+      }
+    } else if (!isSafe) {
       newState.units = newState.units.filter((u) => u.id !== loserUnitId);
       newState.log.push(`Проигравший отряд уничтожен.`);
+      unitDestroyed = true;
     } else {
       newState.log.push(`Проигрыш, но отряд защищён (спецлокация).`);
     }
 
+    // After combat, loser's unit is gone — move winner away if they're on same node
+    // (Units can't coexist with enemies, so winner stays and loser is removed)
+
+    const reasonMap: Record<string, string> = {
+      [attackerPlayerId]: attackerGuessedRight ? "guess" : "proximity",
+      [defenderPlayerId]: defenderGuessedRight ? "guess" : "proximity",
+    };
+
+    newState.lastCombatResult = {
+      winnerId,
+      loserId,
+      winnerCard: winnerId === attackerPlayerId ? attackerCard : defenderCard,
+      loserCard: loserId === attackerPlayerId ? attackerCard : defenderCard,
+      reason: (attackerGuessedRight && defenderGuessedRight) ? "both_guess" : reasonMap[winnerId],
+      loserUnitDestroyed: unitDestroyed,
+      converted,
+    };
+
     // Capture city if attacker won and city belongs to defender
     if (!newState.cityOwners) newState.cityOwners = {};
-    if (node?.type === "city" && actualWinnerId === attackerPlayerId && !isSafe) {
+    if (node?.type === "city" && winnerId === attackerPlayerId && !isSafe) {
       const prevOwner = newState.cityOwners[nodeId];
-      if (prevOwner && prevOwner !== actualWinnerId) {
-        newState.cityOwners[nodeId] = actualWinnerId;
+      if (prevOwner && prevOwner !== winnerId) {
+        newState.cityOwners[nodeId] = winnerId;
         newState.log.push(`Город ${node.name} захвачен!`);
       }
     }
@@ -1100,13 +1201,29 @@ export function endTurn(
   if (!newState.cityOwners) newState.cityOwners = {};
   if (!newState.inventory) newState.inventory = {};
 
-  // Find next active player
+  // Find next active player (skip eliminated + Ситас-skipped)
   let nextIdx = newState.currentPlayerIndex;
   let roundEnd = false;
   do {
     nextIdx = (nextIdx + 1) % newState.turnOrder.length;
     if (nextIdx === 0) roundEnd = true;
   } while (newState.eliminatedPlayers.includes(newState.turnOrder[nextIdx]));
+
+  // Check if next player is Ситас-skipped
+  const nextPlayerId = newState.turnOrder[nextIdx];
+  if (newState.skipTurnPlayers && newState.skipTurnPlayers.includes(nextPlayerId)) {
+    newState.skipTurnPlayers = newState.skipTurnPlayers.filter((p) => p !== nextPlayerId);
+    const skipName = playerNames[nextPlayerId] || "Игрок";
+    newState.log.push(`${skipName} пропускает ход (Ситас)!`);
+    // Advance to next non-skipped, non-eliminated player
+    do {
+      nextIdx = (nextIdx + 1) % newState.turnOrder.length;
+      if (nextIdx === 0) roundEnd = true;
+    } while (
+      newState.eliminatedPlayers.includes(newState.turnOrder[nextIdx]) ||
+      (newState.skipTurnPlayers && newState.skipTurnPlayers.includes(newState.turnOrder[nextIdx]))
+    );
+  }
 
   if (roundEnd) {
     newState.round++;
@@ -1119,6 +1236,7 @@ export function endTurn(
     processSmuglerArrivals(newState, playerNames);
 
     // Reinforcements: +2 armies to inventory per player (per rules: 2 фишки за круг)
+    // Only give reinforcements if player has units on the board
     const maxId = newState.units.reduce((max, u) => {
       const num = parseInt(u.id.replace("u", "")) || 0;
       return Math.max(max, num);
@@ -1127,11 +1245,13 @@ export function endTurn(
 
     for (const pid of newState.turnOrder) {
       if (newState.eliminatedPlayers.includes(pid)) continue;
+      const unitsOnBoard = newState.units.filter((u) => u.playerId === pid);
+      if (unitsOnBoard.length === 0) continue; // no units on board → no reinforcements
       const ownCities = Object.entries(newState.cityOwners).filter(
         ([, owner]) => owner === pid
       );
       if (ownCities.length === 0) continue;
-      const reinforcements = 2; // 2 фишки за круг
+      const reinforcements = 2;
       if (!newState.inventory[pid]) newState.inventory[pid] = [];
       for (let i = 0; i < reinforcements; i++) {
         newState.inventory[pid].push({ id: `u${nextUnitId++}`, type: "ARMY" });
@@ -1148,6 +1268,29 @@ export function endTurn(
     );
     if (anyCanPlace) {
       newState.phase = "PLACEMENT";
+    }
+
+    // Check if any guard is already on a shrine → GOD_SUMMON for current player
+    const nextPid = newState.turnOrder[nextIdx];
+    const guardOnShrine = newState.units.find((u) => {
+      if (u.playerId !== nextPid || u.type !== "GUARD") return false;
+      const node = getActiveNodes().find((n) => n.id === u.position);
+      return node?.type === "shrine";
+    });
+    if (guardOnShrine && newState.phase !== "PLACEMENT") {
+      // Check if can still roll (max 2 per guard per shrine, 3rd = death)
+      if (!newState.godSummonCounts) newState.godSummonCounts = {};
+      const guardCounts = newState.godSummonCounts[guardOnShrine.id] || {};
+      const shrineNode = getActiveNodes().find((n) => n.id === guardOnShrine.position);
+      const rollCount = guardCounts[guardOnShrine.position] || 0;
+      if (rollCount < 2) {
+        newState.phase = "GOD_SUMMON";
+        newState.log.push(`Гвардия на святилище ${shrineNode?.name || ""} — можно бросить кубики!`);
+      } else if (rollCount === 2) {
+        // 3rd roll = death, but player can choose to roll or not
+        newState.phase = "GOD_SUMMON";
+        newState.log.push(`Внимание: третий бросок на ${shrineNode?.name || ""} — гвардия погибнет!`);
+      }
     }
   }
 
