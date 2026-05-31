@@ -19,6 +19,13 @@ export async function GET() {
   }
 
   const unreadCounts: Record<string, number> = {};
+  const mentionChannels: Record<string, boolean> = {};
+
+  const user = await prisma.user.findUnique({
+    where: { id: session.user.id },
+    select: { username: true, name: true },
+  });
+  const uname = user?.username || user?.name || "";
 
   for (const m of memberships) {
     const count = await prisma.message.count({
@@ -31,8 +38,23 @@ export async function GET() {
     });
     if (count > 0) {
       unreadCounts[m.channelId] = count;
+      if (uname) {
+        const mentionCount = await prisma.message.count({
+          where: {
+            channelId: m.channelId,
+            createdAt: { gt: m.lastRead },
+            deleted: false,
+            userId: { not: session.user.id },
+            OR: [
+              { content: { contains: `@${uname}` } },
+              { content: { contains: "@everyone" } },
+            ],
+          },
+        });
+        if (mentionCount > 0) mentionChannels[m.channelId] = true;
+      }
     }
   }
 
-  return NextResponse.json({ unread: unreadCounts });
+  return NextResponse.json({ unread: unreadCounts, mentions: mentionChannels });
 }

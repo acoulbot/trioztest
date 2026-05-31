@@ -702,6 +702,7 @@ function ConnectPageInner() {
   const [showGroupSettings, setShowGroupSettings] = useState(false);
   const [myGlowSettings, setMyGlowSettings] = useState<{ avatarGlowEnabled: boolean; avatarGlowColors: string | null; avatar: string | null } | null>(null);
   const [unreadCounts, setUnreadCounts] = useState<Record<string, number>>({});
+  const [mentionChannels, setMentionChannels] = useState<Record<string, boolean>>({});
   const [mobileView, setMobileView] = useState<MobileView>("groups");
   const [showVoicePanel, setShowVoicePanel] = useState(false);
 
@@ -724,6 +725,7 @@ function ConnectPageInner() {
   const fetchUnread = useCallback(() => {
     fetch("/api/channels/unread").then((r) => r.json()).then((data) => {
       if (data.unread) setUnreadCounts(data.unread);
+      if (data.mentions) setMentionChannels(data.mentions);
     }).catch(() => {});
   }, []);
 
@@ -934,6 +936,7 @@ function ConnectPageInner() {
                     groupDetail={groupDetail}
                     selectedChannel={selectedChannel}
                     unreadCounts={unreadCounts}
+                    mentionChannels={mentionChannels}
                     canManage={!!canManage}
                     isMainCommunity={!!groupDetail.isMain}
                     myProfileUser={myProfileUser}
@@ -1090,6 +1093,7 @@ function ConnectPageInner() {
                   groupDetail={groupDetail}
                   selectedChannel={selectedChannel}
                   unreadCounts={unreadCounts}
+                  mentionChannels={mentionChannels}
                   canManage={!!canManage}
                   isMainCommunity={!!groupDetail.isMain}
                   myProfileUser={myProfileUser}
