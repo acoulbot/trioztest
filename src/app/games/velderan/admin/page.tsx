@@ -27,6 +27,13 @@ const ELEMENT_TYPES: { type: NodeType; label: string }[] = [
   { type: "windrose", label: "Море" },
 ];
 
+const SPECIAL_TYPES: { type: NodeType; label: string }[] = [
+  { type: "pirate", label: "Пираты" },
+  { type: "ghost", label: "Призраки" },
+  { type: "camp", label: "Лагерь" },
+  { type: "smuggler", label: "Контрабандисты" },
+];
+
 let nextId = 1;
 function genId(type: NodeType, faction?: string): string {
   const prefix = type === "city" ? (faction || "city").slice(0, 3) : type === "battle" ? "x" : type === "port" ? "p" : type === "shrine" ? "s" : type[0];
@@ -396,6 +403,28 @@ export default function MapEditorPage() {
                   <span className="text-gray-300">{el.label}</span>
                 </button>
               ))}
+            </div>
+          </div>
+
+          {/* Palette — Special locations (max 1 each) */}
+          <div className="mb-3">
+            <p className="text-gray-400 font-medium mb-1.5">⚡ Спецлокации</p>
+            <div className="grid grid-cols-2 gap-1">
+              {SPECIAL_TYPES.map((el) => {
+                const exists = nodes.some((n) => n.type === el.type);
+                return (
+                  <button key={el.type} onClick={() => !exists && addNode(el.type)} disabled={exists}
+                    className={`flex items-center gap-1.5 px-2 py-1.5 rounded transition-colors ${
+                      exists ? "bg-neutral-800/40 opacity-40 cursor-not-allowed" : "bg-neutral-800 hover:bg-neutral-700"
+                    }`}
+                    title={exists ? "Уже размещён (макс. 1)" : `Добавить ${el.label}`}
+                  >
+                    <span>{NODE_ICONS[el.type]}</span>
+                    <span className="text-gray-300 truncate">{el.label}</span>
+                    {exists && <span className="text-[9px] text-green-400">✓</span>}
+                  </button>
+                );
+              })}
             </div>
           </div>
 
