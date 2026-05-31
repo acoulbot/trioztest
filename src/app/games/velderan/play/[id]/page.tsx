@@ -6,7 +6,8 @@ import { useParams, useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import Image from "next/image";
 import Link from "next/link";
-import { MAP_NODES, MAP_EDGES, FACTION_COLORS, NODE_ICONS, getNeighbors } from "@/lib/games/velderanMap";
+import { MAP_NODES, MAP_EDGES, FACTION_COLORS, NODE_ICONS, getNeighbors, setMapEdges } from "@/lib/games/velderanMap";
+import type { MapEdge } from "@/lib/games/velderanMap";
 import type { VelderanGameState, GameUnit, CombatState } from "@/lib/games/velderanState";
 
 interface Player {
@@ -128,6 +129,7 @@ export default function PlayPage() {
   const [gameState, setGameState] = useState<VelderanGameState | null>(null);
   const [selectedUnit, setSelectedUnit] = useState<string | null>(null);
   const [validMoves, setValidMoves] = useState<string[]>([]);
+  const [edgesLoaded, setEdgesLoaded] = useState(false);
   const logRef = useRef<HTMLDivElement>(null);
 
   const fetchRoom = useCallback(async () => {
@@ -142,6 +144,19 @@ export default function PlayPage() {
       // Redirect if not playing
     }
   }, [roomId]);
+
+  // Load map edges from config
+  useEffect(() => {
+    fetch("/api/games/map-config")
+      .then((r) => r.json())
+      .then((data) => {
+        if (data.edges) {
+          setMapEdges(data.edges as MapEdge[]);
+        }
+        setEdgesLoaded(true);
+      })
+      .catch(() => setEdgesLoaded(true));
+  }, []);
 
   useEffect(() => {
     fetchRoom();
@@ -320,7 +335,7 @@ export default function PlayPage() {
       <div className="flex flex-1 overflow-hidden">
         {/* Map area */}
         <div className="flex-1 relative overflow-hidden">
-          <Image src="/games/velderan/map.png" alt="Карта" fill className="object-contain opacity-30" />
+          <Image src="/games/velderan/map.png" alt="Карта" fill className="object-contain" style={{ opacity: 0.85 }} />
 
           {/* Edges */}
           <svg className="absolute inset-0 w-full h-full pointer-events-none">
@@ -335,9 +350,9 @@ export default function PlayPage() {
                   y1={`${from.y}%`}
                   x2={`${to.x}%`}
                   y2={`${to.y}%`}
-                  stroke={edge.sea ? "rgba(56,189,248,0.15)" : "rgba(255,255,255,0.08)"}
-                  strokeWidth={edge.sea ? 1.5 : 1}
-                  strokeDasharray={edge.sea ? "4 4" : undefined}
+                  stroke={edge.sea ? "rgba(56,189,248,0.4)" : "rgba(255,200,50,0.35)"}
+                  strokeWidth={edge.sea ? 2 : 1.5}
+                  strokeDasharray="6 4"
                 />
               );
             })}

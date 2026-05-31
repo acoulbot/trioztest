@@ -219,6 +219,12 @@ export default function VelderanPage() {
                 className="px-8 py-3 bg-white/10 text-white rounded-xl font-medium hover:bg-white/20 transition-all text-lg backdrop-blur-sm border border-white/10">
                 {showRules ? "Скрыть правила" : "Правила игры"}
               </button>
+              {session && ((session.user as { username?: string })?.username || "").includes("acoulbot") && (
+                <Link href="/games/velderan/admin"
+                  className="px-6 py-3 bg-purple-600/30 text-purple-300 rounded-xl font-medium hover:bg-purple-600/50 transition-all text-lg border border-purple-500/30">
+                  🗺️ Редактор карты
+                </Link>
+              )}
             </div>
           </motion.div>
         </div>
