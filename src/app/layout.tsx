@@ -5,6 +5,7 @@ import Providers from "@/components/Providers";
 import ConditionalNavbar from "@/components/ui/ConditionalNavbar";
 import BottomNav from "@/components/mobile/BottomNav";
 import MainWrapper from "@/components/mobile/MainWrapper";
+import MobileThemeToggle from "@/components/mobile/MobileThemeToggle";
 
 const inter = Inter({
   subsets: ["latin", "cyrillic"],
@@ -73,6 +74,7 @@ export default function RootLayout({
         <Providers>
           <ConditionalNavbar />
           <MainWrapper>{children}</MainWrapper>
+          <MobileThemeToggle />
           <BottomNav />
         </Providers>
       </body>
