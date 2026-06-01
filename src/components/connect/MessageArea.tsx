@@ -1128,7 +1128,7 @@ export default function MessageArea({
                   value={newMessage}
                   onChange={(e) => { setNewMessage(e.target.value); emitTyping(); e.target.style.height = "auto"; e.target.style.height = Math.min(e.target.scrollHeight, 120) + "px"; }}
                   onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendMessage(e); } }}
-                  placeholder={slowmodeWait > 0 ? `Слоумод: ${slowmodeWait} сек...` : `Сообщение #${channelName}`}
+                  placeholder={slowmodeWait > 0 ? `Слоумод: ${slowmodeWait} сек...` : "Сообщение"}
                   className="input-field flex-1 !py-2.5 resize-none overflow-y-auto leading-tight placeholder:truncate"
                   rows={1}
                   style={{ minHeight: 44, maxHeight: 120 }}
