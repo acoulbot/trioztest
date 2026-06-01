@@ -480,7 +480,7 @@ export default function PlayPage() {
   }
 
   return (
-    <div className="h-screen bg-neutral-950 flex flex-col overflow-hidden relative">
+    <div className="h-dvh bg-neutral-950 flex flex-col overflow-hidden relative">
       {/* Event notification toast */}
       {notification && (
         <div className="absolute top-14 left-1/2 -translate-x-1/2 z-[100] pointer-events-none animate-pulse">

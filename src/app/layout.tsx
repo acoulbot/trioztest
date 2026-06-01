@@ -54,7 +54,7 @@ export default function RootLayout({
   return (
     <html lang="ru" className="dark" suppressHydrationWarning>
       <head>
-        <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
+        <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
         {/* Anti-flash: apply saved theme AND variant (velvet/warm) before first paint */}
         <script dangerouslySetInnerHTML={{ __html: `
           (function(){

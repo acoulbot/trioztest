@@ -87,6 +87,7 @@ function WindowCard({ window, index }: { window: WindowData; index: number }) {
   const [tilt, setTilt] = useState({ x: 0, y: 0 });
   const cardRef = useRef<HTMLDivElement>(null);
   const seeds = [42, 77, 123, 99];
+  const isTopRow = index < 2;
 
   const bgStyle = window.backgroundType === "video" && window.backgroundUrl
     ? {}
@@ -173,7 +174,7 @@ function WindowCard({ window, index }: { window: WindowData; index: number }) {
             transition={{ duration: 0.4 }}
           />
 
-          <div className="relative z-10 flex flex-col justify-end h-full p-4 sm:p-6">
+          <div className={`relative z-10 flex flex-col justify-end h-full p-4 sm:p-6 ${isTopRow ? "max-md:pb-20" : ""}`}>
             <motion.div animate={{ y: hovered ? -3 : 0 }} transition={{ duration: 0.3, ease: "easeOut" }}>
               <EditableText
                 contentKey={`window.${window.windowKey}.title`}
