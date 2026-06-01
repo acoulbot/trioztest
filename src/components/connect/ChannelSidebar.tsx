@@ -7,6 +7,7 @@ import type { Channel, VoiceUser, GroupDetail, VoiceState, VoiceActions } from "
 import { ChannelSettingsModal } from "./ChannelSettingsModal";
 import { ChannelItem } from "./ChannelItem";
 import { VoiceUserRow, VoiceControlBtn } from "./VoiceControls";
+import SectionsPanel from "./SectionsPanel";
 import { MicIcon, MutedMicIcon, DeafenOffIcon, DeafenOnIcon, NsIcon, ScreenShareIcon, HangupIcon } from "./voiceIcons";
 
 /* ─── Props ─── */
@@ -18,6 +19,8 @@ interface ChannelSidebarProps {
   mentionChannels?: Record<string, boolean>;
   canManage: boolean;
   isMainCommunity?: boolean;
+  blockMode?: boolean;
+  generalChannelId?: string | null;
   myProfileUser: GlowAvatarUser;
   userName: string;
   userUsername: string;
@@ -39,6 +42,7 @@ interface ChannelSidebarProps {
 
 export default function ChannelSidebar({
   groupDetail, selectedChannel, unreadCounts, mentionChannels = {}, canManage, isMainCommunity,
+  blockMode, generalChannelId,
   myProfileUser, userName, userUsername, userRole,
   onChannelClick, onDeleteChannel, onCreateChannel,
   onInvite, onToggleMembers, onProfileSettings, onOpenSettings, memberCount, onBack,
@@ -46,6 +50,9 @@ export default function ChannelSidebar({
 }: ChannelSidebarProps) {
   const textChannels = groupDetail.channels.filter((c) => c.type === "TEXT" || c.type === "NEWS");
   const voiceChannels = groupDetail.channels.filter((c) => c.type === "VOICE");
+  const generalChannel = (generalChannelId
+    ? groupDetail.channels.find((c) => c.id === generalChannelId)
+    : textChannels.find((c) => !c.parentId)) ?? null;
 
   /* ── Channel settings modal ── */
   const [editingChannel, setEditingChannel] = useState<Channel | null>(null);
@@ -185,8 +192,26 @@ export default function ChannelSidebar({
 
       {/* ── Channels ── */}
       <nav className="flex-1 overflow-y-auto p-2 space-y-0.5" aria-label="Каналы">
+        {/* ── Block mode: single general chat at top ── */}
+        {blockMode && generalChannel && (
+          <>
+            <div className="px-2 py-1 text-[11px] text-neutral-400 uppercase tracking-wider font-semibold">Общий чат</div>
+            <ChannelItem
+              ch={generalChannel}
+              selectedChannel={selectedChannel}
+              unreadCounts={unreadCounts}
+              mentionChannels={mentionChannels}
+              canManage={false}
+              onChannelClick={onChannelClick}
+              onDeleteChannel={onDeleteChannel}
+              isMuted={channelMutes[generalChannel.id] ?? (groupMuted && channelMutes[generalChannel.id] !== false)}
+              onToggleMute={handleToggleChannelMute}
+            />
+          </>
+        )}
+
         {/* ── Main community: group by service ── */}
-        {isMainCommunity && serviceGroups ? (
+        {!blockMode && (isMainCommunity && serviceGroups ? (
           <>
             {/* Ungrouped channels (no serviceId) */}
             {serviceGroups.ungrouped.length > 0 && (
@@ -298,7 +323,7 @@ export default function ChannelSidebar({
               ));
             })()}
           </>
-        )}
+        ))}
 
         {/* Voice channels — collapsible */}
         {voiceChannels.length > 0 && (
@@ -438,6 +463,23 @@ export default function ChannelSidebar({
               );
             })}
           </>
+        )}
+
+        {/* ── Block mode (mobile): section blocks below voice ── */}
+        {blockMode && (
+          <div className="md:hidden mt-4 pt-3" style={{ borderTop: "1px solid var(--cn-border)" }}>
+            <SectionsPanel
+              variant="mobile"
+              channels={groupDetail.channels}
+              generalChannelId={generalChannelId ?? null}
+              selectedChannel={selectedChannel}
+              unreadCounts={unreadCounts}
+              canManage={canManage}
+              groupId={groupDetail.id}
+              onSelectChannel={onChannelClick}
+              onRefresh={() => onGroupRefresh?.()}
+            />
+          </div>
         )}
       </nav>
 

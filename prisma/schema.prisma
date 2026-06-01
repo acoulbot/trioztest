@@ -135,6 +135,7 @@ model Channel {
   icon           String?
   groupId        String
   isRestricted   Boolean              @default(false)
+  postAccess     String               @default("ALL")
   slowmode       Int                  @default(0)
   serviceId      String?
   parentId       String?

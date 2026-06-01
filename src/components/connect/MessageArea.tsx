@@ -23,6 +23,7 @@ interface MessageAreaProps {
   channelName: string;
   channelIcon: string | null;
   channelType?: string;
+  postAccess?: string;
   currentUserId: string;
   currentUserName?: string;
   currentUserRole: string;
@@ -32,10 +33,25 @@ interface MessageAreaProps {
 }
 
 export default function MessageArea({
-  channelId, channelName, channelIcon, channelType = "TEXT", currentUserId, currentUserName = "", currentUserRole, isBanned, onBack, onNewMessage,
+  channelId, channelName, channelIcon, channelType = "TEXT", postAccess = "ALL", currentUserId, currentUserName = "", currentUserRole, isBanned, onBack, onNewMessage,
 }: MessageAreaProps) {
   const isNewsChannel = channelType === "NEWS";
-  const canWriteNews = isNewsChannel && (currentUserRole === "OWNER" || currentUserRole === "ADMIN" || currentUserRole === "MODERATOR" || currentUserRole === "SITE_ADMIN");
+  const isOwnerAdmin = currentUserRole === "OWNER" || currentUserRole === "ADMIN" || currentUserRole === "SITE_ADMIN";
+  const isPrivilegedRole = isOwnerAdmin || currentUserRole === "MODERATOR";
+  const canWriteNews = isNewsChannel && isPrivilegedRole;
+  // Unified write-access gate (NEWS channels + block-level postAccess)
+  let canPost = true;
+  let readOnlyNotice = "";
+  if (isNewsChannel && !canWriteNews) {
+    canPost = false;
+    readOnlyNotice = "Канал новостей — писать могут только администраторы и модераторы";
+  } else if (postAccess === "ADMIN" && !isOwnerAdmin) {
+    canPost = false;
+    readOnlyNotice = "Раздел только для чтения — публикует администратор";
+  } else if (postAccess === "MOD" && !isPrivilegedRole) {
+    canPost = false;
+    readOnlyNotice = "Писать в этот раздел могут только администраторы и модераторы";
+  }
   const currentUserIdRef = useRef(currentUserId);
   const currentUserNameRef = useRef(currentUserName);
   const onNewMessageRef = useRef(onNewMessage);
@@ -1041,9 +1057,9 @@ export default function MessageArea({
       <ChannelToolsPanel key={`tools-${channelId}-${toolsRefresh}`} channelId={channelId} currentUserId={currentUserId} members={channelMembers} />
 
       {/* Input */}
-      {isNewsChannel && !canWriteNews ? (
-        <div className="p-3 border-t border-[var(--cn-border)] text-center text-neutral-400 text-sm">
-          Канал новостей — только администраторы и модераторы могут писать
+      {!canPost ? (
+        <div className="p-3 border-t border-[var(--cn-border)] text-center text-neutral-400 text-sm flex items-center justify-center gap-2">
+          <span aria-hidden="true">🔒</span>{readOnlyNotice}
         </div>
       ) : !isBanned ? (
         <div className="border-t border-[var(--cn-border)]">

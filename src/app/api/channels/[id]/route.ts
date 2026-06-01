@@ -54,11 +54,12 @@ export async function PUT(req: Request, { params }: { params: Promise<{ id: stri
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
-  const { name, icon, type, isRestricted, roleIds, parentId, slowmode } = await req.json();
+  const { name, icon, type, isRestricted, roleIds, parentId, slowmode, postAccess } = await req.json();
   const data: Record<string, unknown> = {};
   if (name !== undefined) data.name = name;
   if (icon !== undefined) data.icon = icon;
   if (type !== undefined && ["TEXT", "VOICE", "NEWS"].includes(type)) data.type = type;
+  if (postAccess !== undefined && ["ALL", "MOD", "ADMIN"].includes(postAccess)) data.postAccess = postAccess;
   if (isRestricted !== undefined) data.isRestricted = isRestricted;
   if (parentId !== undefined) data.parentId = parentId || null;
   if (slowmode !== undefined) data.slowmode = Math.max(0, Math.min(Number(slowmode) || 0, 3600));
