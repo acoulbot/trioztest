@@ -15,6 +15,8 @@ export interface Channel {
   icon: string | null;
   groupId: string;
   serviceId?: string | null;
+  parentId?: string | null;
+  postAccess?: string;
   _count: { members: number; messages: number };
 }
 

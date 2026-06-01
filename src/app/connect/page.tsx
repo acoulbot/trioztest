@@ -18,6 +18,7 @@ import BottomSheet from "@/components/mobile/BottomSheet";
 import GroupListPanel from "@/components/connect/GroupListPanel";
 import ChannelSidebar from "@/components/connect/ChannelSidebar";
 import MessageArea from "@/components/connect/MessageArea";
+import SectionsPanel from "@/components/connect/SectionsPanel";
 import MobileGroupList from "@/components/connect/MobileGroupList";
 import ConnectSplash from "@/components/connect/ConnectSplash";
 // ThemeProvider is now in global Providers
@@ -276,6 +277,12 @@ function ConnectPageInner() {
   const selectedChannelData = groupDetail?.channels.find((c) => c.id === selectedChannel);
   const userId = (session.user as { id?: string }).id ?? "";
 
+  // Block-based layout for the main community: general chat + voice + section blocks
+  const isBlockMode = !!groupDetail?.isMain;
+  const generalChannelId = isBlockMode && groupDetail
+    ? (groupDetail.channels.find((c) => c.type === "TEXT" && !c.parentId)?.id ?? null)
+    : null;
+
   return (
     <>
     {!splashDone && <ConnectSplash onDone={handleSplashDone} />}
@@ -324,6 +331,8 @@ function ConnectPageInner() {
                     mentionChannels={mentionChannels}
                     canManage={!!canManage}
                     isMainCommunity={!!groupDetail.isMain}
+                    blockMode={isBlockMode}
+                    generalChannelId={generalChannelId}
                     myProfileUser={myProfileUser}
                     userName={session.user.name ?? ""}
                     userUsername={session.user.username ?? ""}
@@ -351,6 +360,7 @@ function ConnectPageInner() {
                     channelName={selectedChannelData.name}
                     channelIcon={selectedChannelData.icon}
                     channelType={selectedChannelData.type}
+                    postAccess={selectedChannelData.postAccess}
                     currentUserId={userId}
                     currentUserName={session.user.name ?? ""}
                     currentUserRole={userRole}
@@ -481,6 +491,8 @@ function ConnectPageInner() {
                   mentionChannels={mentionChannels}
                   canManage={!!canManage}
                   isMainCommunity={!!groupDetail.isMain}
+                  blockMode={isBlockMode}
+                  generalChannelId={generalChannelId}
                   myProfileUser={myProfileUser}
                   userName={session.user.name ?? ""}
                   userUsername={session.user.username ?? ""}
@@ -518,6 +530,7 @@ function ConnectPageInner() {
                   channelName={selectedChannelData.name}
                   channelIcon={selectedChannelData.icon}
                   channelType={selectedChannelData.type}
+                  postAccess={selectedChannelData.postAccess}
                   currentUserId={userId}
                   currentUserName={session.user.name ?? ""}
                   currentUserRole={userRole}
@@ -567,6 +580,20 @@ function ConnectPageInner() {
                 </div>
               )}
             </div>
+
+            {/* COL 4 — section blocks (main community only) */}
+            {isBlockMode && selectedGroup && groupDetail && (
+              <SectionsPanel
+                channels={groupDetail.channels}
+                generalChannelId={generalChannelId}
+                selectedChannel={selectedChannel}
+                unreadCounts={unreadCounts}
+                canManage={!!canManage}
+                groupId={groupDetail.id}
+                onSelectChannel={handleChannelClick}
+                onRefresh={() => selectedGroup && fetchGroupDetail(selectedGroup)}
+              />
+            )}
 
             {showMembers && groupDetail && !hideMembersForMain && (
               <MembersPanel group={groupDetail} onClose={() => setShowMembers(false)} />

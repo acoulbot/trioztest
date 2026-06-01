@@ -6,6 +6,7 @@ export interface Channel {
   groupId: string;
   serviceId?: string | null;
   parentId?: string | null;
+  postAccess?: string;
   _count: { members: number; messages: number };
 }
 
@@ -17,6 +18,7 @@ export interface VoiceUser {
 }
 
 export interface GroupDetail {
+  id: string;
   name: string;
   icon: string | null;
   description: string;

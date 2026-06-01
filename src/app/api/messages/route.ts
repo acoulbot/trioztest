@@ -114,7 +114,7 @@ export async function POST(req: NextRequest) {
 
   const channel = await prisma.channel.findUnique({
     where: { id: channelId },
-    select: { groupId: true, type: true, isRestricted: true, slowmode: true },
+    select: { groupId: true, type: true, isRestricted: true, slowmode: true, postAccess: true },
   });
   if (!channel) {
     return NextResponse.json({ error: "Channel not found" }, { status: 404 });
@@ -147,6 +147,15 @@ export async function POST(req: NextRequest) {
   // NEWS channels: only OWNER/ADMIN/MODERATOR can post
   if (channel.type === "NEWS" && !isPrivileged) {
     return NextResponse.json({ error: "Only admins can post in news channels" }, { status: 403 });
+  }
+
+  // Block-level write access: ADMIN (owner/admin only) or MOD (owner/admin/moderator)
+  const isOwnerAdmin = membership.role === "OWNER" || membership.role === "ADMIN";
+  if (channel.postAccess === "ADMIN" && !isOwnerAdmin) {
+    return NextResponse.json({ error: "Писать в этот раздел может только администратор" }, { status: 403 });
+  }
+  if (channel.postAccess === "MOD" && !isPrivileged) {
+    return NextResponse.json({ error: "Писать в этот раздел могут только администраторы и модераторы" }, { status: 403 });
   }
 
   // Restricted channels (inactive service): only admins can post

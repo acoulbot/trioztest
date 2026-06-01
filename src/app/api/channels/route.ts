@@ -69,7 +69,7 @@ export async function POST(req: NextRequest) {
   const banned = await checkBan(session.user.id);
   if (banned) return banned;
 
-  const { name, type, groupId, isRestricted, roleIds, parentId } = await req.json();
+  const { name, type, groupId, isRestricted, roleIds, parentId, postAccess } = await req.json();
   if (!name || !groupId) {
     return NextResponse.json({ error: "Name and groupId required" }, { status: 400 });
   }
@@ -79,6 +79,9 @@ export async function POST(req: NextRequest) {
 
   const validTypes = ["TEXT", "VOICE", "NEWS"];
   const channelType = validTypes.includes(type) ? type : "TEXT";
+
+  const validAccess = ["ALL", "MOD", "ADMIN"];
+  const channelAccess = validAccess.includes(postAccess) ? postAccess : "ALL";
 
   const membership = await prisma.groupMember.findUnique({
     where: { userId_groupId: { userId: session.user.id, groupId } },
@@ -94,6 +97,7 @@ export async function POST(req: NextRequest) {
       type: channelType,
       groupId,
       isRestricted: isRestricted || false,
+      postAccess: channelAccess,
       parentId: parentId || null,
     },
   });
