@@ -16,18 +16,6 @@ export function effectiveAccess(c: Channel): Access {
   return a === "ADMIN" || a === "MOD" ? a : "ALL";
 }
 
-const ACCESS_LABEL: Record<Access, string> = {
-  ADMIN: "админ · чтение",
-  MOD: "админ + модераторы",
-  ALL: "для всех",
-};
-
-const ACCESS_PILL: Record<Access, string> = {
-  ADMIN: "bg-cyan-400/10 text-cyan-300 dark:text-cyan-300",
-  MOD: "bg-violet-400/12 text-violet-300 dark:text-violet-300",
-  ALL: "bg-emerald-400/12 text-emerald-300 dark:text-emerald-300",
-};
-
 const ICON_BG: Record<Access, string> = {
   ADMIN: "bg-cyan-400/12 text-cyan-300",
   MOD: "bg-violet-400/14 text-violet-300",
@@ -141,9 +129,8 @@ export default function SectionsPanel({
                   )}
                 </div>
                 <div className="flex items-center gap-2 mt-2.5 flex-wrap">
-                  <span className={`text-[10.5px] font-bold rounded-lg px-2 py-0.5 ${ACCESS_PILL[access]}`}>{ACCESS_LABEL[access]}</span>
                   {kids.length > 0 && (
-                    <span className="text-[11px]" style={{ color: "var(--cn-muted)" }}>· {kids.length} в списке</span>
+                    <span className="text-[11px]" style={{ color: "var(--cn-muted)" }}>{kids.length} в списке</span>
                   )}
                 </div>
               </button>
