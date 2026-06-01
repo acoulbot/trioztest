@@ -49,16 +49,48 @@ export default function SectionsPanel({
   // undefined = closed, null = new top-level block, string = new list item under block id
 
   // Top-level "разделы" = non-voice channels that aren't the general chat and have no parent
-  const blocks = channels
+  const rawBlocks = channels
     .filter((c) => c.type !== "VOICE" && !c.parentId && c.id !== generalChannelId)
-    .sort((a, b) => a.name.localeCompare(b.name));
+    .sort((a, b) => a.name.localeCompare(b.name, "ru"));
 
   const childrenOf = (blockId: string) =>
     channels.filter((c) => c.parentId === blockId && c.type !== "VOICE");
 
+  // Auto-group channels that share a common prefix before " — "
+  // e.g. "ИИ-Автоматизация", "ИИ-Автоматизация — Вопросы", "ИИ-Автоматизация — Обсуждение"
+  // → one block "ИИ-Автоматизация" with two children
+  type AutoGroup = { block: Channel; kids: Channel[] };
+  const groups: AutoGroup[] = [];
+  const assigned = new Set<string>();
+
+  for (const block of rawBlocks) {
+    if (assigned.has(block.id)) continue;
+    const prefix = block.name.split(" — ")[0].trim();
+    // Find sibling channels with same prefix (but different suffix after " — ")
+    const kids = rawBlocks.filter(
+      (c) =>
+        c.id !== block.id &&
+        !assigned.has(c.id) &&
+        c.name.startsWith(prefix + " — ")
+    );
+    if (kids.length > 0) {
+      kids.forEach((k) => assigned.add(k.id));
+    }
+    assigned.add(block.id);
+    groups.push({ block, kids });
+  }
+
+  // Also include channels that already have explicit children via parentId
+  const blocks = groups.map((g) => g.block);
+
+  const autoKidsOf = (blockId: string): Channel[] => {
+    const g = groups.find((gr) => gr.block.id === blockId);
+    return [...childrenOf(blockId), ...(g?.kids ?? [])];
+  };
+
   const unreadFor = (c: Channel) => {
     let n = unreadCounts[c.id] ?? 0;
-    for (const ch of childrenOf(c.id)) n += unreadCounts[ch.id] ?? 0;
+    for (const ch of autoKidsOf(c.id)) n += unreadCounts[ch.id] ?? 0;
     return n;
   };
 
@@ -92,7 +124,7 @@ export default function SectionsPanel({
         )}
         {blocks.map((block) => {
           const access = effectiveAccess(block);
-          const kids = childrenOf(block.id);
+          const kids = autoKidsOf(block.id);
           const unread = unreadFor(block);
           const active = selectedChannel === block.id || kids.some((k) => k.id === selectedChannel);
           const isOpen = expanded[block.id] ?? false;
