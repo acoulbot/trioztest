@@ -5,7 +5,6 @@ import Link from "next/link";
 import Image from "next/image";
 import { useEffect, useState, useMemo, useRef } from "react";
 import { useSession, signOut } from "next-auth/react";
-import { useTheme } from "@/components/Providers";
 import { useInlineEdit } from "@/components/InlineEditContext";
 import EditableText from "@/components/EditableText";
 
@@ -159,9 +158,15 @@ function WindowCard({ window, index }: { window: WindowData; index: number }) {
 
           {/* Layered gradient — bottom text mask stays, top vignette lifts on hover */}
           <motion.div
-            className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/25 to-transparent"
-            animate={{ opacity: hovered ? 0.75 : 1 }}
+            className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/45 to-transparent"
+            animate={{ opacity: hovered ? 0.8 : 1 }}
             transition={{ duration: 0.35 }}
+          />
+
+          {/* Liquid-glass frosted strip behind the label for legibility */}
+          <div
+            className="absolute inset-x-0 bottom-0 h-2/5 pointer-events-none backdrop-blur-[3px]"
+            style={{ WebkitMaskImage: "linear-gradient(to top, black 35%, transparent)", maskImage: "linear-gradient(to top, black 35%, transparent)" }}
           />
 
           {/* Subtle edge glow on hover */}
@@ -180,19 +185,19 @@ function WindowCard({ window, index }: { window: WindowData; index: number }) {
                 contentKey={`window.${window.windowKey}.title`}
                 defaultValue={window.title}
                 tag="h3"
-                className="text-lg sm:text-xl md:text-2xl font-display font-bold text-white mb-1"
+                className="text-lg sm:text-xl md:text-2xl font-display font-bold text-white mb-1 [text-shadow:_0_1px_4px_rgb(0_0_0_/_0.85)]"
               />
             </motion.div>
 
             <motion.div
-              animate={{ opacity: hovered ? 1 : 0.35, y: hovered ? 0 : 4 }}
+              animate={{ opacity: hovered ? 1 : 0.9, y: hovered ? 0 : 4 }}
               transition={{ duration: 0.3 }}
             >
               <EditableText
                 contentKey={`window.${window.windowKey}.subtitle`}
                 defaultValue={window.subtitle}
                 tag="p"
-                className="text-gray-300 text-xs sm:text-sm"
+                className="text-gray-100 text-xs sm:text-sm font-medium [text-shadow:_0_1px_3px_rgb(0_0_0_/_0.9)]"
               />
             </motion.div>
           </div>
@@ -266,28 +271,10 @@ function CenterLogoButton() {
 function UserMenu() {
   const { data: session } = useSession();
   const [menuOpen, setMenuOpen] = useState(false);
-  const { theme, toggleTheme } = useTheme();
   const { editMode, toggleEditMode, isAdmin } = useInlineEdit();
 
   return (
     <div className="flex items-center gap-2">
-      {/* Theme toggle */}
-      <button
-        onClick={toggleTheme}
-        className="p-2 rounded-xl text-gray-400 hover:text-white hover:bg-white/10 transition-all"
-        title={theme === "dark" ? "Светлая тема" : "Тёмная тема"}
-      >
-        {theme === "dark" ? (
-          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z" />
-          </svg>
-        ) : (
-          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z" />
-          </svg>
-        )}
-      </button>
-
       {isAdmin && (
         <button
           onClick={toggleEditMode}
