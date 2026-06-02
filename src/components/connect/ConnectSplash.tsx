@@ -48,7 +48,13 @@ export default function ConnectSplash({ onDone }: { onDone: () => void }) {
               animate={{ scale: 1, opacity: 1 }}
               transition={{ delay: 0.15, type: "spring", damping: 16, stiffness: 240 }}
             >
-              <span className="text-3xl select-none">⚔️</span>
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src="/logo.png"
+                alt="TZ.Connect"
+                className="w-14 h-14 rounded-2xl object-cover select-none"
+                draggable={false}
+              />
             </motion.div>
           </div>
 
