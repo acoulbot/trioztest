@@ -592,6 +592,18 @@ function ConnectPageInner() {
                 groupId={groupDetail.id}
                 onSelectChannel={handleChannelClick}
                 onRefresh={() => selectedGroup && fetchGroupDetail(selectedGroup)}
+                onDeleteChannel={canManage ? async (channelId) => {
+                  await fetch(`/api/channels/${channelId}`, { method: "DELETE" });
+                  fetchGroupDetail(selectedGroup);
+                } : undefined}
+                onToggleHideChannel={canManage ? async (channelId, hidden) => {
+                  await fetch(`/api/channels/${channelId}`, {
+                    method: "PATCH",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ hidden }),
+                  });
+                  fetchGroupDetail(selectedGroup);
+                } : undefined}
               />
             )}
 

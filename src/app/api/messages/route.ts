@@ -289,16 +289,10 @@ export async function DELETE(req: NextRequest) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
-  const message = await prisma.message.update({
-    where: { id: messageId },
-    data: {
-      deleted: true,
-      content: "",
-      attachments: null,
-    },
-  });
+  // Hard delete — permanently remove from DB, no trace left
+  await prisma.message.delete({ where: { id: messageId } });
 
   emitToChannel(existing.channelId, "message-deleted", { id: messageId, channelId: existing.channelId });
 
-  return NextResponse.json({ ok: true, id: message.id });
+  return NextResponse.json({ ok: true, id: messageId });
 }

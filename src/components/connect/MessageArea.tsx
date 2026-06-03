@@ -246,7 +246,7 @@ export default function MessageArea({
     });
 
     socket.on("message-deleted", ({ id }: { id: string }) => {
-      setMessages((prev) => prev.map((m) => (m.id === id ? { ...m, deleted: true, content: "" } : m)));
+      setMessages((prev) => prev.filter((m) => m.id !== id));
     });
 
     socket.on("user-typing", ({ userId, userName }: { userId: string; userName: string }) => {
@@ -882,9 +882,7 @@ export default function MessageArea({
                   {msg.edited && <span className="text-[10px] text-neutral-400">(ред.)</span>}
                 </div>}
 
-                {msg.deleted ? (
-                  <p className="text-neutral-400 dark:text-gray-600 text-sm mt-0.5 italic">Сообщение удалено</p>
-                ) : editingId === msg.id ? (
+                {editingId === msg.id ? (
                   <div className="mt-1 space-y-1">
                     <input
                       type="text"
