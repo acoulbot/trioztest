@@ -295,7 +295,7 @@ export default function DMPanel({ currentUserId, onClose, initialFriendId }: DMP
 
     socket.on("dm-deleted", ({ messageId, conversationId }: { messageId: string; conversationId: string }) => {
       if (conversationId === selectedConv) {
-        setMessages((prev) => prev.map((m) => m.id === messageId ? { ...m, deleted: true, content: "" } : m));
+        setMessages((prev) => prev.filter((m) => m.id !== messageId));
       }
     });
 
@@ -474,7 +474,7 @@ export default function DMPanel({ currentUserId, onClose, initialFriendId }: DMP
   const deleteMessage = async (messageId: string) => {
     if (!selectedConv) return;
     await fetch(`/api/dm/${selectedConv}?messageId=${messageId}`, { method: "DELETE" });
-    setMessages((prev) => prev.map((m) => m.id === messageId ? { ...m, deleted: true, content: "" } : m));
+    setMessages((prev) => prev.filter((m) => m.id !== messageId));
   };
 
   const handleDecryptFile = useCallback(async (encrypted: ArrayBuffer, iv: string): Promise<ArrayBuffer> => {
@@ -585,9 +585,7 @@ export default function DMPanel({ currentUserId, onClose, initialFriendId }: DMP
                         <span className="font-medium">{msg.replyTo.user.name}:</span> <span className="truncate inline-block max-w-[150px] align-bottom">{msg.replyTo.content?.slice(0, 50) || "[файл]"}</span>
                       </div>
                     )}
-                    {msg.deleted ? (
-                      <p className="text-xs italic opacity-60">Сообщение удалено</p>
-                    ) : editingId === msg.id ? (
+                    {editingId === msg.id ? (
                       <div className="flex gap-1">
                         <input value={editContent} onChange={(e) => setEditContent(e.target.value)} onKeyDown={(e) => e.key === "Enter" && editMessage(msg.id)} className="flex-1 bg-transparent border-b border-white/30 text-sm outline-none" autoFocus />
                         <button onClick={() => editMessage(msg.id)} className="text-xs opacity-70 hover:opacity-100">✓</button>
