@@ -40,20 +40,19 @@ export async function PATCH(req: Request) {
 
   const userId = (session.user as { id: string }).id;
   const userRole = (session.user as { role: string }).role;
-
-  // Only ADMINs can update glow settings
-  if (userRole !== "ADMIN") {
-    return NextResponse.json({ error: "Только администраторы могут настраивать свечение аватара" }, { status: 403 });
-  }
+  const isAdmin = userRole === "ADMIN";
 
   const body = await req.json();
   const data: Record<string, unknown> = {};
 
-  if (typeof body.avatarGlowEnabled === "boolean") {
-    data.avatarGlowEnabled = body.avatarGlowEnabled;
+  // Glow settings — admin only, silently skip for others
+  if (isAdmin) {
+    if (typeof body.avatarGlowEnabled === "boolean") {
+      data.avatarGlowEnabled = body.avatarGlowEnabled;
+    }
   }
 
-  if ("avatarGlowColors" in body) {
+  if (isAdmin && "avatarGlowColors" in body) {
     if (body.avatarGlowColors === null) {
       data.avatarGlowColors = null;
     } else if (Array.isArray(body.avatarGlowColors)) {
@@ -78,7 +77,12 @@ export async function PATCH(req: Request) {
   }
 
   if (Object.keys(data).length === 0) {
-    return NextResponse.json({ error: "Нет данных для обновления" }, { status: 400 });
+    // Non-admin users calling save() with only glow fields — return current state without error
+    const current = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { id: true, avatar: true, avatarGlowEnabled: true, avatarGlowColors: true, profileBanner: true },
+    });
+    return NextResponse.json(current ?? {});
   }
 
   const updated = await prisma.user.update({

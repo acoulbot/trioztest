@@ -126,10 +126,12 @@ export default function ProfileSettingsModal({ user, onClose, onSaved, userRole 
     setSaving(true);
     setError(null);
     try {
-      const patchBody: Record<string, unknown> = {
-        avatarGlowEnabled: glowEnabled,
-        avatarGlowColors: glowEnabled ? activeColors : null,
-      };
+      const patchBody: Record<string, unknown> = {};
+      // Only send glow settings if user is privileged — others get 403 on these fields
+      if (isPrivileged) {
+        patchBody.avatarGlowEnabled = glowEnabled;
+        patchBody.avatarGlowColors = glowEnabled ? activeColors : null;
+      }
       if (isPrivileged) {
         patchBody.profileBanner = bannerUrl;
       }
@@ -199,9 +201,11 @@ export default function ProfileSettingsModal({ user, onClose, onSaved, userRole 
             <div>
               <p className="text-sm font-medium text-neutral-900 dark:text-white">{user.name}</p>
               <p className="text-xs text-neutral-400">@{(user as { username?: string }).username ?? ""}</p>
-              <p className="text-[11px] text-violet-500 dark:text-violet-400 mt-1">
-                {glowEnabled ? "✨ Свечение активно" : "Свечение выключено"}
-              </p>
+              {isPrivileged && (
+                <p className="text-[11px] text-violet-500 dark:text-violet-400 mt-1">
+                  {glowEnabled ? "✨ Свечение активно" : "Свечение выключено"}
+                </p>
+              )}
             </div>
           </div>
 
