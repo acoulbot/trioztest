@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from "react";
 import Button from "@/components/ui/Button";
-import { useSession } from "next-auth/react";
+import { useSession, signOut } from "next-auth/react";
 import { motion, AnimatePresence } from "framer-motion";
 
 export default function WelcomeModal() {
@@ -10,6 +10,8 @@ export default function WelcomeModal() {
   const [show, setShow] = useState(false);
   const [text, setText] = useState("");
   const [accepting, setAccepting] = useState(false);
+  const [declining, setDeclining] = useState(false);
+  const [confirmDecline, setConfirmDecline] = useState(false);
 
   const checkTos = useCallback(async () => {
     if (status !== "authenticated" || !session?.user) return;
@@ -45,6 +47,23 @@ export default function WelcomeModal() {
     }
   };
 
+  const handleDecline = async () => {
+    if (!confirmDecline) {
+      setConfirmDecline(true);
+      return;
+    }
+    setDeclining(true);
+    try {
+      // Delete account so no personal data is stored
+      await fetch("/api/welcome/decline", { method: "POST" });
+      // Sign out — account no longer exists
+      await signOut({ callbackUrl: "/" });
+    } catch {
+      setDeclining(false);
+      setConfirmDecline(false);
+    }
+  };
+
   return (
     <AnimatePresence>
       {show && (
@@ -73,12 +92,45 @@ export default function WelcomeModal() {
               </div>
             </div>
 
-            <div className="p-6 border-t border-neutral-100 dark:border-white/5">
-              <Button onClick={handleAccept} disabled={accepting} size="lg" fullWidth>
+            <div className="p-6 border-t border-neutral-100 dark:border-white/5 space-y-3">
+              <Button onClick={handleAccept} disabled={accepting || declining} size="lg" fullWidth>
                 {accepting ? "Подтверждение..." : "Принять и продолжить"}
               </Button>
-              <p className="text-[11px] text-neutral-400 dark:text-neutral-500 text-center mt-3">
-                Нажимая кнопку, вы подтверждаете ознакомление с правовой информацией
+
+              {/* Decline */}
+              {!confirmDecline ? (
+                <button
+                  onClick={handleDecline}
+                  disabled={accepting || declining}
+                  className="w-full py-2.5 rounded-xl text-sm text-neutral-500 dark:text-neutral-400 hover:text-red-500 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-500/5 transition-colors disabled:opacity-50"
+                >
+                  Не соглашаюсь
+                </button>
+              ) : (
+                <div className="rounded-xl border border-red-200 dark:border-red-500/20 bg-red-50 dark:bg-red-500/5 p-4 space-y-3">
+                  <p className="text-sm text-red-600 dark:text-red-400 font-medium text-center">
+                    Ваш аккаунт будет удалён без возможности восстановления
+                  </p>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => setConfirmDecline(false)}
+                      className="flex-1 py-2 rounded-lg text-sm text-neutral-500 hover:text-neutral-700 dark:hover:text-white bg-neutral-100 dark:bg-white/5 hover:bg-neutral-200 dark:hover:bg-white/10 transition-colors"
+                    >
+                      Отмена
+                    </button>
+                    <button
+                      onClick={handleDecline}
+                      disabled={declining}
+                      className="flex-1 py-2 rounded-lg text-sm font-medium text-white bg-red-500 hover:bg-red-600 transition-colors disabled:opacity-50"
+                    >
+                      {declining ? "Удаление..." : "Подтвердить отказ"}
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              <p className="text-[11px] text-neutral-400 dark:text-neutral-500 text-center">
+                При отказе от соглашения регистрация будет отменена, данные удалены
               </p>
             </div>
           </motion.div>
