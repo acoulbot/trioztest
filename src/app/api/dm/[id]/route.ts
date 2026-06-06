@@ -75,20 +75,33 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     return NextResponse.json({ error: "Message cannot be empty" }, { status: 400 });
   }
 
-  const message = await prisma.directMessage.create({
-    data: {
-      content: sanitized,
-      conversationId: id,
-      userId,
-      encrypted: isE2EE || clientEncrypted || false,
-      attachments: attachments ? JSON.stringify(attachments) : null,
-      replyToId: replyToId || null,
-    },
-    include: {
-      user: { select: { id: true, name: true, username: true, avatar: true, role: true, avatarGlowEnabled: true, avatarGlowColors: true } },
-      replyTo: { select: { id: true, content: true, user: { select: { id: true, name: true } } } },
-    },
-  });
+  const baseData = {
+    content: sanitized,
+    conversationId: id,
+    userId,
+    attachments: attachments ? JSON.stringify(attachments) : null,
+    replyToId: replyToId || null,
+  };
+  const include = {
+    user: { select: { id: true, name: true, username: true, avatar: true, role: true, avatarGlowEnabled: true, avatarGlowColors: true } },
+    replyTo: { select: { id: true, content: true, user: { select: { id: true, name: true } } } },
+  };
+
+  let message;
+  try {
+    // Try with encrypted field — requires migration to be applied
+    message = await prisma.directMessage.create({
+      data: { ...baseData, encrypted: isE2EE || clientEncrypted || false },
+      include,
+    });
+  } catch (err: unknown) {
+    // Fallback: if encrypted column doesn't exist yet (migration pending),
+    // create without it so DMs keep working
+    const isColErr = err instanceof Error &&
+      (err.message.includes("encrypted") || err.message.includes("Unknown field") || err.message.includes("column"));
+    if (!isColErr) throw err;
+    message = await (prisma.directMessage as any).create({ data: baseData, include });
+  }
 
   await prisma.directConversation.update({
     where: { id },
