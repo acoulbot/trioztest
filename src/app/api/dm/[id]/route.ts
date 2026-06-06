@@ -60,7 +60,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
-  const { content, attachments, replyToId } = await req.json();
+  const { content, attachments, replyToId, encrypted: clientEncrypted } = await req.json();
   if ((!content || !content.trim()) && !attachments) {
     return NextResponse.json({ error: "Message content required" }, { status: 400 });
   }
@@ -80,6 +80,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       content: sanitized,
       conversationId: id,
       userId,
+      encrypted: isE2EE || clientEncrypted || false,
       attachments: attachments ? JSON.stringify(attachments) : null,
       replyToId: replyToId || null,
     },
