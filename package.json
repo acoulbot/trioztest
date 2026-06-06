@@ -8,8 +8,8 @@
     "start": "NODE_ENV=production npx tsx server.ts",
     "lint": "eslint src/",
     "seed": "npx tsx prisma/seed.ts",
-    "postinstall": "prisma generate && prisma migrate deploy 2>/dev/null || true",
-    "migrate": "prisma migrate deploy",
+    "postinstall": "prisma generate && prisma migrate deploy",
+    "migrate": "prisma migrate deploy"
   },
   "dependencies": {
     "@jitsi/rnnoise-wasm": "^0.2.1",
