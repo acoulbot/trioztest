@@ -243,6 +243,7 @@ model DirectMessage {
   deleted        Boolean            @default(false)
   attachments    String?
   replyToId      String?
+  encrypted      Boolean            @default(false)
   replyTo        DirectMessage?     @relation("DMReply", fields: [replyToId], references: [id], onDelete: SetNull)
   replies        DirectMessage[]    @relation("DMReply")
   user           User               @relation(fields: [userId], references: [id], onDelete: Cascade)

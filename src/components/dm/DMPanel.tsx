@@ -84,6 +84,7 @@ export default function DMPanel({ currentUserId, onClose, initialFriendId }: DMP
   const [fileUploading, setFileUploading] = useState(false);
   const [dmErrorToast, setDmErrorToast] = useState<string | null>(null);
   const [e2eeReady, setE2eeReady] = useState(false);
+  const [e2eeEnabled, setE2eeEnabled] = useState(true); // user toggle
   const [peerReadAt, setPeerReadAt] = useState<string | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const socketRef = useRef<Socket | null>(null);
@@ -324,13 +325,14 @@ export default function DMPanel({ currentUserId, onClose, initialFriendId }: DMP
     socketRef.current?.emit("dm-stop-typing", { convId: selectedConv });
     try {
       let finalContent = content;
-      if (e2eeReady && privateKeyRef.current && peerPublicKeyRef.current) {
-        finalContent = await encryptMessage(content, privateKeyRef.current, peerPublicKeyRef.current);
+      const useE2EE = e2eeEnabled && e2eeReady && privateKeyRef.current && peerPublicKeyRef.current;
+      if (useE2EE) {
+        finalContent = await encryptMessage(content, privateKeyRef.current!, peerPublicKeyRef.current!);
       }
       const res = await fetch(`/api/dm/${selectedConv}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ content: finalContent, replyToId: replyTo?.id || null }),
+        body: JSON.stringify({ content: finalContent, replyToId: replyTo?.id || null, encrypted: useE2EE }),
       });
       if (res.ok) {
         const msg = await res.json();
@@ -362,7 +364,7 @@ export default function DMPanel({ currentUserId, onClose, initialFriendId }: DMP
       let uploadBlob = blob;
       let encIv: string | undefined;
 
-      if (e2eeReady && privateKeyRef.current && peerPublicKeyRef.current) {
+      if (e2eeEnabled && e2eeReady && privateKeyRef.current && peerPublicKeyRef.current) {
         const arrayBuf = await blob.arrayBuffer();
         const { encrypted, iv } = await encryptFile(arrayBuf, privateKeyRef.current, peerPublicKeyRef.current);
         uploadBlob = new Blob([encrypted], { type: "application/octet-stream" });
@@ -405,7 +407,7 @@ export default function DMPanel({ currentUserId, onClose, initialFriendId }: DMP
       let uploadFile: File | Blob = file;
       let encIv: string | undefined;
 
-      if (e2eeReady && privateKeyRef.current && peerPublicKeyRef.current) {
+      if (e2eeEnabled && e2eeReady && privateKeyRef.current && peerPublicKeyRef.current) {
         const arrayBuf = await file.arrayBuffer();
         const { encrypted, iv } = await encryptFile(arrayBuf, privateKeyRef.current, peerPublicKeyRef.current);
         uploadFile = new Blob([encrypted], { type: "application/octet-stream" });
@@ -453,7 +455,7 @@ export default function DMPanel({ currentUserId, onClose, initialFriendId }: DMP
   const editMessage = async (messageId: string) => {
     if (!editContent.trim() || !selectedConv) return;
     let finalContent = editContent;
-    if (e2eeReady && privateKeyRef.current && peerPublicKeyRef.current) {
+    if (e2eeEnabled && e2eeReady && privateKeyRef.current && peerPublicKeyRef.current) {
       finalContent = await encryptMessage(editContent, privateKeyRef.current, peerPublicKeyRef.current);
     }
     const res = await fetch(`/api/dm/${selectedConv}`, {
@@ -558,12 +560,23 @@ export default function DMPanel({ currentUserId, onClose, initialFriendId }: DMP
                 </p>
               </div>
               {e2eeReady && (
-                <div className="flex items-center gap-1 px-2 py-1 rounded-lg bg-green-500/10 text-green-600 dark:text-green-400">
+                <button
+                  onClick={() => setE2eeEnabled(v => !v)}
+                  title={e2eeEnabled ? "Шифрование включено — нажмите для отключения" : "Шифрование выключено — нажмите для включения"}
+                  className={`flex items-center gap-1 px-2 py-1 rounded-lg transition-colors ${
+                    e2eeEnabled
+                      ? "bg-green-500/10 text-green-600 dark:text-green-400 hover:bg-green-500/20"
+                      : "bg-neutral-100 dark:bg-white/5 text-neutral-400 hover:bg-neutral-200 dark:hover:bg-white/10"
+                  }`}
+                >
                   <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="currentColor">
-                    <path d="M18 8h-1V6c0-2.76-2.24-5-5-5S7 3.24 7 6v2H6c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V10c0-1.1-.9-2-2-2zm-6 9c-1.1 0-2-.9-2-2s.9-2 2-2 2 .9 2 2-.9 2-2 2zm3.1-9H8.9V6c0-1.71 1.39-3.1 3.1-3.1s3.1 1.39 3.1 3.1v2z" />
+                    {e2eeEnabled
+                      ? <path d="M18 8h-1V6c0-2.76-2.24-5-5-5S7 3.24 7 6v2H6c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V10c0-1.1-.9-2-2-2zm-6 9c-1.1 0-2-.9-2-2s.9-2 2-2 2 .9 2 2-.9 2-2 2zm3.1-9H8.9V6c0-1.71 1.39-3.1 3.1-3.1s3.1 1.39 3.1 3.1v2z" />
+                      : <path d="M20 8h-3V4a5 5 0 00-9.9-1H4a2 2 0 00-2 2v12a2 2 0 002 2h16a2 2 0 002-2v-8a2 2 0 00-2-2zm-9 7a2 2 0 110-4 2 2 0 010 4zm3-7H8V4a3 3 0 016 0v4z" />
+                    }
                   </svg>
-                  <span className="text-[10px] font-medium">E2EE</span>
-                </div>
+                  <span className="text-[10px] font-medium">{e2eeEnabled ? "E2EE" : "Открытый"}</span>
+                </button>
               )}
             </div>
 
