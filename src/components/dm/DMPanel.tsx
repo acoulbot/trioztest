@@ -71,11 +71,9 @@ export default function DMPanel({ currentUserId, onClose, initialFriendId }: DMP
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [selectedConv, setSelectedConv] = useState<string | null>(null);
   const [initialHandled, setInitialHandled] = useState(false);
-  const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(true);
   const [messagesLoading, setMessagesLoading] = useState(false);
-  const [nextCursor, setNextCursor] = useState<string | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editContent, setEditContent] = useState("");
   const [replyTo, setReplyTo] = useState<{ id: string; name: string; content: string } | null>(null);
@@ -85,6 +83,21 @@ export default function DMPanel({ currentUserId, onClose, initialFriendId }: DMP
   const [dmErrorToast, setDmErrorToast] = useState<string | null>(null);
   const [e2eeReady, setE2eeReady] = useState(false);
   const [e2eeEnabled, setE2eeEnabled] = useState(true); // user toggle
+
+  // Two separate message arrays — one per channel mode
+  const [encryptedMessages, setEncryptedMessages] = useState<Message[]>([]);
+  const [plainMessages, setPlainMessages] = useState<Message[]>([]);
+  const [nextCursorEncrypted, setNextCursorEncrypted] = useState<string | null>(null);
+  const [nextCursorPlain, setNextCursorPlain] = useState<string | null>(null);
+
+  // Active channel depends on e2eeEnabled
+  const messages = e2eeEnabled ? encryptedMessages : plainMessages;
+  const setMessages = (fn: Message[] | ((prev: Message[]) => Message[])) => {
+    if (e2eeEnabled) setEncryptedMessages(typeof fn === "function" ? fn : () => fn);
+    else setPlainMessages(typeof fn === "function" ? fn : () => fn);
+  };
+  const nextCursor = e2eeEnabled ? nextCursorEncrypted : nextCursorPlain;
+  const setNextCursor = e2eeEnabled ? setNextCursorEncrypted : setNextCursorPlain;
   const [peerReadAt, setPeerReadAt] = useState<string | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const socketRef = useRef<Socket | null>(null);
@@ -165,15 +178,15 @@ export default function DMPanel({ currentUserId, onClose, initialFriendId }: DMP
     }
   }, []);
 
-  const loadMessages = useCallback(async (convId: string, cursor?: string) => {
+  const loadMessages = useCallback(async (convId: string, cursor?: string, encrypted?: boolean) => {
     setMessagesLoading(true);
     try {
-      const url = `/api/dm/${convId}${cursor ? `?cursor=${cursor}` : ""}`;
+      const encParam = encrypted !== undefined ? `&encrypted=${encrypted}` : "";
+      const url = `/api/dm/${convId}?limit=50${cursor ? `&cursor=${cursor}` : ""}${encParam}`;
       const res = await fetch(url);
       if (!res.ok) throw new Error(res.statusText);
       const data = await res.json();
 
-      // Decrypt E2EE messages
       const decryptedMsgs = await Promise.all(
         data.messages.map(async (msg: Message) => {
           if (isE2EEMessage(msg.content)) {
@@ -184,15 +197,18 @@ export default function DMPanel({ currentUserId, onClose, initialFriendId }: DMP
         })
       );
 
-      if (cursor) {
-        setMessages((prev) => [...decryptedMsgs, ...prev]);
+      if (encrypted) {
+        if (cursor) setEncryptedMessages((prev) => [...decryptedMsgs, ...prev]);
+        else setEncryptedMessages(decryptedMsgs);
+        setNextCursorEncrypted(data.nextCursor);
       } else {
-        setMessages(decryptedMsgs);
+        if (cursor) setPlainMessages((prev) => [...decryptedMsgs, ...prev]);
+        else setPlainMessages(decryptedMsgs);
+        setNextCursorPlain(data.nextCursor);
       }
-      setNextCursor(data.nextCursor);
     } catch {
-      setMessages([]);
-      setNextCursor(null);
+      if (encrypted) { setEncryptedMessages([]); setNextCursorEncrypted(null); }
+      else { setPlainMessages([]); setNextCursorPlain(null); }
     } finally {
       setMessagesLoading(false);
     }
@@ -200,7 +216,9 @@ export default function DMPanel({ currentUserId, onClose, initialFriendId }: DMP
 
   useEffect(() => {
     if (selectedConv) {
-      loadMessages(selectedConv);
+      // Load both encrypted and plain channels simultaneously
+      loadMessages(selectedConv, undefined, true);
+      loadMessages(selectedConv, undefined, false);
       fetch("/api/dm/read", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -260,10 +278,19 @@ export default function DMPanel({ currentUserId, onClose, initialFriendId }: DMP
         } catch { /* keep encrypted */ }
       }
       if (msg.conversationId === selectedConv) {
-        setMessages((prev) => {
-          if (prev.find((m) => m.id === msg.id)) return prev;
-          return [...prev, displayMsg];
-        });
+        // Route to correct channel based on whether message is encrypted
+        const isEncMsg = isE2EEMessage(msg.content) || !!(msg as Message & { encrypted?: boolean }).encrypted;
+        if (isEncMsg) {
+          setEncryptedMessages((prev) => {
+            if (prev.find((m) => m.id === msg.id)) return prev;
+            return [...prev, displayMsg];
+          });
+        } else {
+          setPlainMessages((prev) => {
+            if (prev.find((m) => m.id === msg.id)) return prev;
+            return [...prev, displayMsg];
+          });
+        }
       }
       // Play notification only for incoming messages (not own)
       if (msg.userId !== currentUserIdRef.current) {
@@ -580,9 +607,32 @@ export default function DMPanel({ currentUserId, onClose, initialFriendId }: DMP
               )}
             </div>
 
+            {/* Channel mode banner */}
+            <div className={`flex items-center gap-2 px-4 py-1.5 text-[11px] font-medium border-b transition-colors ${
+              e2eeEnabled
+                ? "bg-green-50 dark:bg-green-400/5 text-green-700 dark:text-green-400 border-green-100 dark:border-green-400/10"
+                : "bg-neutral-50 dark:bg-white/3 text-neutral-500 dark:text-gray-500 border-neutral-100 dark:border-white/5"
+            }`}>
+              {e2eeEnabled ? (
+                <>
+                  <svg className="w-3 h-3 flex-shrink-0" viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M18 8h-1V6c0-2.76-2.24-5-5-5S7 3.24 7 6v2H6c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V10c0-1.1-.9-2-2-2zm-6 9c-1.1 0-2-.9-2-2s.9-2 2-2 2 .9 2 2-.9 2-2 2zm3.1-9H8.9V6c0-1.71 1.39-3.1 3.1-3.1s3.1 1.39 3.1 3.1v2z"/>
+                  </svg>
+                  Зашифрованный канал — сообщения видны только участникам
+                </>
+              ) : (
+                <>
+                  <svg className="w-3 h-3 flex-shrink-0" viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M20 8h-3V4a5 5 0 00-9.9-1H4a2 2 0 00-2 2v12a2 2 0 002 2h16a2 2 0 002-2v-8a2 2 0 00-2-2zm-9 7a2 2 0 110-4 2 2 0 010 4zm3-7H8V4a3 3 0 016 0v4z"/>
+                  </svg>
+                  Открытый канал
+                </>
+              )}
+            </div>
+
             <div className="flex-1 overflow-y-auto p-4 space-y-3">
               {nextCursor && (
-                <button onClick={() => loadMessages(selectedConv, nextCursor)} disabled={messagesLoading} className="mx-auto block text-xs text-violet-500 dark:text-cyan-400 hover:underline disabled:opacity-50">
+                <button onClick={() => loadMessages(selectedConv, nextCursor ?? undefined, e2eeEnabled)} disabled={messagesLoading} className="mx-auto block text-xs text-violet-500 dark:text-cyan-400 hover:underline disabled:opacity-50">
                   {messagesLoading ? "Загрузка..." : "Загрузить ранние"}
                 </button>
               )}
