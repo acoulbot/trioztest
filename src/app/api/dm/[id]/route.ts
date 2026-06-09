@@ -23,9 +23,15 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
   const { searchParams } = new URL(req.url);
   const cursor = searchParams.get("cursor");
   const limit = Math.min(parseInt(searchParams.get("limit") || "50", 10), 100);
+  const encryptedParam = searchParams.get("encrypted"); // "true" | "false" | null (all)
+
+  // Build where clause — filter by encrypted flag if column exists
+  const encryptedFilter: { encrypted?: boolean } = {};
+  if (encryptedParam === "true")  encryptedFilter.encrypted = true;
+  if (encryptedParam === "false") encryptedFilter.encrypted = false;
 
   const messages = await prisma.directMessage.findMany({
-    where: { conversationId: id },
+    where: { conversationId: id, ...encryptedFilter },
     include: {
       user: { select: { id: true, name: true, username: true, avatar: true, role: true, avatarGlowEnabled: true, avatarGlowColors: true } },
       replyTo: { select: { id: true, content: true, user: { select: { id: true, name: true } } } },
