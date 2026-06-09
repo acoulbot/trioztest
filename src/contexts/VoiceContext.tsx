@@ -719,6 +719,15 @@ export function VoiceProvider({ children }: { children: React.ReactNode }) {
         }
       }
 
+      // Also set quality for local user so they see their own bars
+      if (socketRef.current?.id) {
+        let localQuality: ConnectionQuality = "good";
+        if (bestPing === null) localQuality = peersRef.current.size > 0 ? "unknown" : "good";
+        else if (bestPing > 400) localQuality = "poor";
+        else if (bestPing > 150) localQuality = "medium";
+        qualityMap.set(socketRef.current.id, localQuality);
+      }
+
       setConnectionQuality(qualityMap);
       setLocalPing(bestPing);
     };
