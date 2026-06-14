@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef } from "react";
 import Button from "@/components/ui/Button";
+import { usePTTSettings, eventToBinding, DEFAULT_BINDING } from "@/lib/ptt";
 import { motion, AnimatePresence } from "framer-motion";
 import GlowAvatar, { GLOW_PRESETS, GlowAvatarUser } from "@/components/ui/GlowAvatar";
 import { DayNightMiniPreview } from "@/components/connect/DayNightBackground";
@@ -89,6 +90,8 @@ export default function ProfileSettingsModal({ user, onClose, onSaved, userRole 
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [successToast, setSuccessToast] = useState<string | null>(null);
+  const { settings: pttSettings, update: updatePTT } = usePTTSettings();
+  const [recordingKey, setRecordingKey] = useState(false);
   const [statusType, setStatusType] = useState<string>("online");
   const [customStatus, setCustomStatus] = useState<string>("");
   const [statusLoading, setStatusLoading] = useState(false);
@@ -494,6 +497,62 @@ export default function ProfileSettingsModal({ user, onClose, onSaved, userRole 
             </AnimatePresence>
           </div>
           )}
+
+          {/* Push-to-Talk */}
+          <div className="space-y-3 pt-2 border-t border-neutral-100 dark:border-white/5">
+            <div className="flex items-center justify-between">
+              <div>
+                <h3 className="text-sm font-semibold text-neutral-900 dark:text-white">🎙 Режим рации (Push-to-Talk)</h3>
+                <p className="text-xs text-neutral-400 mt-0.5">Микрофон включён только пока зажата кнопка</p>
+              </div>
+              {/* Toggle */}
+              <button
+                onClick={() => updatePTT({ enabled: !pttSettings.enabled })}
+                className={`relative w-11 h-6 rounded-full transition-colors flex-shrink-0 ${pttSettings.enabled ? "bg-violet-500 dark:bg-cyan-500" : "bg-neutral-200 dark:bg-neutral-700"}`}
+              >
+                <span className={`absolute top-1 w-4 h-4 bg-white rounded-full shadow transition-transform ${pttSettings.enabled ? "translate-x-6" : "translate-x-1"}`} />
+              </button>
+            </div>
+
+            {pttSettings.enabled && (
+              <div className="space-y-2">
+                <div className="flex items-center gap-2">
+                  <span className="text-xs text-neutral-500 dark:text-gray-400">Кнопка:</span>
+                  <button
+                    onKeyDown={(e) => {
+                      if (!recordingKey) return;
+                      e.preventDefault();
+                      e.stopPropagation();
+                      const b = eventToBinding(e.nativeEvent);
+                      if (b.label) {
+                        updatePTT({ binding: b });
+                        setRecordingKey(false);
+                      }
+                    }}
+                    onClick={() => setRecordingKey(true)}
+                    onBlur={() => setRecordingKey(false)}
+                    className={`flex-1 px-3 py-2 rounded-xl text-sm font-mono text-center border-2 transition-colors outline-none
+                      ${recordingKey
+                        ? "border-violet-500 dark:border-cyan-400 bg-violet-50 dark:bg-cyan-400/10 text-violet-700 dark:text-cyan-300 animate-pulse"
+                        : "border-neutral-200 dark:border-white/10 bg-neutral-50 dark:bg-white/5 text-neutral-900 dark:text-white hover:border-violet-400 dark:hover:border-cyan-500"
+                      }`}
+                  >
+                    {recordingKey ? "Нажмите любую клавишу..." : (pttSettings.binding.label || DEFAULT_BINDING.label)}
+                  </button>
+                  <button
+                    onClick={() => { updatePTT({ binding: DEFAULT_BINDING }); setRecordingKey(false); }}
+                    className="text-xs text-neutral-400 hover:text-red-500 dark:hover:text-red-400 transition-colors whitespace-nowrap"
+                    title="Сбросить на Shift+Q"
+                  >
+                    Сбросить
+                  </button>
+                </div>
+                <p className="text-[11px] text-neutral-400">
+                  Нажмите на кнопку выше и зажмите нужную клавишу или сочетание. Работает только в голосовом канале.
+                </p>
+              </div>
+            )}
+          </div>
 
           {/* E2EE key backup */}
           <div className="space-y-3">

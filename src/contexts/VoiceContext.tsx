@@ -3,7 +3,7 @@
 import { createContext, useContext, useState, useRef, useCallback, useEffect } from "react";
 import { useSession } from "next-auth/react";
 import { io, Socket } from "socket.io-client";
-import { NoiseSuppressor, NSStatus } from "@/lib/noiseSuppressor";
+import { loadSettings, matchesBinding } from "@/lib/ptt";
 import { patchedOffer, patchedAnswer } from "@/lib/sdpUtils";
 
 /* ─── Types ─── */
@@ -655,6 +655,51 @@ export function VoiceProvider({ children }: { children: React.ReactNode }) {
     remoteAudiosRef.current.forEach(a => { a.muted = next; });
     if (next && !isMuted) toggleMute();
   }, [isDeafened, isMuted, toggleMute]);
+
+  /* ── Push-to-Talk ── */
+  const pttActiveRef = useRef(false);
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      const tag = (e.target as HTMLElement)?.tagName;
+      if (tag === "INPUT" || tag === "TEXTAREA" || (e.target as HTMLElement)?.isContentEditable) return;
+      const ptt = loadSettings();
+      if (!ptt.enabled || !isConnected) return;
+      if (!matchesBinding(e, ptt.binding)) return;
+      if (pttActiveRef.current) return;
+      e.preventDefault();
+      pttActiveRef.current = true;
+      const track = rawStreamRef.current?.getAudioTracks()[0];
+      if (track) {
+        track.enabled = true;
+        localStreamRef.current?.getAudioTracks().forEach(t => { t.enabled = true; });
+      }
+      setIsMuted(false);
+      socketRef.current?.emit("toggle-mute", { channelId: channelIdRef.current, muted: false });
+    };
+
+    const handleKeyUp = (e: KeyboardEvent) => {
+      const ptt = loadSettings();
+      if (!ptt.enabled || !isConnected || !pttActiveRef.current) return;
+      if (!matchesBinding(e, ptt.binding)) return;
+      e.preventDefault();
+      pttActiveRef.current = false;
+      const track = rawStreamRef.current?.getAudioTracks()[0];
+      if (track) {
+        track.enabled = false;
+        localStreamRef.current?.getAudioTracks().forEach(t => { t.enabled = false; });
+      }
+      setIsMuted(true);
+      socketRef.current?.emit("toggle-mute", { channelId: channelIdRef.current, muted: true });
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    window.addEventListener("keyup",   handleKeyUp);
+    return () => {
+      window.removeEventListener("keydown", handleKeyDown);
+      window.removeEventListener("keyup",   handleKeyUp);
+    };
+  }, [isConnected]);
 
   /* ── Per-user volume ── */
   const setUserVolume = useCallback((socketId: string, volume: number) => {
